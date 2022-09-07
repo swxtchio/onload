@@ -44,8 +44,7 @@ export cxxflags
 # Include directories.
 #
 MMAKE_INCLUDE_DIR	:= $(TOPPATH)/src/include
-MMAKE_INCLUDE		:= -I. -I$(BUILD)/include -I$(MMAKE_INCLUDE_DIR)
-
+MMAKE_INCLUDE		:= -I. -I$(BUILD)/include -I$(MMAKE_INCLUDE_DIR) -I/usr/local/include
 
 
 ######################################################################

@@ -9,8 +9,8 @@
 ** </L5_PRIVATE>
 \**************************************************************************/
 
-/* 
- * stg 2006/11/06 : Moved to transport/ip from transport/ciul 
+/*
+ * stg 2006/11/06 : Moved to transport/ip from transport/ciul
  */
 
 #include "ip_internal.h"
@@ -26,21 +26,20 @@
 
 #define VERB(x)
 
-
-int ci_tcp_helper_more_bufs(ci_netif* ni)
+int ci_tcp_helper_more_bufs(ci_netif *ni)
 {
   return oo_resource_op(ci_netif_get_driver_handle(ni),
                         OO_IOC_TCP_MORE_BUFS, NULL);
 }
 
-int ci_tcp_helper_more_socks(ci_netif* ni)
+int ci_tcp_helper_more_socks(ci_netif *ni)
 {
   return oo_resource_op(ci_netif_get_driver_handle(ni),
                         OO_IOC_TCP_MORE_SOCKS, NULL);
 }
 
 #if CI_CFG_FD_CACHING
-int ci_tcp_helper_clear_epcache(ci_netif* ni)
+int ci_tcp_helper_clear_epcache(ci_netif *ni)
 {
   return oo_resource_op(ci_netif_get_driver_handle(ni),
                         OO_IOC_TCP_CLEAR_EPCACHE, NULL);
@@ -64,27 +63,26 @@ int ci_tcp_helper_clear_epcache(ci_netif* ni)
  * \return                standard error codes
  *
  *--------------------------------------------------------------------*/
-int ci_tcp_helper_ep_set_filters(ci_fd_t           fd,
-                                 oo_sp             ep,
-                                 ci_ifid_t         bindto_ifindex,
-                                 oo_sp             from_tcp_id)
+int ci_tcp_helper_ep_set_filters(ci_fd_t fd,
+                                 oo_sp ep,
+                                 ci_ifid_t bindto_ifindex,
+                                 oo_sp from_tcp_id)
 {
   oo_tcp_filter_set_t op;
   int rc;
 
-  op.tcp_id       = ep;
+  op.tcp_id = ep;
   op.bindto_ifindex = bindto_ifindex;
-  op.from_tcp_id  = from_tcp_id;
+  op.from_tcp_id = from_tcp_id;
 
-  VERB(ci_log("%s: id=%d", __FUNCTION__, ep));
+  LOG_E(ci_log("%s: id=%d", __FUNCTION__, ep));
   rc = oo_resource_op(fd, OO_IOC_EP_FILTER_SET, &op);
 
-  if( rc < 0 )
-    LOG_SV(ci_log("%s: failed for %d (rc=%d)", __FUNCTION__,
-                  OO_SP_FMT(ep), rc));
+  if (rc < 0)
+    LOG_E(ci_log("%s: failed for %d (rc=%d)", __FUNCTION__,
+                 OO_SP_FMT(ep), rc));
   return rc;
 }
-
 
 #if CI_CFG_ENDPOINT_MOVE
 /*--------------------------------------------------------------------
@@ -92,13 +90,13 @@ int ci_tcp_helper_ep_set_filters(ci_fd_t           fd,
  * TODO
  *
  *--------------------------------------------------------------------*/
-int ci_tcp_helper_ep_reuseport_bind(ci_fd_t           fd,
-                                    const char*       cluster_name,
-                                    ci_int32          cluster_size,
-                                    ci_uint32         cluster_restart_opt,
-                                    ci_uint32         cluster_hot_restart_opt,
-                                    ci_addr_t         addr,
-                                    ci_uint16         port_be16)
+int ci_tcp_helper_ep_reuseport_bind(ci_fd_t fd,
+                                    const char *cluster_name,
+                                    ci_int32 cluster_size,
+                                    ci_uint32 cluster_restart_opt,
+                                    ci_uint32 cluster_hot_restart_opt,
+                                    ci_addr_t addr,
+                                    ci_uint16 port_be16)
 {
   oo_tcp_reuseport_bind_t op;
   int rc;
@@ -113,27 +111,25 @@ int ci_tcp_helper_ep_reuseport_bind(ci_fd_t           fd,
   VERB(ci_log("%s: id=%d", __FUNCTION__, fd));
   rc = oo_resource_op(fd, OO_IOC_EP_REUSEPORT_BIND, &op);
 
-  if( rc < 0 )
+  if (rc < 0)
     LOG_SV(ci_log("%s: failed for %d (rc=%d)", __FUNCTION__, fd, rc));
   return rc;
 }
-
 
 /*--------------------------------------------------------------------
  *!
  * TODO
  *
  *--------------------------------------------------------------------*/
-int ci_tcp_helper_cluster_dump(void* opaque, void* buf, int buf_len)
+int ci_tcp_helper_cluster_dump(void *opaque, void *buf, int buf_len)
 {
-  cluster_dump_args* args = opaque;
+  cluster_dump_args *args = opaque;
   oo_cluster_dump_t op;
   CI_USER_PTR_SET(op.buf, buf);
   op.buf_len = buf_len;
   return oo_resource_op(args->fd, OO_IOC_CLUSTER_DUMP, &op);
 }
 #endif
-
 
 /*--------------------------------------------------------------------
  *!
@@ -151,18 +147,17 @@ int ci_tcp_helper_ep_clear_filters(ci_fd_t fd, oo_sp ep, int need_update)
   oo_tcp_filter_clear_t op;
   int rc;
 
-  op.tcp_id       = ep;
-  op.need_update  = !!need_update;
+  op.tcp_id = ep;
+  op.need_update = !!need_update;
 
   VERB(ci_log("%s: id=%d", __FUNCTION__, ep));
   rc = oo_resource_op(fd, OO_IOC_EP_FILTER_CLEAR, &op);
 
-  if( rc < 0 )
+  if (rc < 0)
     LOG_SV(ci_log("%s: failed for %d (rc=%d)", __FUNCTION__,
                   OO_SP_FMT(ep), rc));
   return rc;
 }
-
 
 /*--------------------------------------------------------------------
  *!
@@ -175,9 +170,9 @@ int ci_tcp_helper_ep_clear_filters(ci_fd_t fd, oo_sp ep, int need_update)
  * \return                standard error codes
  *
  *--------------------------------------------------------------------*/
-int ci_tcp_helper_ep_filter_dump(void* opaque, void* buf, int buf_len)
+int ci_tcp_helper_ep_filter_dump(void *opaque, void *buf, int buf_len)
 {
-  filter_dump_args* args = opaque;
+  filter_dump_args *args = opaque;
   oo_tcp_filter_dump_t op;
   op.sock_id = args->sock_id;
   CI_USER_PTR_SET(op.buf, buf);
@@ -185,11 +180,10 @@ int ci_tcp_helper_ep_filter_dump(void* opaque, void* buf, int buf_len)
   return oo_resource_op(args->fd, OO_IOC_EP_FILTER_DUMP, &op);
 }
 
-
 /*--------------------------------------------------------------------
  *!
  * Adds or deletes multicast address to/from socket list.
- * 
+ *
  * \param fd              File descriptor of tcp_helper
  * \param ep              TCP control block id
  * \param phys_port       L5 physcial port index to support SO_BINDTODEVICE
@@ -200,32 +194,30 @@ int ci_tcp_helper_ep_filter_dump(void* opaque, void* buf, int buf_len)
  * \return                standard error codes
  *
  *--------------------------------------------------------------------*/
-int ci_tcp_helper_ep_mcast_add_del(ci_fd_t           fd,
-                                   oo_sp             ep,
-                                   ci_uint32         mcast_addr,
-                                   ci_ifid_t         ifindex,
-                                   int               add)
+int ci_tcp_helper_ep_mcast_add_del(ci_fd_t fd,
+                                   oo_sp ep,
+                                   ci_uint32 mcast_addr,
+                                   ci_ifid_t ifindex,
+                                   int add)
 {
   oo_tcp_filter_mcast_t op;
   int rc;
 
-  op.tcp_id     = ep;
-  op.ifindex    = ifindex;
-  op.addr       = mcast_addr;
+  op.tcp_id = ep;
+  op.ifindex = ifindex;
+  op.addr = mcast_addr;
 
   VERB(ci_log("%s: id=%d %s", __FUNCTION__, OO_SP_FMT(ep),
               add ? "add" : "del"));
   rc = oo_resource_op(fd,
-                      add ? OO_IOC_EP_FILTER_MCAST_ADD :
-                            OO_IOC_EP_FILTER_MCAST_DEL,
+                      add ? OO_IOC_EP_FILTER_MCAST_ADD : OO_IOC_EP_FILTER_MCAST_DEL,
                       &op);
 
-  if( rc < 0 )
-    LOG_SV(ci_log("%s: %s failed for %d (rc=%d)", 
+  if (rc < 0)
+    LOG_SV(ci_log("%s: %s failed for %d (rc=%d)",
                   __FUNCTION__, add ? "add" : "del", OO_SP_FMT(ep), rc));
   return rc;
 }
-
 
 int __ci_tcp_helper_stack_attach(ci_fd_t from_fd,
                                  efrm_nic_set_t *out_ptr_nic_set,
@@ -239,7 +231,7 @@ int __ci_tcp_helper_stack_attach(ci_fd_t from_fd,
   ci_assert(out_map_size);
   op.is_service = is_service;
   rc = oo_resource_op(from_fd, OO_IOC_STACK_ATTACH, &op);
-  if( rc < 0 )
+  if (rc < 0)
     return rc;
   *out_ptr_nic_set = op.out_nic_set;
   *out_map_size = op.out_map_size;
@@ -265,8 +257,8 @@ int ci_tcp_helper_sock_attach(ci_fd_t stack_fd, oo_sp ep_id,
   op.domain = domain;
   oo_rwlock_lock_read(&citp_dup2_lock);
   rc = oo_resource_op(stack_fd, OO_IOC_SOCK_ATTACH, &op);
-  oo_rwlock_unlock_read (&citp_dup2_lock);
-  if( rc < 0 )
+  oo_rwlock_unlock_read(&citp_dup2_lock);
+  if (rc < 0)
     return rc;
   return op.fd;
 }
@@ -280,14 +272,13 @@ int ci_tcp_helper_sock_attach_to_existing_file(ci_fd_t stack_fd, oo_sp ep_id)
   op.ep_id = ep_id;
   oo_rwlock_lock_read(&citp_dup2_lock);
   rc = oo_resource_op(stack_fd, OO_IOC_SOCK_ATTACH_TO_EXISTING, &op);
-  oo_rwlock_unlock_read (&citp_dup2_lock);
-  if( rc < 0 )
+  oo_rwlock_unlock_read(&citp_dup2_lock);
+  if (rc < 0)
     return rc;
   return op.fd;
 }
 
 #endif
-
 
 int ci_tcp_helper_tcp_accept_sock_attach(ci_fd_t stack_fd, oo_sp ep_id,
                                          int type)
@@ -299,8 +290,8 @@ int ci_tcp_helper_tcp_accept_sock_attach(ci_fd_t stack_fd, oo_sp ep_id,
   op.type = type;
   oo_rwlock_lock_read(&citp_dup2_lock);
   rc = oo_resource_op(stack_fd, OO_IOC_TCP_ACCEPT_SOCK_ATTACH, &op);
-  oo_rwlock_unlock_read (&citp_dup2_lock);
-  if( rc < 0 )
+  oo_rwlock_unlock_read(&citp_dup2_lock);
+  if (rc < 0)
     return rc;
   return op.fd;
 }
@@ -314,17 +305,15 @@ int ci_tcp_helper_pipe_attach(ci_fd_t stack_fd, oo_sp ep_id,
   op.ep_id = ep_id;
   op.flags = flags;
   rc = oo_resource_op(stack_fd, OO_IOC_PIPE_ATTACH, &op);
-  if( rc < 0 )
+  if (rc < 0)
     return rc;
   fds[0] = op.rfd;
   fds[1] = op.wfd;
   return rc;
 }
 
-
 #include <onload/dup2_lock.h>
 oo_rwlock citp_dup2_lock;
-
 
 ci_fd_t ci_tcp_helper_get_sock_fd(ci_fd_t fd)
 {
@@ -334,24 +323,22 @@ ci_fd_t ci_tcp_helper_get_sock_fd(ci_fd_t fd)
   oo_rwlock_lock_read(&citp_dup2_lock);
   op.sock_id = -1;
   rc = oo_resource_op(fd, OO_IOC_OS_SOCK_FD_GET, &op);
-  if( rc == 0 )
+  if (rc == 0)
     return op.fd_out;
-  oo_rwlock_unlock_read (&citp_dup2_lock);
-  return (ci_fd_t) rc; /*! \TODO FIXME: remove cast */
+  oo_rwlock_unlock_read(&citp_dup2_lock);
+  return (ci_fd_t)rc; /*! \TODO FIXME: remove cast */
 }
-
 
 int ci_tcp_helper_rel_sock_fd(ci_fd_t fd)
 {
   int rc = 0;
-  rc = ci_sys_close (fd);
-  oo_rwlock_unlock_read (&citp_dup2_lock);
+  rc = ci_sys_close(fd);
+  oo_rwlock_unlock_read(&citp_dup2_lock);
   return rc;
 }
 
-
-int ci_tcp_helper_bind_os_sock(ci_fd_t fd, const struct sockaddr* address,
-                               size_t addrlen, ci_uint16* out_port)
+int ci_tcp_helper_bind_os_sock(ci_fd_t fd, const struct sockaddr *address,
+                               size_t addrlen, ci_uint16 *out_port)
 {
   int rc;
   oo_tcp_bind_os_sock_t op;
@@ -361,7 +348,8 @@ int ci_tcp_helper_bind_os_sock(ci_fd_t fd, const struct sockaddr* address,
 
   rc = oo_resource_op(fd, OO_IOC_TCP_BIND_OS_SOCK, &op);
 
-  if (rc < 0) {
+  if (rc < 0)
+  {
     errno = -rc;
     return -1;
   }
@@ -373,20 +361,19 @@ int ci_tcp_helper_bind_os_sock(ci_fd_t fd, const struct sockaddr* address,
   return rc;
 }
 
-
 int ci_tcp_helper_listen_os_sock(ci_fd_t fd, int backlog)
 {
   int rc;
 
   rc = oo_resource_op(fd, OO_IOC_TCP_LISTEN_OS_SOCK, &backlog);
-  if (rc < 0) {
+  if (rc < 0)
+  {
     errno = -rc;
     return -1;
   }
-  ci_assert (rc == 0);
+  ci_assert(rc == 0);
   return rc;
 }
-
 
 int ci_tcp_helper_endpoint_shutdown(ci_netif *ni, oo_sp sock_id,
                                     int how, ci_uint32 old_state)
@@ -399,14 +386,14 @@ int ci_tcp_helper_endpoint_shutdown(ci_netif *ni, oo_sp sock_id,
   op.old_state = old_state;
   rc = oo_resource_op(ci_netif_get_driver_handle(ni),
                       OO_IOC_TCP_ENDPOINT_SHUTDOWN, &op);
-  if (rc < 0) {
+  if (rc < 0)
+  {
     errno = -rc;
     return -1;
   }
-  ci_assert (rc == 0);
+  ci_assert(rc == 0);
   return rc;
 }
-
 
 int ci_tcp_helper_set_tcp_close_os_sock(ci_netif *ni, oo_sp sock_id)
 {
@@ -414,14 +401,13 @@ int ci_tcp_helper_set_tcp_close_os_sock(ci_netif *ni, oo_sp sock_id)
                         OO_IOC_TCP_CLOSE_OS_SOCK, &sock_id);
 }
 
-
 /* This ioctl creates a backing OS socket for a TCP endpoint. If a socket
  * option is passed with level >= 0 then that option is synced to the OS
  * socket after creation.
  */
 int ci_tcp_helper_os_sock_create_and_set(ci_netif *ni, ci_fd_t fd,
                                          ci_sock_cmn *s, int level,
-                                         int optname, const void* optval,
+                                         int optname, const void *optval,
                                          int optlen)
 {
   int rc;
@@ -443,7 +429,8 @@ int ci_tcp_helper_os_sock_create_and_set(ci_netif *ni, ci_fd_t fd,
   ci_assert_nequal(s->b.state, CI_TCP_LISTEN);
 
   /* no timers expected */
-  if( (s->b.state & CI_TCP_STATE_TCP) ) {
+  if ((s->b.state & CI_TCP_STATE_TCP))
+  {
     ci_tcp_state_verify_no_timers(ni, SOCK_TO_TCP(s));
   }
 
@@ -455,21 +442,19 @@ int ci_tcp_helper_os_sock_create_and_set(ci_netif *ni, ci_fd_t fd,
   return rc;
 }
 
-
 #if CI_CFG_TCP_SHARED_LOCAL_PORTS
 int ci_tcp_helper_alloc_active_wild(ci_netif *ni, ci_addr_t laddr)
 {
   oo_alloc_active_wild_t aaw = {
-    .laddr = laddr,
+      .laddr = laddr,
   };
   return oo_resource_op(ci_netif_get_driver_handle(ni),
                         OO_IOC_ALLOC_ACTIVE_WILD, &aaw);
 }
 #endif
 
-
 #if CI_CFG_WANT_BPF_NATIVE
-int ci_netif_evq_poll_k(ci_netif* ni, int _n)
+int ci_netif_evq_poll_k(ci_netif *ni, int _n)
 {
   ci_uint32 intf_i = _n;
 
@@ -479,24 +464,23 @@ int ci_netif_evq_poll_k(ci_netif* ni, int _n)
 }
 #endif
 
-
-int ci_tcp_helper_zc_register_buffers(ci_netif* ni, void* base, int num_pages,
-                                      uint64_t* hw_addrs, uint64_t* id)
+int ci_tcp_helper_zc_register_buffers(ci_netif *ni, void *base, int num_pages,
+                                      uint64_t *hw_addrs, uint64_t *id)
 {
   oo_zc_register_buffers_t arg = {
-    .base_ptr = (uintptr_t)base,
-    .num_pages = num_pages,
-    .hw_addrs_ptr = (uintptr_t)hw_addrs,
+      .base_ptr = (uintptr_t)base,
+      .num_pages = num_pages,
+      .hw_addrs_ptr = (uintptr_t)hw_addrs,
   };
   int rc = oo_resource_op(ci_netif_get_driver_handle(ni),
                           OO_IOC_ZC_REGISTER_BUFFERS, &arg);
-  if( rc < 0 )
+  if (rc < 0)
     return rc;
   *id = arg.id;
   return 0;
 }
 
-int ci_tcp_helper_zc_unregister_buffers(ci_netif* ni, uint64_t id)
+int ci_tcp_helper_zc_unregister_buffers(ci_netif *ni, uint64_t id)
 {
   return oo_resource_op(ci_netif_get_driver_handle(ni),
                         OO_IOC_ZC_UNREGISTER_BUFFERS, &id);

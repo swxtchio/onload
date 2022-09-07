@@ -4,6 +4,7 @@ TARGET		:= $(CIIP_LIB)
 MMAKE_TYPE	:= LIB
 
 LIB_SRCS	:=		\
+		dpdk.c \
 		netif.c		\
 		iptimer.c	\
 		netif_event.c	\
@@ -53,7 +54,7 @@ LIB_SRCS	:=		\
 		active_wild.c	\
 		pkt_checksum.c	\
 		netif_dtor.c	\
-		ringbuffer.c
+		ringbuffer.c 
 
 ifneq ($(DRIVER),1)
 LIB_SRCS	+=		\
@@ -103,9 +104,12 @@ ifeq ($(LINUX),1)
 # gcc v4 in FC4 incorrectly complains about uninitialised variables, so we
 # switch off the test for this file
 $(MMAKE_OBJ_PREFIX)udp_recv.o: cwarnings += -Wno-uninitialized
+# these are dpdk "warnings" so we don't really care
+$(MMAKE_OBJ_PREFIX)dpdk.o: cwarnings += -Wno-implicit-fallthrough
 endif
 
 endif
+
 
 MMAKE_CFLAGS += $(CP_INTF_VER_CFLAGS)
 

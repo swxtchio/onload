@@ -2,7 +2,7 @@
 # X-SPDX-Copyright-Text: (c) Copyright 2004-2020 Xilinx, Inc.
 GNU	    := 1
 MMAKE_CARCH ?= -mtune=native
-MMAKE_CARCH := -m64 $(MMAKE_CTUNE)
+MMAKE_CARCH := -march=native $(MMAKE_CTUNE)
 
 MMAKE_RELOCATABLE_LIB := -z combreloc
 

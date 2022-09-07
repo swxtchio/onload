@@ -14,39 +14,40 @@
 #error "don't include ci/internal/transport_config_opt.h from binary-only code"
 #endif
 
-
 #ifndef __KERNEL__
 /* Maps the shared memory regions that are used as the interface between the
  * control plane and its clients.  On failure, this function will clean up any
  * partially-initialised state. */
-int
-oo_cp_create(int fd, struct oo_cplane_handle* cp, enum cp_sync_mode mode,
-             ci_uint32 flags)
+int oo_cp_create(int fd, struct oo_cplane_handle *cp, enum cp_sync_mode mode,
+                 ci_uint32 flags)
 {
+  ci_log("KYLE WAS HERE CP create");
   static const ci_uint32 SUPPORTED_FLAGS = CP_CREATE_FLAGS_INIT_NET;
 
   size_t fwd_offset, fwd_len, fwd_rw_offset, fwd_rw_len;
 
-  struct cp_mibs* mibs = cp->mib;
+  struct cp_mibs *mibs = cp->mib;
   int rc;
-  void* mib_mem;
-  void* fwd_mem;
+  void *mib_mem;
+  void *fwd_mem;
   ci_uint32 op;
 
-  if( flags & ~SUPPORTED_FLAGS )
+  if (flags & ~SUPPORTED_FLAGS)
     return -EINVAL;
 
   /* Check user-kernel interface version. */
   rc = cp_ioctl(fd, OO_IOC_CP_CHECK_VERSION, &oo_cplane_api_version);
-  if( rc != 0 )
+  if (rc != 0)
     return rc;
 
   /* If the caller has requested init_net, we need to associate the file with
    * that instance before we do any other cplane ioctls. */
-  if( flags & CP_CREATE_FLAGS_INIT_NET ) {
+  if (flags & CP_CREATE_FLAGS_INIT_NET)
+  {
     op = CP_SELECT_INSTANCE_INIT_NET;
     rc = cp_ioctl(fd, OO_IOC_CP_SELECT_INSTANCE, &op);
-    if( rc != 0 ) {
+    if (rc != 0)
+    {
       ci_log("ERROR: failed to select control plane instance: %s",
              strerror(-rc));
       return rc;
@@ -58,25 +59,27 @@ oo_cp_create(int fd, struct oo_cplane_handle* cp, enum cp_sync_mode mode,
    * while we're asleep, the ioctl will fail with EINTR, and we want to try
    * again. */
   op = mode;
-  do {
+  do
+  {
     rc = cp_ioctl(fd, OO_IOC_CP_WAIT_FOR_SERVER, &op);
-  } while( rc == -EINTR );
-  if( rc != 0 )
+  } while (rc == -EINTR);
+  if (rc != 0)
     return rc;
 
   /* Find out the MIB size */
   rc = cp_ioctl(fd, OO_IOC_CP_MIB_SIZE, &cp->bytes);
-  if( rc != 0 )
+  if (rc != 0)
     return rc;
 
   ci_assert(cp->bytes);
   ci_assert_equal(cp->bytes & (CI_PAGE_SIZE - 1), 0);
 
   /* Mmap MIBs */
-  mib_mem = mmap(NULL, cp->bytes, PROT_READ , MAP_SHARED, fd,
+  mib_mem = mmap(NULL, cp->bytes, PROT_READ, MAP_SHARED, fd,
                  OO_MMAP_MAKE_OFFSET(OO_MMAP_TYPE_CPLANE,
                                      OO_MMAP_CPLANE_ID_MIB));
-  if( mib_mem == MAP_FAILED ) {
+  if (mib_mem == MAP_FAILED)
+  {
     ci_log("ERROR: failed to mmap cplane MIBs: %s", strerror(errno));
     return -errno;
   }
@@ -93,7 +96,8 @@ oo_cp_create(int fd, struct oo_cplane_handle* cp, enum cp_sync_mode mode,
 #endif
   fwd_offset = CP_MMAP_LOCAL_FWD_OFFSET();
   fwd_mem = mmap(NULL, fwd_len, PROT_READ, MAP_SHARED, fd, fwd_offset);
-  if( fwd_mem == MAP_FAILED ) {
+  if (fwd_mem == MAP_FAILED)
+  {
     ci_log("ERROR: failed to mmap fwd part of Control Plane memory: %s",
            strerror(errno));
     rc = -errno;
@@ -111,9 +115,10 @@ oo_cp_create(int fd, struct oo_cplane_handle* cp, enum cp_sync_mode mode,
 #endif
   fwd_rw_offset = CP_MMAP_LOCAL_FWD_RW_OFFSET();
   mibs[1].fwd_table.rw_rows = mibs[0].fwd_table.rw_rows = mmap(
-          NULL, fwd_rw_len, PROT_READ | PROT_WRITE, MAP_SHARED,
-          fd, fwd_rw_offset);
-  if( mibs[0].fwd_table.rw_rows == MAP_FAILED ) {
+      NULL, fwd_rw_len, PROT_READ | PROT_WRITE, MAP_SHARED,
+      fd, fwd_rw_offset);
+  if (mibs[0].fwd_table.rw_rows == MAP_FAILED)
+  {
     ci_log("ERROR: failed to mmap fwd_rw part of Control Plane memory: %s",
            strerror(errno));
     rc = -errno;
@@ -130,8 +135,7 @@ oo_cp_create(int fd, struct oo_cplane_handle* cp, enum cp_sync_mode mode,
 
 /* Tear down the mappings of the control plane.  Necessary only if
  * oo_cp_create() succeeded. */
-void
-oo_cp_destroy(struct oo_cplane_handle* cp)
+void oo_cp_destroy(struct oo_cplane_handle *cp)
 {
   munmap(cp->mib->fwd_table.rows, /* rows pointer is equivalent to fwd_blob */
          CI_ROUND_UP(cp_calc_fwd_blob_size(cp->mib->dim), CI_PAGE_SIZE));
@@ -143,23 +147,22 @@ oo_cp_destroy(struct oo_cplane_handle* cp)
 
 #if !defined(__KERNEL__)
 static int
-oo_op_route_resolve(struct oo_cplane_handle* cp, struct cp_fwd_key* key)
+oo_op_route_resolve(struct oo_cplane_handle *cp, struct cp_fwd_key *key)
 {
   int rc;
 
   rc = cp_ioctl(cp->fd, OO_IOC_CP_FWD_RESOLVE, key);
   /* Fixme: should we re-start in case of EAGAIN? */
-  if( rc < 0 )
+  if (rc < 0)
     return rc;
   return 0;
 }
 #endif
 
-
 #ifdef __KERNEL__
 static DEFINE_PER_CPU(unsigned, seed);
 #endif
-static int oo_cp_multipath_hash(struct cp_fwd_key* key, int max)
+static int oo_cp_multipath_hash(struct cp_fwd_key *key, int max)
 {
   /* We'd better use hash from the key and some data from the connection -
    * ports, socket_id, etc.
@@ -186,27 +189,28 @@ static int oo_cp_multipath_hash(struct cp_fwd_key* key, int max)
   return ((p >> 16) & 0x7fff) % max;
 }
 
-int __oo_cp_route_resolve(struct oo_cplane_handle* cp,
-                          cicp_verinfo_t* verinfo,
-                          struct cp_fwd_key* key,
-                          int/*bool*/ ask_server,
-                          struct cp_fwd_data* data,
+int __oo_cp_route_resolve(struct oo_cplane_handle *cp,
+                          cicp_verinfo_t *verinfo,
+                          struct cp_fwd_key *key,
+                          int /*bool*/ ask_server,
+                          struct cp_fwd_data *data,
                           cp_fwd_table_id fwd_table_id)
 {
-  struct cp_fwd_table* fwd_table = oo_cp_get_fwd_table(cp, fwd_table_id);
+  struct cp_fwd_table *fwd_table = oo_cp_get_fwd_table(cp, fwd_table_id);
   cp_version_t ver, old_ver;
   cicp_mac_rowid_t id;
-  struct cp_fwd_row* fwd;
+  struct cp_fwd_row *fwd;
   int first_pass = 1;
   ci_uint32 weight = CP_FWD_MULTIPATH_WEIGHT_NONE;
 
- find_again:
+find_again:
   id = cp_fwd_find_match(fwd_table, key, weight);
-  if( id == CICP_MAC_ROWID_BAD ||
+  if (id == CICP_MAC_ROWID_BAD ||
       ~(fwd = cp_get_fwd_by_id(fwd_table, id))->flags &
-        CICP_FWD_FLAG_DATA_VALID ||
-      ! cp_fwd_find_row_found_perfect_match(fwd_table, id, key) ) {
-    if( ! ask_server )
+          CICP_FWD_FLAG_DATA_VALID ||
+      !cp_fwd_find_row_found_perfect_match(fwd_table, id, key))
+  {
+    if (!ask_server)
       return -ENOENT;
     oo_op_route_resolve(cp, key CI_KERNEL_ARG(fwd_table_id));
     ask_server = CI_FALSE;
@@ -216,25 +220,27 @@ int __oo_cp_route_resolve(struct oo_cplane_handle* cp,
   }
 
   ver = OO_ACCESS_ONCE(*cp_fwd_version(fwd));
-  do {
-    if( ~ fwd->flags & CICP_FWD_FLAG_DATA_VALID ||
-        ! cp_fwd_key_match(fwd, key) )
-        goto find_again;
+  do
+  {
+    if (~fwd->flags & CICP_FWD_FLAG_DATA_VALID ||
+        !cp_fwd_key_match(fwd, key))
+      goto find_again;
     ci_rmb();
     *data = *cp_get_fwd_data_current(fwd);
-    if( first_pass && data->weight.end > 1 ) {
+    if (first_pass && data->weight.end > 1)
+    {
       weight = oo_cp_multipath_hash(key, data->weight.end);
       first_pass = 0;
-      if( ! cp_fwd_weight_match(weight, &data->weight) )
+      if (!cp_fwd_weight_match(weight, &data->weight))
         goto find_again;
     }
 
     /* We can accidentally increase TTL for a wrong row  - we do not care */
-    if( fwd->flags & CICP_FWD_FLAG_STALE )
+    if (fwd->flags & CICP_FWD_FLAG_STALE)
       fwd_table->rw_rows[id].frc_used = ci_frc64_get();
     old_ver = ver;
     ci_rmb();
-  } while( old_ver != (ver = OO_ACCESS_ONCE(*cp_fwd_version(fwd))) );
+  } while (old_ver != (ver = OO_ACCESS_ONCE(*cp_fwd_version(fwd))));
 
   verinfo->id = id;
   verinfo->version = ver;
@@ -245,17 +251,16 @@ int __oo_cp_route_resolve(struct oo_cplane_handle* cp,
    * without trying to re-resolve the MAC address when a new socket starts
    * using it.
    */
-  if( ask_server && ! (data->flags & CICP_FWD_DATA_FLAG_ARP_VALID) )
+  if (ask_server && !(data->flags & CICP_FWD_DATA_FLAG_ARP_VALID))
     oo_cp_arp_resolve(cp, verinfo, fwd_table_id);
   return 0;
 }
 
-int
-oo_cp_get_hwport_properties(struct oo_cplane_handle* cp, ci_hwport_id_t hwport,
-                            cp_hwport_flags_t* out_mib_flags,
-                            cp_nic_flags_t* out_nic_flags)
+int oo_cp_get_hwport_properties(struct oo_cplane_handle *cp, ci_hwport_id_t hwport,
+                                cp_hwport_flags_t *out_mib_flags,
+                                cp_nic_flags_t *out_nic_flags)
 {
-  struct cp_mibs* mib;
+  struct cp_mibs *mib;
   cp_version_t version;
   int rc;
 
@@ -263,26 +268,26 @@ oo_cp_get_hwport_properties(struct oo_cplane_handle* cp, ci_hwport_id_t hwport,
 
   rc = 0;
 
-  if( cicp_hwport_row_is_free(&mib->hwport[hwport]) ) {
+  if (cicp_hwport_row_is_free(&mib->hwport[hwport]))
+  {
     rc = -ENOENT;
     goto out;
   }
 
-  if( out_mib_flags != NULL )
+  if (out_mib_flags != NULL)
     *out_mib_flags = mib->hwport[hwport].flags;
-  if( out_nic_flags != NULL )
+  if (out_nic_flags != NULL)
     *out_nic_flags = mib->hwport[hwport].nic_flags;
 
- out:
+out:
   CP_VERLOCK_STOP(version, mib)
   return rc;
 }
 
-
 ci_ifid_t
-oo_cp_get_hwport_ifindex(struct oo_cplane_handle* cp, ci_hwport_id_t hwport)
+oo_cp_get_hwport_ifindex(struct oo_cplane_handle *cp, ci_hwport_id_t hwport)
 {
-  struct cp_mibs* mib;
+  struct cp_mibs *mib;
   cp_version_t version;
   ci_ifid_t ifindex;
 
@@ -295,14 +300,13 @@ oo_cp_get_hwport_ifindex(struct oo_cplane_handle* cp, ci_hwport_id_t hwport)
   return ifindex;
 }
 
-
 #ifdef __KERNEL__
 
 /* Retrieves all hwports that allows Onload to run.  The return
  * value is a bitmap of hwports. */
-cicp_hwport_mask_t oo_cp_get_hwports(struct oo_cplane_handle* cp)
+cicp_hwport_mask_t oo_cp_get_hwports(struct oo_cplane_handle *cp)
 {
-  struct cp_mibs* mib;
+  struct cp_mibs *mib;
   cp_version_t version;
   cicp_hwport_mask_t all_hwports = 0;
 
@@ -311,18 +315,17 @@ cicp_hwport_mask_t oo_cp_get_hwports(struct oo_cplane_handle* cp)
   CP_VERLOCK_START(version, mib, cp)
 
   all_hwports =
-    cp_get_hwports(mib,
-                   cp_hwport_make_mask(mib->dim->hwport_max) - 1);
+      cp_get_hwports(mib,
+                     cp_hwport_make_mask(mib->dim->hwport_max) - 1);
 
   CP_VERLOCK_STOP(version, mib)
 
   return all_hwports;
 }
 
-
-int oo_cp_get_acceleratable_llap_count(struct oo_cplane_handle* cp)
+int oo_cp_get_acceleratable_llap_count(struct oo_cplane_handle *cp)
 {
-  struct cp_mibs* mib;
+  struct cp_mibs *mib;
   cp_version_t version;
   int llap_count = 0;
 
@@ -335,14 +338,13 @@ int oo_cp_get_acceleratable_llap_count(struct oo_cplane_handle* cp)
   return llap_count;
 }
 
-
 /* The current use-case for this function is the installation of scalable
  * filters on all interfaces.  Otherwise, iterating over ifindices is probably
  * the wrong approach. */
-int oo_cp_get_acceleratable_ifindices(struct oo_cplane_handle* cp,
-                                      ci_ifid_t* ifindices, int max_count)
+int oo_cp_get_acceleratable_ifindices(struct oo_cplane_handle *cp,
+                                      ci_ifid_t *ifindices, int max_count)
 {
-  struct cp_mibs* mib;
+  struct cp_mibs *mib;
   cp_version_t version;
   int llap_count = 0;
 

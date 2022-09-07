@@ -174,7 +174,6 @@ else
   ONLOAD_CFLAGS += -DCI_HAVE_SFC=0
 endif
 
-
 .PHONY: modules modules_install clean_kernel kernel
 
 kernel: modules

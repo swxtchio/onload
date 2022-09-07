@@ -57,7 +57,7 @@ MMAKE_OBJ_PREFIX := ci_tools_
 LIB_OBJS	 := $(LIB_SRCS:%.c=$(MMAKE_OBJ_PREFIX)%.o)
 
 ifeq (${PLATFORM},gnu_x86_64)
-MMAKE_CFLAGS	+= -mpclmul -msse4.1
+MMAKE_CFLAGS	+= -mpclmul -msse3 -msse4 -msse4.1
 endif
 
 # Only needed for i386 

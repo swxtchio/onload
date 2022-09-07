@@ -13,6 +13,7 @@
 
 #include "ip_internal.h"
 #include "uk_intf_ver.h"
+#include "dpdk.h"
 #include <ci/internal/efabcfg.h>
 #include <ci/internal/banner.h>
 #include <onload/version.h>
@@ -31,11 +32,9 @@
 #endif
 #endif
 
-
 #ifdef __KERNEL__
-const char* oo_uk_intf_ver = OO_UK_INTF_VER;
+const char *oo_uk_intf_ver = OO_UK_INTF_VER;
 #endif
-
 
 /*****************************************************************************
  *                                                                           *
@@ -44,17 +43,14 @@ const char* oo_uk_intf_ver = OO_UK_INTF_VER;
  *                                                                           *
  *****************************************************************************/
 
-
-
-
 #ifdef __KERNEL__
 
-#define assert_zero(x)  ci_assert_equal((x), 0)
+#define assert_zero(x) ci_assert_equal((x), 0)
 
-void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
+void ci_netif_state_init(ci_netif *ni, int cpu_khz, const char *name)
 {
-  ci_netif_state_nic_t* nn;
-  ci_netif_state* nis = ni->state;
+  ci_netif_state_nic_t *nn;
+  ci_netif_state *nis = ni->state;
   struct oo_p_dllink_state list;
   int nic_i;
   int i;
@@ -62,9 +58,10 @@ void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
   nis->opts = ni->opts;
 
   /* TX DMA overflow queue and id allocator init for nvme plugin */
-  OO_STACK_FOR_EACH_INTF_I(ni, nic_i) {
+  OO_STACK_FOR_EACH_INTF_I(ni, nic_i)
+  {
     nn = &nis->nic[nic_i];
-    for( i = 0; i < sizeof(nn->dmaq) / sizeof(nn->dmaq[0]); ++i )
+    for (i = 0; i < sizeof(nn->dmaq) / sizeof(nn->dmaq[0]); ++i)
       oo_pktq_init(&nn->dmaq[i]);
     assert_zero(nn->tx_bytes_added);
     assert_zero(nn->tx_bytes_removed);
@@ -74,10 +71,10 @@ void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
     nn->rx_frags = OO_PP_NULL;
 
 #if CI_CFG_TX_CRC_OFFLOAD
-  if( NI_OPTS(ni).tcp_offload_plugin == CITP_TCP_OFFLOAD_NVME )
-    ci_nvme_plugin_crc_id_init(&nis->nvme_crc_plugin_idp[nic_i],
-                               ni->nic_hw[nic_i].plugin_tx_region_id,
-                               NI_OPTS(ni).nvme_crc_table_cap);
+    if (NI_OPTS(ni).tcp_offload_plugin == CITP_TCP_OFFLOAD_NVME)
+      ci_nvme_plugin_crc_id_init(&nis->nvme_crc_plugin_idp[nic_i],
+                                 ni->nic_hw[nic_i].plugin_tx_region_id,
+                                 NI_OPTS(ni).nvme_crc_table_cap);
 #endif
   }
 
@@ -100,9 +97,10 @@ void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
   oo_p_dllink_init(ni, list);
   list = oo_p_dllink_ptr(ni, &nis->deferred_list_free);
   oo_p_dllink_init(ni, list);
-  for( i = 0; i < NI_OPTS(ni).defer_arp_pkts; i++ ) {
+  for (i = 0; i < NI_OPTS(ni).defer_arp_pkts; i++)
+  {
     struct oo_p_dllink_state link =
-                oo_p_dllink_ptr(ni, &ni->deferred_pkts[i].link);
+        oo_p_dllink_ptr(ni, &ni->deferred_pkts[i].link);
     oo_p_dllink_init(ni, link);
     oo_p_dllink_add(ni, list, link);
   }
@@ -114,9 +112,9 @@ void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
 #endif
 
   oo_p_dllink_init(ni, oo_p_dllink_ptr(ni,
-                   &nis->timeout_q[OO_TIMEOUT_Q_TIMEWAIT]));
+                                       &nis->timeout_q[OO_TIMEOUT_Q_TIMEWAIT]));
   oo_p_dllink_init(ni, oo_p_dllink_ptr(ni,
-                   &nis->timeout_q[OO_TIMEOUT_Q_FINWAIT]));
+                                       &nis->timeout_q[OO_TIMEOUT_Q_FINWAIT]));
   ci_ip_timer_init(ni, &nis->timeout_tid,
                    oo_ptr_to_statep(ni, &nis->timeout_tid),
                    "ttid");
@@ -166,21 +164,21 @@ void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
   oo_p_dllink_init(ni, oo_p_dllink_ptr(ni, &nis->post_poll_list));
 
   nis->sock_spin_cycles =
-            __oo_usec_to_cycles64(cpu_khz, NI_OPTS(ni).spin_usec);
+      __oo_usec_to_cycles64(cpu_khz, NI_OPTS(ni).spin_usec);
   nis->buzz_cycles =
-            __oo_usec_to_cycles64(cpu_khz, NI_OPTS(ni).buzz_usec);
+      __oo_usec_to_cycles64(cpu_khz, NI_OPTS(ni).buzz_usec);
   nis->timer_prime_cycles =
-            __oo_usec_to_cycles64(cpu_khz, NI_OPTS(ni).timer_prime_usec);
+      __oo_usec_to_cycles64(cpu_khz, NI_OPTS(ni).timer_prime_usec);
 #if CI_CFG_INJECT_PACKETS
   nis->kernel_packets_cycles =
-            __oo_usec_to_cycles64(cpu_khz,
-                                  NI_OPTS(ni).kernel_packets_timer_usec);
+      __oo_usec_to_cycles64(cpu_khz,
+                            NI_OPTS(ni).kernel_packets_timer_usec);
 #endif
 
   ci_ip_timer_state_init(ni, cpu_khz);
   nis->last_spin_poll_frc = IPTIMER_STATE(ni)->frc;
   nis->last_sleep_frc = IPTIMER_STATE(ni)->frc;
-  
+
   oo_timesync_update(efab_tcp_driver.timesync);
 
   assert_zero(nis->defer_work_count);
@@ -211,7 +209,8 @@ void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
 
 #if CI_CFG_EPOLL3
   nis->ready_lists_in_use = 0;
-  for( i = 0; i < CI_CFG_N_READY_LISTS; i++ ) {
+  for (i = 0; i < CI_CFG_N_READY_LISTS; i++)
+  {
     oo_p_dllink_init(ni, oo_p_dllink_ptr(ni, &nis->ready_lists[i]));
     oo_p_dllink_init(ni, oo_p_dllink_ptr(ni, &nis->unready_lists[i]));
     nis->ready_list_flags[i] = 0;
@@ -219,15 +218,16 @@ void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
 #endif
 
 #if CI_CFG_TCP_SHARED_LOCAL_PORTS
-  for( i = 0;
+  for (i = 0;
        i < nis->active_wild_table_entries_n * nis->active_wild_pools_n;
-       ++i ) {
+       ++i)
+  {
     oo_p_dllink_init(ni, oo_p_dllink_ptr(ni, &ni->active_wild_table[i]));
   }
   nis->active_wild_n = 0;
 #endif
 
-  for( i = 0; i < nis->seq_table_entries_n; ++i )
+  for (i = 0; i < nis->seq_table_entries_n; ++i)
     assert_zero(ni->seq_table[i].route_count);
 
   nis->packet_alloc_numa_nodes = 0;
@@ -245,7 +245,7 @@ void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
   oo_p_dllink_init(ni, list);
 
   nis->active_cache.avail_stack = oo_ptr_to_statep(ni,
-                                              &nis->active_cache_avail_stack);
+                                                   &nis->active_cache_avail_stack);
   nis->active_cache_avail_stack = nis->opts.sock_cache_max;
 
   list = oo_p_dllink_ptr(ni, &nis->passive_scalable_cache.cache);
@@ -255,8 +255,7 @@ void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
   list = oo_p_dllink_ptr(ni, &nis->passive_scalable_cache.fd_states);
   oo_p_dllink_init(ni, list);
 
-  nis->passive_scalable_cache.avail_stack = oo_ptr_to_statep
-    (ni, &ni->state->passive_cache_avail_stack);
+  nis->passive_scalable_cache.avail_stack = oo_ptr_to_statep(ni, &ni->state->passive_cache_avail_stack);
 #endif
 
 #if CI_CFG_INJECT_PACKETS
@@ -264,11 +263,9 @@ void ci_netif_state_init(ci_netif* ni, int cpu_khz, const char* name)
   assert_zero(nis->kernel_packets_last_forwarded);
   assert_zero(nis->kernel_packets_pending);
 #endif
-
 }
 
 #endif
-
 
 static int citp_ipstack_params_inited = 0;
 static ci_uint32 citp_tcp_sndbuf_min = CI_CFG_TCP_SNDBUF_MIN;
@@ -286,21 +283,21 @@ static ci_uint32 citp_tcp_adv_win_scale_max = CI_TCP_WSCL_MAX;
 static ci_uint32 citp_fin_timeout = CI_CFG_TCP_FIN_TIMEOUT;
 static ci_uint32 citp_retransmit_threshold = CI_TCP_RETRANSMIT_THRESHOLD;
 static ci_uint32 citp_retransmit_threshold_orphan =
-                   CI_TCP_RETRANSMIT_THRESHOLD_ORPHAN;
+    CI_TCP_RETRANSMIT_THRESHOLD_ORPHAN;
 static ci_uint32 citp_retransmit_threshold_syn =
-                   CI_TCP_RETRANSMIT_THRESHOLD_SYN;
+    CI_TCP_RETRANSMIT_THRESHOLD_SYN;
 static ci_uint32 citp_retransmit_threshold_synack =
-                   CI_TCP_RETRANSMIT_THRESHOLD_SYN;
+    CI_TCP_RETRANSMIT_THRESHOLD_SYN;
 static ci_uint32 citp_keepalive_probes = CI_TCP_KEEPALIVE_PROBES;
 static ci_uint32 citp_keepalive_time = CI_TCP_TCONST_KEEPALIVE_TIME;
 static ci_uint32 citp_keepalive_intvl = CI_TCP_TCONST_KEEPALIVE_INTVL;
 static ci_uint32 citp_syn_opts = CI_TCPT_SYN_FLAGS;
 static ci_uint32 citp_tcp_dsack = CI_CFG_TCP_DSACK;
 static ci_uint32 citp_tcp_time_wait_assassinate = CI_CFG_TIME_WAIT_ASSASSINATE;
-static ci_uint32 citp_tcp_early_retransmit = 3;  /* default as of 3.10 */
+static ci_uint32 citp_tcp_early_retransmit = 3; /* default as of 3.10 */
 static ci_uint32 citp_challenge_ack_limit = CI_CFG_CHALLENGE_ACK_LIMIT;
 static ci_uint32 citp_tcp_invalid_ratelimit =
-                        CI_CFG_TCP_OUT_OF_WINDOW_ACK_RATELIMIT;
+    CI_CFG_TCP_OUT_OF_WINDOW_ACK_RATELIMIT;
 
 #if CI_CFG_IPV6
 static ci_uint32 citp_auto_flowlabels = CI_AUTO_FLOWLABELS_DEFAULT;
@@ -320,7 +317,8 @@ ci_inline int ci_sysctl_get_values(char *path, ci_uint32 *ret, int n)
   strcpy(name, CI_CFG_PROC_PATH);
   strncpy(name + strlen(CI_CFG_PROC_PATH), path, CI_CFG_PROC_PATH_LEN_MAX);
   fd = ci_sys_open(name, O_RDONLY);
-  if (fd < 0) {
+  if (fd < 0)
+  {
     /* There are a lot of reasons to fail:
      * - too old kernel does not know this parameter;
      * - we are in chroot, and/or /proc is not mounted;
@@ -332,12 +330,14 @@ ci_inline int ci_sysctl_get_values(char *path, ci_uint32 *ret, int n)
   buflen = ci_sys_read(fd, buf, sizeof(buf));
   ci_sys_close(fd);
   buf[buflen - 1] = '\0';
-  for( i = 0; i < n && sscanf(p, "%u", &ret[i]) > 0; ++i ) {
-    while( buf + buflen > p && p[0] != '\t' )
+  for (i = 0; i < n && sscanf(p, "%u", &ret[i]) > 0; ++i)
+  {
+    while (buf + buflen > p && p[0] != '\t')
       p++;
     p++;
   }
-  if( i < n ) {
+  if (i < n)
+  {
     ci_log("%s: failed to parse %s: %s", __FUNCTION__, name, buf);
     return -1;
   }
@@ -349,8 +349,7 @@ ci_inline int ci_sysctl_get_values(char *path, ci_uint32 *ret, int n)
  * passive mode, when they call listen(), accept(), chroot() and listen().
  */
 
-int
-ci_setup_ipstack_params(void)
+int ci_setup_ipstack_params(void)
 {
   ci_uint32 opt[3];
 
@@ -362,32 +361,35 @@ ci_setup_ipstack_params(void)
     return 0;
 
   {
-    int fd = ci_sys_open(CI_CFG_PROC_PATH"net/ipv4", O_RDONLY | O_DIRECTORY);
-    if( fd < 0 ) {
-      ci_log("ERROR: failed to open "CI_CFG_PROC_PATH"net/ipv4");
+    int fd = ci_sys_open(CI_CFG_PROC_PATH "net/ipv4", O_RDONLY | O_DIRECTORY);
+    if (fd < 0)
+    {
+      ci_log("ERROR: failed to open " CI_CFG_PROC_PATH "net/ipv4");
       return -1;
     }
     ci_sys_close(fd);
   }
   /* We will re-read following values in kernel mode for every socket,
    * but we need them before the first socket is initialized. */
-  if( ci_sysctl_get_values("net/ipv4/tcp_wmem", opt, 3) == 0 ) {
+  if (ci_sysctl_get_values("net/ipv4/tcp_wmem", opt, 3) == 0)
+  {
     /* CI_CFG_TCP_SNDBUF_MIN is used */
     citp_tcp_sndbuf_def = opt[1];
     citp_tcp_sndbuf_max = opt[2];
   }
-  if( ci_sysctl_get_values("net/ipv4/tcp_rmem", opt, 3) == 0 ) {
+  if (ci_sysctl_get_values("net/ipv4/tcp_rmem", opt, 3) == 0)
+  {
     /* CI_CFG_TCP_RCVBUF_MIN is used */
     citp_tcp_rcvbuf_def = opt[1];
     citp_tcp_rcvbuf_max = opt[2];
   }
-  if( ci_sysctl_get_values("net/core/wmem_max", opt, 1) == 0 )
+  if (ci_sysctl_get_values("net/core/wmem_max", opt, 1) == 0)
     citp_udp_sndbuf_max = opt[0];
-  if( ci_sysctl_get_values("net/core/wmem_default", opt, 1) == 0 )
+  if (ci_sysctl_get_values("net/core/wmem_default", opt, 1) == 0)
     citp_udp_sndbuf_def = opt[0];
-  if( ci_sysctl_get_values("net/core/rmem_max", opt, 1) == 0 )
+  if (ci_sysctl_get_values("net/core/rmem_max", opt, 1) == 0)
     citp_udp_rcvbuf_max = opt[0];
-  if( ci_sysctl_get_values("net/core/rmem_default", opt, 1) == 0 )
+  if (ci_sysctl_get_values("net/core/rmem_default", opt, 1) == 0)
     citp_udp_rcvbuf_def = opt[0];
 
   if (ci_sysctl_get_values("net/ipv4/tcp_max_syn_backlog", opt, 1) == 0)
@@ -409,7 +411,8 @@ ci_setup_ipstack_params(void)
    * such a case.  See linux/net/ipv4/tcp_timer.c: tcp_orphan_retries()
    * for details. */
   if (ci_sysctl_get_values("net/ipv4/tcp_orphan_retries", opt, 1) == 0 &&
-      opt[0] > 0 ) {
+      opt[0] > 0)
+  {
     citp_retransmit_threshold_orphan = opt[0];
   }
   if (ci_sysctl_get_values("net/ipv4/tcp_syn_retries", opt, 1) == 0)
@@ -427,30 +430,33 @@ ci_setup_ipstack_params(void)
     citp_keepalive_intvl = opt[0] * 1000;
 
   /* SYN options */
-  if (ci_sysctl_get_values("net/ipv4/tcp_sack", opt, 1) == 0) {
-    if( opt[0] )
+  if (ci_sysctl_get_values("net/ipv4/tcp_sack", opt, 1) == 0)
+  {
+    if (opt[0])
       citp_syn_opts |= CI_TCPT_FLAG_SACK;
     else
-      citp_syn_opts &=~ CI_TCPT_FLAG_SACK;
+      citp_syn_opts &= ~CI_TCPT_FLAG_SACK;
   }
-  if (ci_sysctl_get_values("net/ipv4/tcp_timestamps", opt, 1) == 0) {
-    if( opt[0] )
+  if (ci_sysctl_get_values("net/ipv4/tcp_timestamps", opt, 1) == 0)
+  {
+    if (opt[0])
       citp_syn_opts |= CI_TCPT_FLAG_TSO;
     else
-      citp_syn_opts &=~ CI_TCPT_FLAG_TSO;
+      citp_syn_opts &= ~CI_TCPT_FLAG_TSO;
   }
-  if (ci_sysctl_get_values("net/ipv4/tcp_window_scaling", opt, 1) == 0) {
-    if( opt[0] )
+  if (ci_sysctl_get_values("net/ipv4/tcp_window_scaling", opt, 1) == 0)
+  {
+    if (opt[0])
       citp_syn_opts |= CI_TCPT_FLAG_WSCL;
     else
-      citp_syn_opts &=~ CI_TCPT_FLAG_WSCL;
+      citp_syn_opts &= ~CI_TCPT_FLAG_WSCL;
   }
 
   if (ci_sysctl_get_values("net/ipv4/tcp_dsack", opt, 1) == 0)
     citp_tcp_dsack = opt[0];
 
   if (ci_sysctl_get_values("net/ipv4/tcp_rfc1337", opt, 1) == 0)
-    citp_tcp_time_wait_assassinate = ! opt[0];
+    citp_tcp_time_wait_assassinate = !opt[0];
 
   if (ci_sysctl_get_values("net/ipv4/tcp_early_retrans", opt, 1) == 0)
     citp_tcp_early_retransmit = opt[0];
@@ -462,7 +468,7 @@ ci_setup_ipstack_params(void)
     citp_tcp_invalid_ratelimit = opt[0];
 
 #if CI_CFG_IPV6
-  if( ci_sysctl_get_values("net/ipv6/auto_flowlabels", opt, 1) == 0 )
+  if (ci_sysctl_get_values("net/ipv6/auto_flowlabels", opt, 1) == 0)
     citp_auto_flowlabels = opt[0];
 #endif
 
@@ -472,8 +478,7 @@ ci_setup_ipstack_params(void)
 
 #else
 
-int
-ci_setup_ipstack_params(void)
+int ci_setup_ipstack_params(void)
 {
   citp_ipstack_params_inited = 0;
   return 0;
@@ -481,26 +486,27 @@ ci_setup_ipstack_params(void)
 
 #endif /* __KERNEL__ */
 
-void ci_netif_config_opts_defaults(ci_netif_config_opts* opts)
+void ci_netif_config_opts_defaults(ci_netif_config_opts *opts)
 {
-# undef  CI_CFG_OPTFILE_VERSION
-# undef  CI_CFG_OPTGROUP
-# undef  CI_CFG_OPT
-# undef  CI_CFG_STR_OPT
-# define CI_CFG_OPT(env, name, type, doc, type_modifider, group,     \
-                    default, minimum, maximum, presentation)	      \
+#undef CI_CFG_OPTFILE_VERSION
+#undef CI_CFG_OPTGROUP
+#undef CI_CFG_OPT
+#undef CI_CFG_STR_OPT
+#define CI_CFG_OPT(env, name, type, doc, type_modifider, group, \
+                   default, minimum, maximum, presentation)     \
   opts->name = default;
 
-# define CI_CFG_STR_OPT(env, name, type, doc, type_modifider, group,   \
-                        default, minimum, maximum, presentation)       \
-  strncpy(opts->name, default, sizeof(opts->name));                    \
+#define CI_CFG_STR_OPT(env, name, type, doc, type_modifider, group, \
+                       default, minimum, maximum, presentation)     \
+  strncpy(opts->name, default, sizeof(opts->name));                 \
   opts->name[sizeof(opts->name) - 1] = 0;
 
-# include <ci/internal/opts_netif_def.h>
+#include <ci/internal/opts_netif_def.h>
 
   /* now modify defaults with information from the operating system */
   ci_setup_ipstack_params();
-  if (citp_ipstack_params_inited) {
+  if (citp_ipstack_params_inited)
+  {
     opts->tcp_sndbuf_min = citp_tcp_sndbuf_min;
     opts->tcp_sndbuf_def = citp_tcp_sndbuf_def;
     opts->tcp_sndbuf_max = citp_tcp_sndbuf_max;
@@ -545,30 +551,34 @@ void ci_netif_config_opts_defaults(ci_netif_config_opts* opts)
   }
 }
 
-void ci_netif_config_opts_rangecheck(ci_netif_config_opts* opts)
+void ci_netif_config_opts_rangecheck(ci_netif_config_opts *opts)
 {
   ci_uint64 MIN;
   ci_uint64 MAX;
-  ci_int64  SMIN;
-  ci_int64  SMAX;
+  ci_int64 SMIN;
+  ci_int64 SMAX;
   int _optbits;
   int _bitwidth;
 
   /* stop compiler complaining if these values are not used */
-  (void)MIN; (void)MAX; (void)SMIN; (void)SMAX;
-  (void)_optbits; (void)_bitwidth; 
-  
-#undef  CI_CFG_OPTFILE_VERSION
-#undef  CI_CFG_OPTGROUP
-#undef  CI_CFG_OPT
-#undef  CI_CFG_STR_OPT
+  (void)MIN;
+  (void)MAX;
+  (void)SMIN;
+  (void)SMAX;
+  (void)_optbits;
+  (void)_bitwidth;
 
-#define _CI_CFG_BITVAL   _optbits
-#define _CI_CFG_BITVAL1  1
-#define _CI_CFG_BITVAL2  2
-#define _CI_CFG_BITVAL3  3
-#define _CI_CFG_BITVAL4  4
-#define _CI_CFG_BITVAL8  8
+#undef CI_CFG_OPTFILE_VERSION
+#undef CI_CFG_OPTGROUP
+#undef CI_CFG_OPT
+#undef CI_CFG_STR_OPT
+
+#define _CI_CFG_BITVAL _optbits
+#define _CI_CFG_BITVAL1 1
+#define _CI_CFG_BITVAL2 2
+#define _CI_CFG_BITVAL3 3
+#define _CI_CFG_BITVAL4 4
+#define _CI_CFG_BITVAL8 8
 #define _CI_CFG_BITVAL12 12
 #define _CI_CFG_BITVAL16 16
 #define _CI_CFG_BITVALA8 _CI_CFG_BITVAL
@@ -577,41 +587,46 @@ void ci_netif_config_opts_rangecheck(ci_netif_config_opts* opts)
 #undef MAX
 #undef SMIN
 #undef SMAX
-    
+
 #define CI_CFG_REDRESS(opt, val) opt = val;
 #define CI_CFG_MSG "ERROR"
 
 #define CI_CFG_STR_OPT(...)
 
 #define CI_CFG_OPT(env, name, type, doc, bits, group, default, minimum, maximum, pres) \
-{ type _val = opts->name;					          \
-  type _max;								  \
-  type _min;								  \
-  _optbits=sizeof(type)*8;                                                \
-  _bitwidth=_CI_CFG_BITVAL##bits;					  \
-  MIN = 0;                                                                \
-  MAX = ((1ull<<(_bitwidth-1))<<1) - 1ull;       			  \
-  SMAX = MAX >> 1; SMIN = -SMAX-1;                                        \
-  _max = (type)(maximum); /* try to stop the compiler warning */          \
-  _min = (type)(minimum); /* about silly comparisons          */          \
-  if (_val > _max) {                                                      \
-    ci_log("config: "CI_CFG_MSG" - option " #name                         \
-           " (%"CI_PRIu64") larger than maximum " #maximum" (%"CI_PRIu64")",		  \
-           (ci_uint64)_val, (ci_uint64) _max);                                     \
-    CI_CFG_REDRESS(opts->name, _max);                                     \
-  }                                                                       \
-  if (_val < _min) {                                                      \
-    ci_log("config: "CI_CFG_MSG" - option " #name                         \
-           " (%"CI_PRIu64") smaller than minimum " #minimum,		  \
-           (ci_uint64)_val);                                              \
-    CI_CFG_REDRESS(opts->name, _min);                                     \
-  }                                                                       \
-}                                               
+  {                                                                                    \
+    type _val = opts->name;                                                            \
+    type _max;                                                                         \
+    type _min;                                                                         \
+    _optbits = sizeof(type) * 8;                                                       \
+    _bitwidth = _CI_CFG_BITVAL##bits;                                                  \
+    MIN = 0;                                                                           \
+    MAX = ((1ull << (_bitwidth - 1)) << 1) - 1ull;                                     \
+    SMAX = MAX >> 1;                                                                   \
+    SMIN = -SMAX - 1;                                                                  \
+    _max = (type)(maximum); /* try to stop the compiler warning */                     \
+    _min = (type)(minimum); /* about silly comparisons          */                     \
+    if (_val > _max)                                                                   \
+    {                                                                                  \
+      ci_log("config: " CI_CFG_MSG " - option " #name                                  \
+             " (%" CI_PRIu64 ") larger than maximum " #maximum " (%" CI_PRIu64 ")",    \
+             (ci_uint64)_val, (ci_uint64)_max);                                        \
+      CI_CFG_REDRESS(opts->name, _max);                                                \
+    }                                                                                  \
+    if (_val < _min)                                                                   \
+    {                                                                                  \
+      ci_log("config: " CI_CFG_MSG " - option " #name                                  \
+             " (%" CI_PRIu64 ") smaller than minimum " #minimum,                       \
+             (ci_uint64)_val);                                                         \
+      CI_CFG_REDRESS(opts->name, _min);                                                \
+    }                                                                                  \
+  }
 
-# include <ci/internal/opts_netif_def.h>
+#include <ci/internal/opts_netif_def.h>
 
   /* EF_MAX_ENDPOINTS should must be divisible by 2048 */
-  if( opts->max_ep_bufs % EP_BUF_PER_CHUNK != 0 ) {
+  if (opts->max_ep_bufs % EP_BUF_PER_CHUNK != 0)
+  {
     unsigned new_max = opts->max_ep_bufs;
     new_max = CI_ROUND_UP(new_max, EP_BUF_PER_CHUNK);
     ci_log("config: EF_MAX_ENDPOINTS is rounded up from %u to %u", opts->max_ep_bufs, new_max);
@@ -619,60 +634,63 @@ void ci_netif_config_opts_rangecheck(ci_netif_config_opts* opts)
   }
 }
 
-
-
 #ifndef __KERNEL__
 
-struct string_to_bitmask {
-  int               stb_index;
-  const char*const  stb_str;
+struct string_to_bitmask
+{
+  int stb_index;
+  const char *const stb_str;
 };
-
 
 /* str is a ',' separated list of options.  Each option in str is
  * compared against stb_str in each entry in opts.  stb_index'st bit
  * in bitmask_out is set if stb_default in opts is set and no option
  * in str turns it off by using '-' or some option in str enables it.
  */
-static void convert_string_to_bitmask(const char* str,
-                                      const struct string_to_bitmask* opts,
-                                      int opts_len, ci_uint32* bitmask_out)
+static void convert_string_to_bitmask(const char *str,
+                                      const struct string_to_bitmask *opts,
+                                      int opts_len, ci_uint32 *bitmask_out)
 {
   int len, i, opt_found, negate;
 
-  if( ! str )
+  if (!str)
     return;
 
   /* Parse the input string to add/remove bits */
-  while( 1 ) {
-    while( *str == ',' )
+  while (1)
+  {
+    while (*str == ',')
       ++str;
     len = strchrnul(str, ',') - str;
-    if( len == 0 )
+    if (len == 0)
       break;
 
     /* Check if we are removing an option */
-    if( *str == '-' ) {
+    if (*str == '-')
+    {
       negate = 1;
       ++str;
       --len;
     }
-    else {
+    else
+    {
       negate = 0;
     }
 
     /* Iterate opts looking for the parsed str */
     opt_found = 0;
-    for( i = 0; i < opts_len; ++i )
-      if( ! strncmp(str, opts[i].stb_str, len) ) {
-        if( negate )
+    for (i = 0; i < opts_len; ++i)
+      if (!strncmp(str, opts[i].stb_str, len))
+      {
+        if (negate)
           *bitmask_out &= ~(1 << opts[i].stb_index);
         else
           *bitmask_out |= 1 << opts[i].stb_index;
         ++opt_found;
         break;
       }
-    if( ! opt_found ) {
+    if (!opt_found)
+    {
       char buf[128];
       strncpy(buf, str, len);
       buf[len] = '\0';
@@ -682,38 +700,35 @@ static void convert_string_to_bitmask(const char* str,
   }
 }
 
-
-static void ci_netif_config_opts_getenv_ef_log(ci_netif_config_opts* opts)
+static void ci_netif_config_opts_getenv_ef_log(ci_netif_config_opts *opts)
 {
   struct string_to_bitmask options[EF_LOG_MAX] = {
-    {EF_LOG_BANNER, "banner"},
-    {EF_LOG_RESOURCE_WARNINGS, "resource_warnings"},
-    {EF_LOG_CONN_DROP, "conn_drop"},
-    {EF_LOG_CONFIG_WARNINGS, "config_warnings"},
-    {EF_LOG_USAGE_WARNINGS, "usage_warnings"},
+      {EF_LOG_BANNER, "banner"},
+      {EF_LOG_RESOURCE_WARNINGS, "resource_warnings"},
+      {EF_LOG_CONN_DROP, "conn_drop"},
+      {EF_LOG_CONFIG_WARNINGS, "config_warnings"},
+      {EF_LOG_USAGE_WARNINGS, "usage_warnings"},
   };
 
   convert_string_to_bitmask(getenv("EF_LOG"), options, EF_LOG_MAX,
                             &opts->log_category);
 }
 
-
 static void
-ci_netif_config_opts_getenv_ef_scalable_filters(ci_netif_config_opts* opts);
+ci_netif_config_opts_getenv_ef_scalable_filters(ci_netif_config_opts *opts);
 
 static int
-handle_str_opt(ci_netif_config_opts* opts,
-               const char* optname, char* optval_buf, size_t optval_buflen);
+handle_str_opt(ci_netif_config_opts *opts,
+               const char *optname, char *optval_buf, size_t optval_buflen);
 
 static int
-parse_enum(ci_netif_config_opts* opts,
-           const char* name, const char* const* options,
-           const char* default_val);
+parse_enum(ci_netif_config_opts *opts,
+           const char *name, const char *const *options,
+           const char *default_val);
 
-
-void ci_netif_config_opts_getenv(ci_netif_config_opts* opts)
+void ci_netif_config_opts_getenv(ci_netif_config_opts *opts)
 {
-  const char* s;
+  const char *s;
 
   /* Work out what logging is enabled first, so we can log config errors */
   ci_netif_config_opts_getenv_ef_log(opts);
@@ -723,9 +738,11 @@ void ci_netif_config_opts_getenv(ci_netif_config_opts* opts)
    * others...
    */
 
-  if( (s = getenv("EF_POLL_USEC")) ) {
+  if ((s = getenv("EF_POLL_USEC")))
+  {
     opts->spin_usec = atoi(s);
-    if( opts->spin_usec != 0 ) {
+    if (opts->spin_usec != 0)
+    {
       /* Don't buzz for too long by default! */
       opts->buzz_usec = CI_MIN(opts->spin_usec, 100);
       /* Disable EF_INT_DRIVEN by default when spinning. */
@@ -736,38 +753,42 @@ void ci_netif_config_opts_getenv(ci_netif_config_opts* opts)
        */
     }
   }
-  if( (s = getenv("EF_SPIN_USEC")) ) {
+  if ((s = getenv("EF_SPIN_USEC")))
+  {
     opts->spin_usec = atoi(s);
     /* Disable EF_INT_DRIVEN by default when spinning. */
-    if( opts->spin_usec != 0 )
+    if (opts->spin_usec != 0)
       opts->int_driven = 0;
   }
 
-  if( (s = getenv("EF_INT_DRIVEN")) )
+  if ((s = getenv("EF_INT_DRIVEN")))
     opts->int_driven = atoi(s);
 #if CI_CFG_WANT_BPF_NATIVE
-  if( (s = getenv("EF_POLL_IN_KERNEL")) )
+  if ((s = getenv("EF_POLL_IN_KERNEL")))
     opts->poll_in_kernel = atoi(s);
-  static const char* const xdp_mode_opts[] = { "disabled", "compatible", 0 };
+  static const char *const xdp_mode_opts[] = {"disabled", "compatible", 0};
   opts->xdp_mode = parse_enum(opts, "EF_XDP_MODE", xdp_mode_opts, "disabled");
-  if( opts->xdp_mode ) {
+  if (opts->xdp_mode)
+  {
     /* for now only in-kernel XDP is supported - enabling in-kernel mode implicitly */
     opts->poll_in_kernel = 1;
   }
 #endif
-  if( opts->int_driven )
+  if (opts->int_driven)
     /* Disable count-down timer when interrupt driven. */
     opts->timer_usec = 0;
-  if( (s = getenv("EF_HELPER_USEC")) ) {
+  if ((s = getenv("EF_HELPER_USEC")))
+  {
     opts->timer_usec = atoi(s);
-    if( opts->timer_usec != 0 )
+    if (opts->timer_usec != 0)
       /* Set the prime interval to half the timeout by default. */
       opts->timer_prime_usec = opts->timer_usec / 2;
   }
-  if( (s = getenv("EF_HELPER_PRIME_USEC")) )
+  if ((s = getenv("EF_HELPER_PRIME_USEC")))
     opts->timer_prime_usec = atoi(s);
 
-  if( (s = getenv("EF_BUZZ_USEC")) ) {
+  if ((s = getenv("EF_BUZZ_USEC")))
+  {
     opts->buzz_usec = atoi(s);
   }
 
@@ -776,463 +797,489 @@ void ci_netif_config_opts_getenv(ci_netif_config_opts* opts)
    */
 
 #if CI_CFG_POISON_BUFS
-  if( (s = getenv("EF_POISON")) )       opts->poison_rx_buf = atoi(s);
+  if ((s = getenv("EF_POISON")))
+    opts->poison_rx_buf = atoi(s);
 #endif
 #if CI_CFG_RANDOM_DROP
-  if( (s = getenv("EF_RX_DROP_RATE")) ) {
+  if ((s = getenv("EF_RX_DROP_RATE")))
+  {
     int r = atoi(s);
-    if( r )  opts->rx_drop_rate = RAND_MAX / r;
+    if (r)
+      opts->rx_drop_rate = RAND_MAX / r;
   }
 #endif
-  if( (s = getenv("EF_URG_RFC")) )
+  if ((s = getenv("EF_URG_RFC")))
     opts->urg_rfc = atoi(s);
 
-  static const char* const urgent_opts[] = { "allow", "ignore", 0 };
+  static const char *const urgent_opts[] = {"allow", "ignore", 0};
   opts->urg_mode = parse_enum(opts, "EF_TCP_URG_MODE", urgent_opts, "ignore");
 
-  if( (s = getenv("EF_MCAST_RECV")) )
+  if ((s = getenv("EF_MCAST_RECV")))
     opts->mcast_recv = atoi(s);
-  if( (s = getenv("EF_FORCE_SEND_MULTICAST")) )
+  if ((s = getenv("EF_FORCE_SEND_MULTICAST")))
     opts->force_send_multicast = atoi(s);
-  if( (s = getenv("EF_MCAST_SEND")) )
+  if ((s = getenv("EF_MCAST_SEND")))
     opts->mcast_send = atoi(s);
-  else if( (s = getenv("EF_MULTICAST_LOOP_OFF")) ) {
+  else if ((s = getenv("EF_MULTICAST_LOOP_OFF")))
+  {
     opts->multicast_loop_off = atoi(s);
-    switch( opts->multicast_loop_off ) {
-      case 0:
-        opts->mcast_send = CITP_MCAST_SEND_FLAG_LOCAL;
-        break;
-      case 1:
-        opts->mcast_send = 0;
-        break;
+    switch (opts->multicast_loop_off)
+    {
+    case 0:
+      opts->mcast_send = CITP_MCAST_SEND_FLAG_LOCAL;
+      break;
+    case 1:
+      opts->mcast_send = 0;
+      break;
     }
   }
-  if( (s = getenv("EF_MCAST_RECV_HW_LOOP")) )
+  if ((s = getenv("EF_MCAST_RECV_HW_LOOP")))
     opts->mcast_recv_hw_loop = atoi(s);
-  if( (s = getenv("EF_EVS_PER_POLL")) )
+  if ((s = getenv("EF_EVS_PER_POLL")))
     opts->evs_per_poll = atoi(s);
 #if CI_CFG_WANT_BPF_NATIVE
-  else if( opts->poll_in_kernel )
-    opts->evs_per_poll = 192;     /* See EF_EVS_PER_POLL documentation */
+  else if (opts->poll_in_kernel)
+    opts->evs_per_poll = 192; /* See EF_EVS_PER_POLL documentation */
 #endif
-  if( (s = getenv("EF_TCP_TCONST_MSL")) )
+  if ((s = getenv("EF_TCP_TCONST_MSL")))
     opts->msl_seconds = atoi(s);
-  if( (s = getenv("EF_TCP_FIN_TIMEOUT")) )
+  if ((s = getenv("EF_TCP_FIN_TIMEOUT")))
     opts->fin_timeout = atoi(s);
-  if( (s = getenv("EF_TCP_ADV_WIN_SCALE_MAX")) )
+  if ((s = getenv("EF_TCP_ADV_WIN_SCALE_MAX")))
     opts->tcp_adv_win_scale_max = atoi(s);
 
-  if( (s = getenv("EF_TCP_SYN_OPTS")) ) {
+  if ((s = getenv("EF_TCP_SYN_OPTS")))
+  {
     unsigned v;
     ci_verify(sscanf(s, "%x", &v) == 1);
     opts->syn_opts = citp_syn_opts = v;
   }
 
-  if ( (s = getenv("EF_MAX_PACKETS")) ) {
+  if ((s = getenv("EF_MAX_PACKETS")))
+  {
     int max_packets_rq = atoi(s);
     opts->max_packets = (max_packets_rq + PKTS_PER_SET - 1) &
-                                                ~(PKTS_PER_SET - 1);
-    if( opts->max_packets != max_packets_rq )
+                        ~(PKTS_PER_SET - 1);
+    if (opts->max_packets != max_packets_rq)
       /* ?? TODO: log message */
       ;
     opts->max_rx_packets = opts->max_packets * 3 / 4;
     opts->max_tx_packets = opts->max_packets * 3 / 4;
   }
-  if ( (s = getenv("EF_MAX_RX_PACKETS")) ) {
+  if ((s = getenv("EF_MAX_RX_PACKETS")))
+  {
     opts->max_rx_packets = atoi(s);
-    if( opts->max_rx_packets > opts->max_packets )
+    if (opts->max_rx_packets > opts->max_packets)
       opts->max_rx_packets = opts->max_packets;
   }
-  if ( (s = getenv("EF_MAX_TX_PACKETS")) ) {
+  if ((s = getenv("EF_MAX_TX_PACKETS")))
+  {
     opts->max_tx_packets = atoi(s);
-    if( opts->max_tx_packets > opts->max_packets )
+    if (opts->max_tx_packets > opts->max_packets)
       opts->max_tx_packets = opts->max_packets;
   }
-  if ( (s = getenv("EF_PREALLOC_PACKETS")) )
+  if ((s = getenv("EF_PREALLOC_PACKETS")))
     opts->prealloc_packets = atoi(s);
-  if ( (s = getenv("EF_RXQ_MIN")) )
+  if ((s = getenv("EF_RXQ_MIN")))
     opts->rxq_min = atoi(s);
-  if ( (s = getenv("EF_MIN_FREE_PACKETS")) )
+  if ((s = getenv("EF_MIN_FREE_PACKETS")))
     opts->min_free_packets = atoi(s);
-  if( (s = getenv("EF_PREFAULT_PACKETS")) )
+  if ((s = getenv("EF_PREFAULT_PACKETS")))
     opts->prefault_packets = atoi(s);
-  if ( (s = getenv("EF_MAX_ENDPOINTS")) )
+  if ((s = getenv("EF_MAX_ENDPOINTS")))
     opts->max_ep_bufs = atoi(s);
-  if ( (s = getenv("EF_ENDPOINT_PACKET_RESERVE")) )
+  if ((s = getenv("EF_ENDPOINT_PACKET_RESERVE")))
     opts->endpoint_packet_reserve = atoi(s);
-  if ( (s = getenv("EF_DEFER_ARP_MAX")) )
+  if ((s = getenv("EF_DEFER_ARP_MAX")))
     opts->defer_arp_pkts = atoi(s);
-  if ( (s = getenv("EF_DEFER_ARP_TIMEOUT")) )
+  if ((s = getenv("EF_DEFER_ARP_TIMEOUT")))
     opts->defer_arp_timeout = atoi(s);
-  if ( (s = getenv("EF_SHARE_WITH")) )
+  if ((s = getenv("EF_SHARE_WITH")))
     opts->share_with = atoi(s);
 #if CI_CFG_PKTS_AS_HUGE_PAGES
-  if( (s = getenv("EF_USE_HUGE_PAGES")) )
+  if ((s = getenv("EF_USE_HUGE_PAGES")))
     opts->huge_pages = atoi(s);
-  if( opts->huge_pages != 0 && opts->share_with != 0 ) {
+  if (opts->huge_pages != 0 && opts->share_with != 0)
+  {
     CONFIG_LOG(opts, CONFIG_WARNINGS, "Turning huge pages off because the "
-               "stack is going to be used by multiple users");
+                                      "stack is going to be used by multiple users");
     opts->huge_pages = 0;
   }
 #endif
-  if ( (s = getenv("EF_COMPOUND_PAGES_MODE")) )
+  if ((s = getenv("EF_COMPOUND_PAGES_MODE")))
     opts->compound_pages = atoi(s);
-  if ( (s = getenv("EF_RXQ_SIZE")) )
+  if ((s = getenv("EF_RXQ_SIZE")))
     opts->rxq_size = atoi(s);
-  if ( (s = getenv("EF_RXQ_LIMIT")) )
+  if ((s = getenv("EF_RXQ_LIMIT")))
     opts->rxq_limit = atoi(s);
-  if ( (s = getenv("EF_SHARED_RXQ_NUM")) )
+  if ((s = getenv("EF_SHARED_RXQ_NUM")))
     opts->shared_rxq_num = atoi(s);
-  if ( (s = getenv("EF_TXQ_SIZE")) )
+  if ((s = getenv("EF_TXQ_SIZE")))
     opts->txq_size = atoi(s);
-  if ( (s = getenv("EF_SEND_POLL_THRESH")) )
+  if ((s = getenv("EF_SEND_POLL_THRESH")))
     opts->send_poll_thresh = atoi(s);
-  if ( (s = getenv("EF_SEND_POLL_MAX_EVS")) )
+  if ((s = getenv("EF_SEND_POLL_MAX_EVS")))
     opts->send_poll_max_events = atoi(s);
-  if ( (s = getenv("EF_DEFER_WORK_LIMIT")) )
+  if ((s = getenv("EF_DEFER_WORK_LIMIT")))
     opts->defer_work_limit = atoi(s);
-  if( (s = getenv("EF_UDP_SEND_UNLOCK_THRESH")) )
+  if ((s = getenv("EF_UDP_SEND_UNLOCK_THRESH")))
     opts->udp_send_unlock_thresh = atoi(s);
-  if( (s = getenv("EF_UDP_PORT_HANDOVER_MIN")) )
+  if ((s = getenv("EF_UDP_PORT_HANDOVER_MIN")))
     opts->udp_port_handover_min = atoi(s);
-  if( (s = getenv("EF_UDP_PORT_HANDOVER_MAX")) )
+  if ((s = getenv("EF_UDP_PORT_HANDOVER_MAX")))
     opts->udp_port_handover_max = atoi(s);
-  if( (s = getenv("EF_UDP_PORT_HANDOVER2_MIN")) )
+  if ((s = getenv("EF_UDP_PORT_HANDOVER2_MIN")))
     opts->udp_port_handover2_min = atoi(s);
-  if( (s = getenv("EF_UDP_PORT_HANDOVER2_MAX")) )
+  if ((s = getenv("EF_UDP_PORT_HANDOVER2_MAX")))
     opts->udp_port_handover2_max = atoi(s);
-  if( (s = getenv("EF_UDP_PORT_HANDOVER3_MIN")) )
+  if ((s = getenv("EF_UDP_PORT_HANDOVER3_MIN")))
     opts->udp_port_handover3_min = atoi(s);
-  if( (s = getenv("EF_UDP_PORT_HANDOVER3_MAX")) )
+  if ((s = getenv("EF_UDP_PORT_HANDOVER3_MAX")))
     opts->udp_port_handover3_max = atoi(s);
-  if ( (s = getenv("EF_DELACK_THRESH")) )
+  if ((s = getenv("EF_DELACK_THRESH")))
     opts->delack_thresh = atoi(s);
 #if CI_CFG_DYNAMIC_ACK_RATE
-  if ( (s = getenv("EF_DYNAMIC_ACK_THRESH")) )
+  if ((s = getenv("EF_DYNAMIC_ACK_THRESH")))
     opts->dynack_thresh = atoi(s);
   /* Always want this value to be >= delack_thresh to simplify code
-   * that uses it 
+   * that uses it
    */
   opts->dynack_thresh = CI_MAX(opts->dynack_thresh, opts->delack_thresh);
 #endif
 
-  if ( (s = getenv("EF_CHALLENGE_ACK_LIMIT")) )
+  if ((s = getenv("EF_CHALLENGE_ACK_LIMIT")))
     opts->challenge_ack_limit = atoi(s);
-  if ( (s = getenv("EF_INVALID_ACK_RATELIMIT")) )
+  if ((s = getenv("EF_INVALID_ACK_RATELIMIT")))
     opts->oow_ack_ratelimit = atoi(s);
 #if CI_CFG_FD_CACHING
-  if ( (s = getenv("EF_SOCKET_CACHE_MAX")) )
+  if ((s = getenv("EF_SOCKET_CACHE_MAX")))
     opts->sock_cache_max = atoi(s);
-  if ( (s = getenv("EF_PER_SOCKET_CACHE_MAX")) )
+  if ((s = getenv("EF_PER_SOCKET_CACHE_MAX")))
     opts->per_sock_cache_max = atoi(s);
-  if( opts->per_sock_cache_max < 0 )
+  if (opts->per_sock_cache_max < 0)
     opts->per_sock_cache_max = opts->sock_cache_max;
 #endif
 
 #if CI_CFG_PORT_STRIPING
   /* configuration opttions for striping */
-  if ( (s = getenv("EF_STRIPE_NETMASK")) ) {
+  if ((s = getenv("EF_STRIPE_NETMASK")))
+  {
     int a1, a2, a3, a4;
     sscanf(s, "%d.%d.%d.%d", &a1, &a2, &a3, &a4);
     opts->stripe_netmask_be32 = (a1 << 24) | (a2 << 16) | (a3 << 8) | a4;
     opts->stripe_netmask_be32 = CI_BSWAP_BE32(opts->stripe_netmask_be32);
   }
-  if ( (s = getenv("EF_STRIPE_DUPACK_THRESH")) ) {
+  if ((s = getenv("EF_STRIPE_DUPACK_THRESH")))
+  {
     opts->stripe_dupack_threshold = atoi(s);
     opts->stripe_dupack_threshold =
-          CI_MAX(opts->stripe_dupack_threshold, CI_CFG_TCP_DUPACK_THRESH_BASE);
-    opts->stripe_dupack_threshold  =
-          CI_MIN(opts->stripe_dupack_threshold, CI_CFG_TCP_DUPACK_THRESH_MAX);
+        CI_MAX(opts->stripe_dupack_threshold, CI_CFG_TCP_DUPACK_THRESH_BASE);
+    opts->stripe_dupack_threshold =
+        CI_MIN(opts->stripe_dupack_threshold, CI_CFG_TCP_DUPACK_THRESH_MAX);
   }
-  if( (s = getenv("EF_STRIPE_TCP_OPT")) )
+  if ((s = getenv("EF_STRIPE_TCP_OPT")))
     opts->stripe_tcp_opt = atoi(s);
 #endif
-  if( (s = getenv("EF_TX_PUSH")) )
+  if ((s = getenv("EF_TX_PUSH")))
     opts->tx_push = atoi(s);
-  if( opts->tx_push && (s = getenv("EF_TX_PUSH_THRESHOLD")) )
+  if (opts->tx_push && (s = getenv("EF_TX_PUSH_THRESHOLD")))
     opts->tx_push_thresh = atoi(s);
-  if( (s = getenv("EF_PACKET_BUFFER_MODE")) )
+  if ((s = getenv("EF_PACKET_BUFFER_MODE")))
     opts->packet_buffer_mode = atoi(s);
-  if( (s = getenv("EF_TCP_RST_DELAYED_CONN")) )
+  if ((s = getenv("EF_TCP_RST_DELAYED_CONN")))
     opts->rst_delayed_conn = atoi(s);
-  if( (s = getenv("EF_TCP_SNDBUF_MODE")) )
+  if ((s = getenv("EF_TCP_SNDBUF_MODE")))
     opts->tcp_sndbuf_mode = atoi(s);
-  if( (s = getenv("EF_TCP_COMBINE_SENDS_MODE")) )
+  if ((s = getenv("EF_TCP_COMBINE_SENDS_MODE")))
     opts->tcp_combine_sends_mode = atoi(s);
-  if( (s = getenv("EF_TCP_SEND_NONBLOCK_NO_PACKETS_MODE")) )
+  if ((s = getenv("EF_TCP_SEND_NONBLOCK_NO_PACKETS_MODE")))
     opts->tcp_nonblock_no_pkts_mode = atoi(s);
-  if( (s = getenv("EF_TCP_RCVBUF_STRICT")) )
+  if ((s = getenv("EF_TCP_RCVBUF_STRICT")))
     opts->tcp_rcvbuf_strict = atoi(s);
-  if( (s = getenv("EF_TCP_RCVBUF_MODE")) )
+  if ((s = getenv("EF_TCP_RCVBUF_MODE")))
     opts->tcp_rcvbuf_mode = atoi(s);
-  if( (s = getenv("EF_POLL_ON_DEMAND")) )
+  if ((s = getenv("EF_POLL_ON_DEMAND")))
     opts->poll_on_demand = atoi(s);
-  if( (s = getenv("EF_INT_REPRIME")) )
+  if ((s = getenv("EF_INT_REPRIME")))
     opts->int_reprime = atoi(s);
-  if( (s = getenv("EF_NONAGLE_INFLIGHT_MAX")) )
+  if ((s = getenv("EF_NONAGLE_INFLIGHT_MAX")))
     opts->nonagle_inflight_max = atoi(s);
-  if( (s = getenv("EF_FORCE_TCP_NODELAY")) )
+  if ((s = getenv("EF_FORCE_TCP_NODELAY")))
     opts->tcp_force_nodelay = atoi(s);
-  if( (s = getenv("EF_IRQ_CORE")) )
+  if ((s = getenv("EF_IRQ_CORE")))
     opts->irq_core = atoi(s);
-  if( (s = getenv("EF_IRQ_CHANNEL")) )
+  if ((s = getenv("EF_IRQ_CHANNEL")))
     opts->irq_channel = atoi(s);
-  if( (s = getenv("EF_TCP_LISTEN_HANDOVER")) )
+  if ((s = getenv("EF_TCP_LISTEN_HANDOVER")))
     opts->tcp_listen_handover = atoi(s);
-  if( (s = getenv("EF_TCP_CONNECT_HANDOVER")) )
+  if ((s = getenv("EF_TCP_CONNECT_HANDOVER")))
     opts->tcp_connect_handover = atoi(s);
-  if( (s = getenv("EF_UDP_CONNECT_HANDOVER")) )
+  if ((s = getenv("EF_UDP_CONNECT_HANDOVER")))
     opts->udp_connect_handover = atoi(s);
-  if( (s = getenv("EF_UDP_SEND_UNLOCKED")) )
+  if ((s = getenv("EF_UDP_SEND_UNLOCKED")))
     opts->udp_send_unlocked = atoi(s);
-  if( (s = getenv("EF_UDP_SEND_NONBLOCK_NO_PACKETS_MODE")) )
+  if ((s = getenv("EF_UDP_SEND_NONBLOCK_NO_PACKETS_MODE")))
     opts->udp_nonblock_no_pkts_mode = atoi(s);
-  if( (s = getenv("EF_UNCONFINE_SYN")) )
+  if ((s = getenv("EF_UNCONFINE_SYN")))
     opts->unconfine_syn = atoi(s) != 0;
-  if( (s = getenv("EF_BINDTODEVICE_HANDOVER")) )
+  if ((s = getenv("EF_BINDTODEVICE_HANDOVER")))
     opts->bindtodevice_handover = atoi(s) != 0;
-  if( (s = getenv("EF_MCAST_JOIN_BINDTODEVICE")) )
+  if ((s = getenv("EF_MCAST_JOIN_BINDTODEVICE")))
     opts->mcast_join_bindtodevice = atoi(s) != 0;
-  if( (s = getenv("EF_MCAST_JOIN_HANDOVER")) )
+  if ((s = getenv("EF_MCAST_JOIN_HANDOVER")))
     opts->mcast_join_handover = atoi(s);
 
 #if CI_CFG_ENDPOINT_MOVE
-  if( (s = getenv("EF_TCP_SERVER_LOOPBACK")) )
+  if ((s = getenv("EF_TCP_SERVER_LOOPBACK")))
     opts->tcp_server_loopback = atoi(s);
-  if( (s = getenv("EF_TCP_CLIENT_LOOPBACK")) )
+  if ((s = getenv("EF_TCP_CLIENT_LOOPBACK")))
     opts->tcp_client_loopback = atoi(s);
   /* Forbid impossible combination of loopback options */
-  if( opts->tcp_server_loopback == CITP_TCP_LOOPBACK_OFF &&
-      opts->tcp_client_loopback == CITP_TCP_LOOPBACK_SAMESTACK )
+  if (opts->tcp_server_loopback == CITP_TCP_LOOPBACK_OFF &&
+      opts->tcp_client_loopback == CITP_TCP_LOOPBACK_SAMESTACK)
     opts->tcp_client_loopback = CITP_TCP_LOOPBACK_OFF;
 #endif
 
-  if( (s = getenv("EF_TCP_RX_CHECKS")) ) {
+  if ((s = getenv("EF_TCP_RX_CHECKS")))
+  {
     unsigned v;
     ci_verify(sscanf(s, "%x", &v) == 1);
     opts->tcp_rx_checks = v;
-    if( (s = getenv("EF_TCP_RX_LOG_FLAGS")) ) {
+    if ((s = getenv("EF_TCP_RX_LOG_FLAGS")))
+    {
       ci_verify(sscanf(s, "%x", &v) == 1);
       opts->tcp_rx_log_flags = v;
     }
   }
 
-  if( (s = getenv("EF_ACCEPTQ_MIN_BACKLOG")) )
+  if ((s = getenv("EF_ACCEPTQ_MIN_BACKLOG")))
     opts->acceptq_min_backlog = atoi(s);
 
-  if ( (s = getenv("EF_TCP_SNDBUF")) )
+  if ((s = getenv("EF_TCP_SNDBUF")))
     opts->tcp_sndbuf_user = atoi(s);
-  if ( (s = getenv("EF_TCP_RCVBUF")) )
+  if ((s = getenv("EF_TCP_RCVBUF")))
     opts->tcp_rcvbuf_user = atoi(s);
-  if ( (s = getenv("EF_UDP_SNDBUF")) )
+  if ((s = getenv("EF_UDP_SNDBUF")))
     opts->udp_sndbuf_user = atoi(s);
-  if ( (s = getenv("EF_UDP_RCVBUF")) )
+  if ((s = getenv("EF_UDP_RCVBUF")))
     opts->udp_rcvbuf_user = atoi(s);
 
-  if( (s = getenv("EF_TCP_SNDBUF_ESTABLISHED_DEFAULT")) )
+  if ((s = getenv("EF_TCP_SNDBUF_ESTABLISHED_DEFAULT")))
     opts->tcp_sndbuf_est_def = atoi(s);
-  if( (s = getenv("EF_TCP_RCVBUF_ESTABLISHED_DEFAULT")) )
+  if ((s = getenv("EF_TCP_RCVBUF_ESTABLISHED_DEFAULT")))
     opts->tcp_rcvbuf_est_def = atoi(s);
 
-  if( opts->tcp_sndbuf_user != 0 ) {
+  if (opts->tcp_sndbuf_user != 0)
+  {
     opts->tcp_sndbuf_min = opts->tcp_sndbuf_max = opts->tcp_sndbuf_user;
     opts->tcp_sndbuf_def = oo_adjust_SO_XBUF(opts->tcp_sndbuf_user);
   }
-  if( opts->tcp_rcvbuf_user != 0 ) {
+  if (opts->tcp_rcvbuf_user != 0)
+  {
     opts->tcp_rcvbuf_min = opts->tcp_rcvbuf_max = opts->tcp_rcvbuf_user;
     opts->tcp_rcvbuf_def = oo_adjust_SO_XBUF(opts->tcp_rcvbuf_user);
   }
-  if( opts->udp_sndbuf_user != 0 ) {
+  if (opts->udp_sndbuf_user != 0)
+  {
     opts->udp_sndbuf_min = opts->udp_sndbuf_max = opts->udp_sndbuf_user;
     opts->udp_sndbuf_def = oo_adjust_SO_XBUF(opts->udp_sndbuf_user);
   }
-  if( opts->udp_rcvbuf_user != 0 ) {
+  if (opts->udp_rcvbuf_user != 0)
+  {
     opts->udp_rcvbuf_min = opts->udp_rcvbuf_max = opts->udp_rcvbuf_user;
     opts->udp_rcvbuf_def = oo_adjust_SO_XBUF(opts->udp_rcvbuf_user);
   }
 
-  if ( (s = getenv("EF_RETRANSMIT_THRESHOLD_SYNACK")) )
+  if ((s = getenv("EF_RETRANSMIT_THRESHOLD_SYNACK")))
     opts->retransmit_threshold_synack = atoi(s);
 
-  if ( (s = getenv("EF_RETRANSMIT_THRESHOLD_SYN")) )
+  if ((s = getenv("EF_RETRANSMIT_THRESHOLD_SYN")))
     opts->retransmit_threshold_syn = atoi(s);
 
-  if ( (s = getenv("EF_RETRANSMIT_THRESHOLD")) )
+  if ((s = getenv("EF_RETRANSMIT_THRESHOLD")))
     opts->retransmit_threshold = atoi(s);
 
-  if ( (s = getenv("EF_TCP_BACKLOG_MAX")) ) {
+  if ((s = getenv("EF_TCP_BACKLOG_MAX")))
+  {
     opts->tcp_backlog_max = atoi(s);
-    if ( getenv("EF_TCP_SYNRECV_MAX") == NULL ) {
+    if (getenv("EF_TCP_SYNRECV_MAX") == NULL)
+    {
       opts->tcp_synrecv_max = opts->tcp_backlog_max *
                               CI_CFG_ASSUME_LISTEN_SOCKS;
     }
   }
-  if ( (s = getenv("EF_TCP_SYNRECV_MAX")) ) {
+  if ((s = getenv("EF_TCP_SYNRECV_MAX")))
+  {
     opts->tcp_synrecv_max = atoi(s);
   }
   /* Number of aux buffers is tcp_synrecv_max * 2.
    * Number of ep buffers which can be used by aux bufs is
    * tcp_synrecv_max * 2 / 7.
    * And we need some space for real endpoints. */
-  if( opts->tcp_synrecv_max * 4 > opts->max_ep_bufs * 7 ) {
+  if (opts->tcp_synrecv_max * 4 > opts->max_ep_bufs * 7)
+  {
     CONFIG_LOG(opts, CONFIG_WARNINGS, "%s: EF_TCP_SYNRECV_MAX=%d and "
-               "EF_MAX_ENDPOINTS=%d are inconsistent.",
-               opts->tcp_synrecv_max * 2 > opts->max_ep_bufs * 7 ?
-               "ERROR" : "WARNING",
+                                      "EF_MAX_ENDPOINTS=%d are inconsistent.",
+               opts->tcp_synrecv_max * 2 > opts->max_ep_bufs * 7 ? "ERROR" : "WARNING",
                opts->tcp_synrecv_max, opts->max_ep_bufs);
-    if( getenv("EF_TCP_SYNRECV_MAX") == NULL ) {
+    if (getenv("EF_TCP_SYNRECV_MAX") == NULL)
+    {
       CONFIG_LOG(opts, CONFIG_WARNINGS, "EF_TCP_SYNRECV_MAX is set to %d "
-                 "based on %s value and assuming up to %d listening "
-                 "sockets in the Onload stack",
+                                        "based on %s value and assuming up to %d listening "
+                                        "sockets in the Onload stack",
                  opts->tcp_synrecv_max,
-                 getenv("EF_TCP_BACKLOG_MAX") == NULL ?
-                 "/proc/sys/net/ipv4/tcp_max_syn_backlog" :
-                 "EF_TCP_BACKLOG_MAX",
+                 getenv("EF_TCP_BACKLOG_MAX") == NULL ? "/proc/sys/net/ipv4/tcp_max_syn_backlog" : "EF_TCP_BACKLOG_MAX",
                  CI_CFG_ASSUME_LISTEN_SOCKS);
     }
     CONFIG_LOG(opts, CONFIG_WARNINGS, "Too few endpoints requested: ~4 "
-               "syn-receive states consume one endpoint. ");
+                                      "syn-receive states consume one endpoint. ");
   }
 
-  if ( (s = getenv("EF_TCP_INITIAL_CWND")) )
+  if ((s = getenv("EF_TCP_INITIAL_CWND")))
     opts->initial_cwnd = atoi(s);
-  if ( (s = getenv("EF_TCP_LOSS_MIN_CWND")) )
+  if ((s = getenv("EF_TCP_LOSS_MIN_CWND")))
     opts->loss_min_cwnd = atoi(s);
-  if ( (s = getenv("EF_TCP_MIN_CWND")) )
+  if ((s = getenv("EF_TCP_MIN_CWND")))
     opts->min_cwnd = atoi(s);
 #if CI_CFG_TCP_FASTSTART
-  if ( (s = getenv("EF_TCP_FASTSTART_INIT")) )
+  if ((s = getenv("EF_TCP_FASTSTART_INIT")))
     opts->tcp_faststart_init = atoi(s);
-  if ( (s = getenv("EF_TCP_FASTSTART_IDLE")) )
+  if ((s = getenv("EF_TCP_FASTSTART_IDLE")))
     opts->tcp_faststart_idle = atoi(s);
-  if ( (s = getenv("EF_TCP_FASTSTART_LOSS")) )
+  if ((s = getenv("EF_TCP_FASTSTART_LOSS")))
     opts->tcp_faststart_loss = atoi(s);
 #endif
 
-  if ( (s = getenv("EF_RFC_RTO_INITIAL")))
+  if ((s = getenv("EF_RFC_RTO_INITIAL")))
     opts->rto_initial = atoi(s);
-  if ( (s = getenv("EF_RFC_RTO_MIN")))
+  if ((s = getenv("EF_RFC_RTO_MIN")))
     opts->rto_min = atoi(s);
-  if ( (s = getenv("EF_RFC_RTO_MAX")))
+  if ((s = getenv("EF_RFC_RTO_MAX")))
     opts->rto_max = atoi(s);
 
-  if ( (s = getenv("EF_KEEPALIVE_TIME")))
+  if ((s = getenv("EF_KEEPALIVE_TIME")))
     opts->keepalive_time = atoi(s);
-  if ( (s = getenv("EF_KEEPALIVE_INTVL")))
+  if ((s = getenv("EF_KEEPALIVE_INTVL")))
     opts->keepalive_intvl = atoi(s);
-  if ( (s = getenv("EF_KEEPALIVE_PROBES")))
+  if ((s = getenv("EF_KEEPALIVE_PROBES")))
     opts->keepalive_probes = atoi(s);
 
 #ifndef NDEBUG
-  if( (s = getenv("EF_TCP_MAX_SEQERR_MSGS")))
+  if ((s = getenv("EF_TCP_MAX_SEQERR_MSGS")))
     opts->tcp_max_seqerr_msg = atoi(s);
 #endif
 #if CI_CFG_BURST_CONTROL
-  if ( (s = getenv("EF_BURST_CONTROL_LIMIT")))
+  if ((s = getenv("EF_BURST_CONTROL_LIMIT")))
     opts->burst_control_limit = atoi(s);
 #endif
 #if CI_CFG_CONG_AVOID_NOTIFIED
-  if ( (s = getenv("EF_CONG_NOTIFY_THRESH")))
+  if ((s = getenv("EF_CONG_NOTIFY_THRESH")))
     opts->cong_notify_thresh = atoi(s);
 #endif
 #if CI_CFG_TAIL_DROP_PROBE
-  if ( (s = getenv("EF_TAIL_DROP_PROBE")))
+  if ((s = getenv("EF_TAIL_DROP_PROBE")))
     opts->tail_drop_probe = atoi(s);
 #endif
 #if CI_CFG_CONG_AVOID_SCALE_BACK
-  if ( (s = getenv("EF_CONG_AVOID_SCALE_BACK")))
+  if ((s = getenv("EF_CONG_AVOID_SCALE_BACK")))
     opts->cong_avoid_scale_back = atoi(s);
 #endif
 
-  if ( (s = getenv("EF_TCP_TIME_WAIT_ASSASSINATION")))
+  if ((s = getenv("EF_TCP_TIME_WAIT_ASSASSINATION")))
     opts->time_wait_assassinate = atoi(s);
 
   /* Get our netifs to inherit flags if the O/S is being forced to */
   if (CITP_OPTS.accept_force_inherit_nonblock)
     opts->accept_inherit_nonblock = 1;
 
-  if ( (s = getenv("EF_FREE_PACKETS_LOW_WATERMARK")) )
+  if ((s = getenv("EF_FREE_PACKETS_LOW_WATERMARK")))
     opts->free_packets_low = atoi(s);
-  if( opts->free_packets_low == 0 )
+  if (opts->free_packets_low == 0)
     opts->free_packets_low = opts->rxq_size / 2;
 
 #if CI_CFG_PIO
-  if ( (s = getenv("EF_PIO")) )
+  if ((s = getenv("EF_PIO")))
     opts->pio = atoi(s);
-  if( opts->pio == 0 )
+  if (opts->pio == 0)
     /* Makes for more efficient checking on fast data path */
     opts->pio_thresh = 0;
-  else if ( (s = getenv("EF_PIO_THRESHOLD")) )
+  else if ((s = getenv("EF_PIO_THRESHOLD")))
     opts->pio_thresh = atoi(s);
 #endif
 
-  if( (s = getenv("EF_RX_TIMESTAMPING")) )
+  if ((s = getenv("EF_RX_TIMESTAMPING")))
     opts->rx_timestamping = atoi(s);
 
-  static const char* const timestamping_opts[] = { "nic", "cpacket", 0 };
+  static const char *const timestamping_opts[] = {"nic", "cpacket", 0};
   opts->rx_timestamping_ordering =
-    parse_enum(opts, "EF_RX_TIMESTAMPING_ORDERING", timestamping_opts, "nic");
+      parse_enum(opts, "EF_RX_TIMESTAMPING_ORDERING", timestamping_opts, "nic");
 
-  if( (s = getenv("EF_TX_TIMESTAMPING")) )
+  if ((s = getenv("EF_TX_TIMESTAMPING")))
     opts->tx_timestamping = atoi(s);
 
-  if( (s = getenv("EF_TIMESTAMPING_REPORTING")) )
+  if ((s = getenv("EF_TIMESTAMPING_REPORTING")))
     opts->timestamping_reporting = atoi(s);
 
-  if( (s = getenv("EF_TCP_TSOPT_MODE")) ) {
+  if ((s = getenv("EF_TCP_TSOPT_MODE")))
+  {
     opts->tcp_tsopt_mode = atoi(s);
-    if( !(opts->tcp_tsopt_mode == 2) ) {
-      citp_syn_opts &=~ CI_TCPT_FLAG_TSO;
+    if (!(opts->tcp_tsopt_mode == 2))
+    {
+      citp_syn_opts &= ~CI_TCPT_FLAG_TSO;
       citp_syn_opts |= (opts->tcp_tsopt_mode ? CI_TCPT_FLAG_TSO : 0);
       opts->syn_opts = citp_syn_opts;
     }
   }
 
-  if( (s = getenv("EF_USE_DSACK")) )
+  if ((s = getenv("EF_USE_DSACK")))
     opts->use_dsack = atoi(s);
 
-  if( (s = getenv("EF_PERIODIC_TIMER_CPU")) ) {
+  if ((s = getenv("EF_PERIODIC_TIMER_CPU")))
+  {
     int cpu = atoi(s);
-    if( cpu >= sysconf(_SC_NPROCESSORS_ONLN) ) {
+    if (cpu >= sysconf(_SC_NPROCESSORS_ONLN))
+    {
       CONFIG_LOG(opts, CONFIG_WARNINGS, "Value of EF_PERIODIC_TIMER_CPU is "
-                 "invalid. Periodic work will not be affinitised.");
+                                        "invalid. Periodic work will not be affinitised.");
       cpu = -1;
     }
     opts->periodic_timer_cpu = cpu;
   }
 
-  if( (s = getenv("EF_TCP_SYNCOOKIES")) )
+  if ((s = getenv("EF_TCP_SYNCOOKIES")))
     opts->tcp_syncookies = atoi(s);
 
-  if( (s = getenv("EF_CLUSTER_IGNORE")) ) {
+  if ((s = getenv("EF_CLUSTER_IGNORE")))
+  {
     ci_log("EF_CLUSTER_IGNORE is deprecated use EF_CLUSTER_SIZE instead");
     opts->cluster_ignore = atoi(s);
   }
-  else if( (s = getenv("EF_CLUSTER_SIZE")) ) {
+  else if ((s = getenv("EF_CLUSTER_SIZE")))
+  {
     opts->cluster_ignore = (atoi(s) == 0);
   }
   else
     opts->cluster_ignore = 1;
 
 #if CI_CFG_TCP_SHARED_LOCAL_PORTS
-  if( (s = getenv("EF_TCP_SHARED_LOCAL_PORTS")) )
+  if ((s = getenv("EF_TCP_SHARED_LOCAL_PORTS")))
     opts->tcp_shared_local_ports = atoi(s);
-  if( (s = getenv("EF_TCP_SHARED_LOCAL_PORTS_REUSE_FAST")) )
+  if ((s = getenv("EF_TCP_SHARED_LOCAL_PORTS_REUSE_FAST")))
     opts->tcp_shared_local_ports_reuse_fast = atoi(s);
-  if( (s = getenv("EF_TCP_SHARED_LOCAL_PORTS_MAX")) )
+  if ((s = getenv("EF_TCP_SHARED_LOCAL_PORTS_MAX")))
     opts->tcp_shared_local_ports_max = atoi(s);
-  if( (s = getenv("EF_TCP_SHARED_LOCAL_PORTS_NO_FALLBACK")) )
+  if ((s = getenv("EF_TCP_SHARED_LOCAL_PORTS_NO_FALLBACK")))
     opts->tcp_shared_local_no_fallback = atoi(s) &&
-      opts->tcp_shared_local_ports > 0;
-  if( (s = getenv("EF_TCP_SHARED_LOCAL_PORTS_PER_IP")) )
+                                         opts->tcp_shared_local_ports > 0;
+  if ((s = getenv("EF_TCP_SHARED_LOCAL_PORTS_PER_IP")))
     opts->tcp_shared_local_ports_per_ip = atoi(s);
-  if( (s = getenv("EF_TCP_SHARED_LOCAL_PORTS_PER_IP_MAX")) )
+  if ((s = getenv("EF_TCP_SHARED_LOCAL_PORTS_PER_IP_MAX")))
     opts->tcp_shared_local_ports_per_ip_max = atoi(s);
-  if( (s = getenv("EF_TCP_SHARED_LOCAL_PORTS_STEP")) )
+  if ((s = getenv("EF_TCP_SHARED_LOCAL_PORTS_STEP")))
     opts->tcp_shared_local_ports_step = atoi(s);
 #endif
 
-  if( (s = getenv("EF_HIGH_THROUGHPUT_MODE")) )
+  if ((s = getenv("EF_HIGH_THROUGHPUT_MODE")))
     opts->rx_merge_mode = atoi(s);
 
   handle_str_opt(opts, "EF_INTERFACE_WHITELIST", opts->iface_whitelist,
@@ -1240,106 +1287,111 @@ void ci_netif_config_opts_getenv(ci_netif_config_opts* opts)
   handle_str_opt(opts, "EF_INTERFACE_BLACKLIST", opts->iface_blacklist,
                  sizeof(opts->iface_blacklist));
 
-  if( (s = getenv("EF_KERNEL_PACKETS_BATCH_SIZE")) )
+  if ((s = getenv("EF_KERNEL_PACKETS_BATCH_SIZE")))
     opts->kernel_packets_batch_size = atoi(s);
 
-  if( (s = getenv("EF_KERNEL_PACKETS_TIMER_USEC")) )
+  if ((s = getenv("EF_KERNEL_PACKETS_TIMER_USEC")))
     opts->kernel_packets_timer_usec = atoi(s);
 
-  static const char* const tcp_isn_opts[] = { "clocked", "clocked+cache", 0 };
+  static const char *const tcp_isn_opts[] = {"clocked", "clocked+cache", 0};
   opts->tcp_isn_mode =
-    parse_enum(opts, "EF_TCP_ISN_MODE", tcp_isn_opts, "clocked+cache");
-  if( (s = getenv("EF_TCP_ISN_2MSL")) )
+      parse_enum(opts, "EF_TCP_ISN_MODE", tcp_isn_opts, "clocked+cache");
+  if ((s = getenv("EF_TCP_ISN_2MSL")))
     opts->tcp_isn_2msl = atoi(s);
-  if( (s = getenv("EF_TCP_ISN_CACHE_SIZE")) )
+  if ((s = getenv("EF_TCP_ISN_CACHE_SIZE")))
     opts->tcp_isn_cache_size = atoi(s);
-  if( (s = getenv("EF_TCP_ISN_INCLUDE_PASSIVE")) )
+  if ((s = getenv("EF_TCP_ISN_INCLUDE_PASSIVE")))
     opts->tcp_isn_include_passive = atoi(s);
-  if( (s = getenv("EF_TCP_ISN_OFFSET")) )
+  if ((s = getenv("EF_TCP_ISN_OFFSET")))
     opts->tcp_isn_offset = atoi(s);
 
   ci_netif_config_opts_getenv_ef_scalable_filters(opts);
 
 #if CI_CFG_CTPIO
-  if( (s = getenv("EF_CTPIO")) )
+  if ((s = getenv("EF_CTPIO")))
     opts->ctpio = atoi(s);
 
-  static const char* const ctpio_opts[] = { "sf", "sf-np", "ct", 0 };
+  static const char *const ctpio_opts[] = {"sf", "sf-np", "ct", 0};
   opts->ctpio_mode = parse_enum(opts, "EF_CTPIO_MODE", ctpio_opts, "sf-np");
 
-  if( (s = getenv("EF_CTPIO_MAX_FRAME_LEN")) )
+  if ((s = getenv("EF_CTPIO_MAX_FRAME_LEN")))
     opts->ctpio_max_frame_len = atoi(s);
-  else if( opts->ctpio_mode == EF_CTPIO_MODE_CT )
+  else if (opts->ctpio_mode == EF_CTPIO_MODE_CT)
     opts->ctpio_max_frame_len = 1518;
   else
     opts->ctpio_max_frame_len = 500;
-  if( (s = getenv("EF_CTPIO_CT_THRESH")) )
+  if ((s = getenv("EF_CTPIO_CT_THRESH")))
     opts->ctpio_ct_thresh = atoi(s);
-  if( (s = getenv("EF_CTPIO_SWITCH_BYPASS")) )
+  if ((s = getenv("EF_CTPIO_SWITCH_BYPASS")))
     opts->ctpio_switch_bypass = atoi(s);
 #endif
 
-  if( (s = getenv("EF_TCP_EARLY_RETRANSMIT")) )
+  if ((s = getenv("EF_TCP_EARLY_RETRANSMIT")))
     opts->tcp_early_retransmit = atoi(s);
 
 #if CI_CFG_IPV6
-  if( (s = getenv("EF_AUTO_FLOWLABELS")) )
+  if ((s = getenv("EF_AUTO_FLOWLABELS")))
     opts->auto_flowlabels = atoi(s);
 #endif
 
-  if( (s = getenv("EF_AF_XDP_ZEROCOPY")) )
+  if ((s = getenv("EF_AF_XDP_ZEROCOPY")))
     opts->af_xdp_zerocopy = atoi(s);
 
-  if( (s = getenv("EF_ICMP_PKTS")) )
+  if ((s = getenv("EF_ICMP_PKTS")))
     opts->icmp_msg_max = atoi(s);
 
 #if CI_CFG_TCP_OFFLOAD_RECYCLER || CI_CFG_TX_CRC_OFFLOAD
-  static const char* const tcp_offload_opts[] = { "off", "tcp", "ceph", "nvme", 0 };
+  static const char *const tcp_offload_opts[] = {"off", "tcp", "ceph", "nvme", 0};
   opts->tcp_offload_plugin = parse_enum(opts, "EF_TCP_OFFLOAD",
                                         tcp_offload_opts, "off");
 
-  if( (s = getenv("EF_CEPH_DATA_BUF_BYTES")) )
+  if ((s = getenv("EF_CEPH_DATA_BUF_BYTES")))
     opts->ceph_data_buf_bytes = atoi(s);
 
-  if( (s = getenv("EF_NVME_CRC_TABLE_CAP")) )
+  if ((s = getenv("EF_NVME_CRC_TABLE_CAP")))
     opts->nvme_crc_table_cap = atoi(s);
 #endif
 }
 
 static int
-handle_str_opt(ci_netif_config_opts* opts,
-               const char* optname, char* optval_buf, size_t optval_buflen)
+handle_str_opt(ci_netif_config_opts *opts,
+               const char *optname, char *optval_buf, size_t optval_buflen)
 {
- char* s;
-  if( (s = getenv(optname)) ) {
-    if( strlen(s) >= optval_buflen ) {
+  char *s;
+  if ((s = getenv(optname)))
+  {
+    if (strlen(s) >= optval_buflen)
+    {
       CONFIG_LOG(opts, CONFIG_WARNINGS, "Value of %s"
-                 "too long - truncating. ", optname);
+                                        "too long - truncating. ",
+                 optname);
     }
     strncpy(optval_buf, s, optval_buflen);
     optval_buf[optval_buflen - 1] = 0;
 
     return 1;
   }
-  else {
+  else
+  {
     return 0;
   }
 }
 
 static int
-parse_enum(ci_netif_config_opts* opts,
-           const char* name, const char* const* options,
-           const char* default_val)
+parse_enum(ci_netif_config_opts *opts,
+           const char *name, const char *const *options,
+           const char *default_val)
 {
-  const char* value;
+  const char *value;
   int i;
 
-  if( (value = getenv(name)) == NULL )
+  if ((value = getenv(name)) == NULL)
     value = default_val;
 
-  while( 1 ) {
-    for( i = 0; options[i]; ++i )
-      if( ! strcasecmp(value, options[i]) )
+  while (1)
+  {
+    for (i = 0; options[i]; ++i)
+      if (!strcasecmp(value, options[i]))
         return i;
 
     CONFIG_LOG(opts, CONFIG_WARNINGS,
@@ -1349,29 +1401,29 @@ parse_enum(ci_netif_config_opts* opts,
   }
 }
 
-static const char* strmchrnul(const char *s, const char* delims)
+static const char *strmchrnul(const char *s, const char *delims)
 {
-  const char* r = NULL;
-  while( *delims ) {
-   const char * t = strchrnul(s, *delims);
-   if( !r || t < r )
-     r = t;
-   ++delims;
+  const char *r = NULL;
+  while (*delims)
+  {
+    const char *t = strchrnul(s, *delims);
+    if (!r || t < r)
+      r = t;
+    ++delims;
   }
   return r;
 }
 
-
 /* Note that all ifindices in this function must be signed to allow for the
  * extra magic values such as CITP_SCALABLE_FILTERS_ALL. */
-static int ci_opts_parse_scalable_filters_nic(ci_netif_config_opts* opts,
-                                              const char** spec_in_out,
-                                              int* mode_out,
-                                              ci_int32* ifindex_out)
+static int ci_opts_parse_scalable_filters_nic(ci_netif_config_opts *opts,
+                                              const char **spec_in_out,
+                                              int *mode_out,
+                                              ci_int32 *ifindex_out)
 {
   char ifname[IFNAMSIZ] = {};
-  const char* s = *spec_in_out;
-  const char* modestr;
+  const char *s = *spec_in_out;
+  const char *modestr;
   ci_int32 ifindex = 0;
   int mode = -1;
   int rc = 0;
@@ -1380,97 +1432,112 @@ static int ci_opts_parse_scalable_filters_nic(ci_netif_config_opts* opts,
   strncpy(ifname, s, CI_MIN(modestr - s, sizeof(ifname) - 1));
   ifindex = if_nametoindex(ifname);
 
-  if( ifindex == CI_IFID_BAD && (strcmp(ifname, "any") == 0 ||
-                                 strcmp(ifname, ".") == 0) )
+  if (ifindex == CI_IFID_BAD && (strcmp(ifname, "any") == 0 ||
+                                 strcmp(ifname, ".") == 0))
     ifindex = CITP_SCALABLE_FILTERS_ALL;
 
   /* If we've got a valid ifindex then we need to determine the mode */
-  if( ifindex > 0 || ifindex == CITP_SCALABLE_FILTERS_ALL ) {
+  if (ifindex > 0 || ifindex == CITP_SCALABLE_FILTERS_ALL)
+  {
     /* If a mode isn't present in the EF_SCALABLE_FILTERS option check
      * EF_SCALABLE_FILTERS_MODE.
      */
-    if( *modestr != '=' )
+    if (*modestr != '=')
       modestr = getenv("EF_SCALABLE_FILTERS_MODE");
     else
       ++modestr;
 
     /* If the mode is set explicitly then parse that */
-    if( modestr && modestr != strmchrnul(modestr, ",") ) {
+    if (modestr && modestr != strmchrnul(modestr, ","))
+    {
       int mode_value = CITP_SCALABLE_MODE_NONE;
       int mode_set = 0;
-      struct {const char* name; int mode;} modes[] = {
-        {"transparent_active", CITP_SCALABLE_MODE_TPROXY_ACTIVE},
-        {"passive", CITP_SCALABLE_MODE_PASSIVE},
-        {"active",  CITP_SCALABLE_MODE_ACTIVE},
-        {"rss",     CITP_SCALABLE_MODE_RSS},
+      struct
+      {
+        const char *name;
+        int mode;
+      } modes[] = {
+          {"transparent_active", CITP_SCALABLE_MODE_TPROXY_ACTIVE},
+          {"passive", CITP_SCALABLE_MODE_PASSIVE},
+          {"active", CITP_SCALABLE_MODE_ACTIVE},
+          {"rss", CITP_SCALABLE_MODE_RSS},
       };
-      while ( modestr != strmchrnul(modestr, ",") ) {
-        const char* mode_end = strmchrnul(modestr, ":,");
-        int len  = mode_end - modestr;
+      while (modestr != strmchrnul(modestr, ","))
+      {
+        const char *mode_end = strmchrnul(modestr, ":,");
+        int len = mode_end - modestr;
         int i;
-        for( i = 0; i < sizeof(modes) / sizeof(*modes); ++i )
-          if( strncmp(modes[i].name, modestr, len) == 0 &&
-              modes[i].name[len] == 0 ) {
-            mode_value |=  modes[i].mode;
+        for (i = 0; i < sizeof(modes) / sizeof(*modes); ++i)
+          if (strncmp(modes[i].name, modestr, len) == 0 &&
+              modes[i].name[len] == 0)
+          {
+            mode_value |= modes[i].mode;
             mode_set |= 3;
             break;
-        }
-        if( ! (mode_set & 1) ) {
+          }
+        if (!(mode_set & 1))
+        {
           CONFIG_LOG(opts, CONFIG_WARNINGS, "config: Error parsing "
-                     "EF_SCALABLE_FILTERS, token '%s', disabling scalable "
-                     "filter mode", modestr);
+                                            "EF_SCALABLE_FILTERS, token '%s', disabling scalable "
+                                            "filter mode",
+                     modestr);
           mode = CITP_SCALABLE_MODE_NONE;
           mode_set = 0;
           rc = -EINVAL;
           break;
         }
         modestr = mode_end;
-        if( *modestr == ':' )
+        if (*modestr == ':')
           ++modestr;
         mode_set &= ~1;
       }
 
-      if( mode_set ) {
+      if (mode_set)
+      {
         int modes_supported[] = {
-          CITP_SCALABLE_MODE_TPROXY_ACTIVE,
-          CITP_SCALABLE_MODE_PASSIVE,
-          CITP_SCALABLE_MODE_ACTIVE,
-          CITP_SCALABLE_MODE_TPROXY_ACTIVE | CITP_SCALABLE_MODE_PASSIVE,
-          CITP_SCALABLE_MODE_TPROXY_ACTIVE | CITP_SCALABLE_MODE_RSS,
-          CITP_SCALABLE_MODE_ACTIVE | CITP_SCALABLE_MODE_RSS,
-          CITP_SCALABLE_MODE_PASSIVE | CITP_SCALABLE_MODE_RSS,
-          CITP_SCALABLE_MODE_ACTIVE | CITP_SCALABLE_MODE_PASSIVE |
-                                      CITP_SCALABLE_MODE_RSS
-        };
-        int n_modes = sizeof(modes_supported)/sizeof(*modes_supported);
+            CITP_SCALABLE_MODE_TPROXY_ACTIVE,
+            CITP_SCALABLE_MODE_PASSIVE,
+            CITP_SCALABLE_MODE_ACTIVE,
+            CITP_SCALABLE_MODE_TPROXY_ACTIVE | CITP_SCALABLE_MODE_PASSIVE,
+            CITP_SCALABLE_MODE_TPROXY_ACTIVE | CITP_SCALABLE_MODE_RSS,
+            CITP_SCALABLE_MODE_ACTIVE | CITP_SCALABLE_MODE_RSS,
+            CITP_SCALABLE_MODE_PASSIVE | CITP_SCALABLE_MODE_RSS,
+            CITP_SCALABLE_MODE_ACTIVE | CITP_SCALABLE_MODE_PASSIVE |
+                CITP_SCALABLE_MODE_RSS};
+        int n_modes = sizeof(modes_supported) / sizeof(*modes_supported);
         int fail = 1;
         int i;
 
         mode = mode_value;
 
-        for( i = 0; i < n_modes; ++i) {
-          if( mode == modes_supported[i] ) {
+        for (i = 0; i < n_modes; ++i)
+        {
+          if (mode == modes_supported[i])
+          {
             fail = 0;
             break;
           }
         }
-        if( fail ) {
+        if (fail)
+        {
           CONFIG_LOG(opts, CONFIG_WARNINGS, "config: Unsupported scalable "
-                     "mode selected, disabling scalable filter mode.");
+                                            "mode selected, disabling scalable filter mode.");
           mode = CITP_SCALABLE_MODE_NONE;
           rc = -EINVAL;
         }
       }
     }
   }
-  else {
+  else
+  {
     CONFIG_LOG(opts, CONFIG_WARNINGS, "config: Could not determine ifindex "
-               "from name '%s', disabling scalable filter mode.", ifname);
+                                      "from name '%s', disabling scalable filter mode.",
+               ifname);
     mode = CITP_SCALABLE_MODE_NONE;
     rc = -EINVAL;
   }
 
-  if( modestr && *modestr )
+  if (modestr && *modestr)
     ++modestr;
 
   *spec_in_out = modestr;
@@ -1479,13 +1546,12 @@ static int ci_opts_parse_scalable_filters_nic(ci_netif_config_opts* opts,
   return rc;
 }
 
-
-#define swap(x,y) ({ typeof(x) t = (x); (x) = (y); (y) = (t); })
+#define swap(x, y) ({ typeof(x) t = (x); (x) = (y); (y) = (t); })
 
 static void
-ci_netif_config_opts_getenv_ef_scalable_filters(ci_netif_config_opts* opts)
+ci_netif_config_opts_getenv_ef_scalable_filters(ci_netif_config_opts *opts)
 {
-  const char* s;
+  const char *s;
   int enable = 0;
   int mode = CITP_SCALABLE_MODE_NONE;
   int listen_mode = CITP_SCALABLE_LISTEN_BOUND;
@@ -1496,7 +1562,8 @@ ci_netif_config_opts_getenv_ef_scalable_filters(ci_netif_config_opts* opts)
   ci_int32 ifindexes[2] = {};
 
   /* Nothing is interesting unless EF_SCALABLE_FILTERS is set */
-  if( (s = getenv("EF_SCALABLE_FILTERS")) ) {
+  if ((s = getenv("EF_SCALABLE_FILTERS")))
+  {
     int modes[2] = {};
     int cluster_name_len;
     int i;
@@ -1507,57 +1574,70 @@ ci_netif_config_opts_getenv_ef_scalable_filters(ci_netif_config_opts* opts)
 
     /* parse interfaces in EF_SCALABLE_FILTERS until: got two of them,
      * run out of the string or hit parsing error */
-    for( i = 0;
+    for (i = 0;
          i < 2 && s && *s &&
          0 == (rc = ci_opts_parse_scalable_filters_nic(opts, &s, &modes[i],
                                                        &ifindexes[i]));
-         ++i);
+         ++i)
+      ;
 
-    if( rc != 0 ) {
+    if (rc != 0)
+    {
       /* message has already been printed */
       goto invalid_mode;
     }
-    else if( i == 0 ) {
+    else if (i == 0)
+    {
       mode = CITP_SCALABLE_MODE_NONE;
     }
-    else if( i == 1 ) {
+    else if (i == 1)
+    {
       /* If the mode was not set explicitly then default to non-rss mode,
        * otherwise check the mode is supported */
-      if( modes[0] < 0 )
+      if (modes[0] < 0)
         modes[0] = CITP_SCALABLE_MODE_TPROXY_ACTIVE |
                    CITP_SCALABLE_MODE_PASSIVE;
       ifindexes[1] = ifindexes[0];
     }
-    else {
+    else
+    {
       /* Multiple modes specified. */
 
-      if( ifindexes[0] == CITP_SCALABLE_FILTERS_ALL ||
-          ifindexes[1] == CITP_SCALABLE_FILTERS_ALL ) {
+      if (ifindexes[0] == CITP_SCALABLE_FILTERS_ALL ||
+          ifindexes[1] == CITP_SCALABLE_FILTERS_ALL)
+      {
         CONFIG_LOG(opts, CONFIG_WARNINGS,
                    "config: Multiple scalable interfaces specified when "
                    "requesting scalable filters on all interfaces.");
         goto invalid_mode;
       }
 
-      if( modes[0] < 0 && modes[1] < 0 ) {
+      if (modes[0] < 0 && modes[1] < 0)
+      {
         modes[0] = CITP_SCALABLE_MODE_PASSIVE;
         modes[1] = CITP_SCALABLE_MODE_TPROXY_ACTIVE;
       }
-      else {
-        if( modes[1] < 0 ) {
+      else
+      {
+        if (modes[1] < 0)
+        {
           swap(modes[0], modes[1]);
           swap(ifindexes[0], ifindexes[1]);
         }
-        if( modes[0] < 0 ) {
-          if( modes[1] & (CITP_SCALABLE_MODE_ACTIVE | CITP_SCALABLE_MODE_TPROXY_ACTIVE) ) {
-            if( modes[1] & CITP_SCALABLE_MODE_PASSIVE ) {
+        if (modes[0] < 0)
+        {
+          if (modes[1] & (CITP_SCALABLE_MODE_ACTIVE | CITP_SCALABLE_MODE_TPROXY_ACTIVE))
+          {
+            if (modes[1] & CITP_SCALABLE_MODE_PASSIVE)
+            {
               CONFIG_LOG(opts, CONFIG_WARNINGS, "config: With two scalable interfaces "
-                         "one needs to be exclusively active while other exclusively passive.");
+                                                "one needs to be exclusively active while other exclusively passive.");
               goto invalid_mode;
             }
             modes[0] = CITP_SCALABLE_MODE_PASSIVE | (modes[1] & CITP_SCALABLE_MODE_RSS);
           }
-          else if( modes[1] & CITP_SCALABLE_MODE_PASSIVE ) {
+          else if (modes[1] & CITP_SCALABLE_MODE_PASSIVE)
+          {
             modes[0] = CITP_SCALABLE_MODE_TPROXY_ACTIVE | (modes[1] & CITP_SCALABLE_MODE_RSS);
             swap(modes[0], modes[1]);
             swap(ifindexes[0], ifindexes[1]);
@@ -1570,63 +1650,70 @@ ci_netif_config_opts_getenv_ef_scalable_filters(ci_netif_config_opts* opts)
         ci_assert_nflags(modes[0], CITP_SCALABLE_MODE_PASSIVE);
       }
 
-      if( (modes[0] ^ modes[1]) & CITP_SCALABLE_MODE_RSS ) {
+      if ((modes[0] ^ modes[1]) & CITP_SCALABLE_MODE_RSS)
+      {
         CONFIG_LOG(opts, CONFIG_WARNINGS, "config: When specifying two scalable "
-                   "modes RSS setting needs to be identical.");
+                                          "modes RSS setting needs to be identical.");
         goto invalid_mode;
       }
     }
 
     mode = modes[0] | modes[1];
 
-    if( mode != CITP_SCALABLE_MODE_NONE ) {
-      if( (s = getenv("EF_SCALABLE_FILTERS_ENABLE")) )
+    if (mode != CITP_SCALABLE_MODE_NONE)
+    {
+      if ((s = getenv("EF_SCALABLE_FILTERS_ENABLE")))
         enable = atoi(s);
       else
         enable = CITP_SCALABLE_FILTERS_ENABLE;
 
-      if( (s = getenv("EF_SCALABLE_LISTEN_MODE")) )
+      if ((s = getenv("EF_SCALABLE_LISTEN_MODE")))
         listen_mode = atoi(s);
 #if CI_CFG_TCP_SHARED_LOCAL_PORTS
-      if( mode & CITP_SCALABLE_MODE_ACTIVE )
+      if (mode & CITP_SCALABLE_MODE_ACTIVE)
         active_wilds_need_filter = 0;
-      if( (s = getenv("EF_SCALABLE_ACTIVE_WILDS_NEED_FILTER")) )
+      if ((s = getenv("EF_SCALABLE_ACTIVE_WILDS_NEED_FILTER")))
         active_wilds_need_filter = atoi(s);
 #endif
     }
-    else {
+    else
+    {
       enable = CITP_SCALABLE_FILTERS_DISABLE;
     }
 
     /* Stacks cannot be named by EF_NAME in clustered scalable modes. */
-    if( enable == CITP_SCALABLE_FILTERS_ENABLE &&
+    if (enable == CITP_SCALABLE_FILTERS_ENABLE &&
         mode & CITP_SCALABLE_MODE_RSS &&
-        (s = getenv("EF_NAME")) && s[0] != '\0' )
+        (s = getenv("EF_NAME")) && s[0] != '\0')
       CONFIG_LOG(opts, CONFIG_WARNINGS,
                  "config: Stacks cannot be named by EF_NAME while in a "
                  "clustered scalable mode.")
 
     /* In scalable mode, cluster name has a max length of 5. See bug78935. */
     cluster_name_len = 5 - (CITP_OPTS.cluster_size > 9);
-    if( strlen(CITP_OPTS.cluster_name) > cluster_name_len ) {
+    if (strlen(CITP_OPTS.cluster_name) > cluster_name_len)
+    {
       CITP_OPTS.cluster_name[cluster_name_len] = '\0';
       CONFIG_LOG(opts, CONFIG_WARNINGS,
                  "config: The supplied EF_CLUSTER_NAME is too long and is "
-                 "being truncated to: %s.", CITP_OPTS.cluster_name);
+                 "being truncated to: %s.",
+                 CITP_OPTS.cluster_name);
     }
   }
-  else {
-    if( (s = getenv("EF_SCALABLE_FILTERS_ENABLE")) )
+  else
+  {
+    if ((s = getenv("EF_SCALABLE_FILTERS_ENABLE")))
       CONFIG_LOG(opts, CONFIG_WARNINGS, "config: EF_SCALABLE_FILTERS_ENABLE "
-                 "ignored as no valid config for EF_SCALABLE_FILTERS found.");
+                                        "ignored as no valid config for EF_SCALABLE_FILTERS found.");
     enable = CITP_SCALABLE_FILTERS_DISABLE;
   }
 
-  if( enable == CITP_SCALABLE_FILTERS_DISABLE ) {
-    if( (s = getenv("EF_SCALABLE_LISTEN_MODE")) )
+  if (enable == CITP_SCALABLE_FILTERS_DISABLE)
+  {
+    if ((s = getenv("EF_SCALABLE_LISTEN_MODE")))
       CONFIG_LOG(opts, CONFIG_WARNINGS, "config: EF_SCALABLE_LISTEN_MODE "
-                 "ignored as no valid config for EF_SCALABLE_FILTERS found.");
-    if( (s = getenv("EF_SCALABLE_ACTIVE_WILDS_NEED_FILTER")) )
+                                        "ignored as no valid config for EF_SCALABLE_FILTERS found.");
+    if ((s = getenv("EF_SCALABLE_ACTIVE_WILDS_NEED_FILTER")))
       CONFIG_LOG(opts, CONFIG_WARNINGS,
                  "config: EF_SCALABLE_ACTIVE_WILDS_NEED_FILTER "
                  "ignored as no valid config for EF_SCALABLE_FILTERS found.");
@@ -1646,7 +1733,6 @@ invalid_mode:
 
 #endif
 
-
 /*****************************************************************************
  *                                                                           *
  *          TCP-helper Construction                                          *
@@ -1655,59 +1741,62 @@ invalid_mode:
  *****************************************************************************/
 
 #ifndef __KERNEL__
-static void netif_tcp_helper_build2(ci_netif* ni)
+static void netif_tcp_helper_build2(ci_netif *ni)
 {
 #if CI_CFG_TCP_SHARED_LOCAL_PORTS
   ni->active_wild_table =
-    (struct oo_p_dllink*) ((char*) ni->state + ni->state->active_wild_ofs);
+      (struct oo_p_dllink *)((char *)ni->state + ni->state->active_wild_ofs);
 #endif
   ni->seq_table =
-    (ci_tcp_prev_seq_t*) ((char*) ni->state + ni->state->seq_table_ofs);
+      (ci_tcp_prev_seq_t *)((char *)ni->state + ni->state->seq_table_ofs);
   ni->deferred_pkts =
-    (struct oo_deferred_pkt*) ((char*) ni->state +
-                               ni->state->deferred_pkts_ofs);
+      (struct oo_deferred_pkt *)((char *)ni->state +
+                                 ni->state->deferred_pkts_ofs);
   ni->filter_table =
-    (ci_netif_filter_table*) ((char*) ni->state + ni->state->table_ofs);
+      (ci_netif_filter_table *)((char *)ni->state + ni->state->table_ofs);
   ni->filter_table_ext =
-    (ci_netif_filter_table_entry_ext*) ((char*) ni->state +
-                                        ni->state->table_ext_ofs);
+      (ci_netif_filter_table_entry_ext *)((char *)ni->state +
+                                          ni->state->table_ext_ofs);
 #if CI_CFG_IPV6
   ni->ip6_filter_table =
-    (ci_ip6_netif_filter_table*) ((char*) ni->state + ni->state->ip6_table_ofs);
+      (ci_ip6_netif_filter_table *)((char *)ni->state + ni->state->ip6_table_ofs);
 #endif
-  ni->packets = (oo_pktbuf_manager*) ((char*) ni->state + ni->state->buf_ofs);
-  ni->dma_addrs = (ef_addr*) ((char*) ni->state + ni->state->dma_ofs);
+  ni->packets = (oo_pktbuf_manager *)((char *)ni->state + ni->state->buf_ofs);
+  ni->dma_addrs = (ef_addr *)((char *)ni->state + ni->state->dma_ofs);
 
 #if CI_CFG_UL_INTERRUPT_HELPER
   oo_ringbuffer_init(&ni->closed_eps, &ni->state->closed_eps, "closed_eps",
-                     (void*)((char*) ni->state + ni->state->closed_eps_ofs));
+                     (void *)((char *)ni->state + ni->state->closed_eps_ofs));
   oo_ringbuffer_init(&ni->sw_filter_ops, &ni->state->sw_filter_ops,
                      "sw_filters",
-                     (void*)((char*) ni->state + ni->state->sw_filter_ofs));
+                     (void *)((char *)ni->state + ni->state->sw_filter_ofs));
 #endif
 }
 
-
-
-static void netif_tcp_helper_munmap(ci_netif* ni)
+static void netif_tcp_helper_munmap(ci_netif *ni)
 {
   int rc;
 
-  if( ni->timesync != NULL ) {
+  if (ni->timesync != NULL)
+  {
     rc = oo_resource_munmap(ci_netif_get_driver_handle(ni),
                             ni->timesync, ni->state->timesync_bytes);
-    if( rc < 0 )  LOG_NV(ci_log("%s: munmap timesync %d", __FUNCTION__, rc));
+    if (rc < 0)
+      LOG_NV(ci_log("%s: munmap timesync %d", __FUNCTION__, rc));
   }
 
   /* Buffer mapping. */
-  if( ni->packets != NULL ) {
+  if (ni->packets != NULL)
+  {
     unsigned id;
 
     /* Unmap packets pages */
-    for( id = 0; id < ni->packets->sets_n; id++ ) {
-      if( PKT_BUFSET_U_MMAPPED(ni, id) ) {
+    for (id = 0; id < ni->packets->sets_n; id++)
+    {
+      if (PKT_BUFSET_U_MMAPPED(ni, id))
+      {
 #if CI_CFG_PKTS_AS_HUGE_PAGES
-        if( ni->packets->set[id].shm_id >= 0 )
+        if (ni->packets->set[id].shm_id >= 0)
           rc = shmdt(ni->pkt_bufs[id]);
         else
 #endif
@@ -1716,65 +1805,77 @@ static void netif_tcp_helper_munmap(ci_netif* ni)
                                   ni->pkt_bufs[id],
                                   CI_CFG_PKT_BUF_SIZE * PKTS_PER_SET);
         }
-        if( rc < 0 )
+        if (rc < 0)
           LOG_NV(ci_log("%s: munmap packets %d", __FUNCTION__, rc));
       }
     }
   }
 
-  if( ni->efct_shm_ptr != NULL ) {
+  if (ni->efct_shm_ptr != NULL)
+  {
     rc = oo_resource_munmap(ci_netif_get_driver_handle(ni),
                             ni->efct_shm_ptr, ni->state->efct_shm_mmap_bytes);
-    if( rc < 0 )  LOG_NV(ci_log("%s: munmap efct shm %d", __FUNCTION__, rc));
+    if (rc < 0)
+      LOG_NV(ci_log("%s: munmap efct shm %d", __FUNCTION__, rc));
   }
 
-  if( ni->buf_ptr != NULL ) {
+  if (ni->buf_ptr != NULL)
+  {
     rc = oo_resource_munmap(ci_netif_get_driver_handle(ni),
                             ni->buf_ptr, ni->state->buf_mmap_bytes);
-    if( rc < 0 )  LOG_NV(ci_log("%s: munmap bufs %d", __FUNCTION__, rc));
+    if (rc < 0)
+      LOG_NV(ci_log("%s: munmap bufs %d", __FUNCTION__, rc));
   }
 
 #if CI_CFG_PIO
-  if( ni->pio_bytes_mapped != 0 && ni->pio_ptr != NULL ) {
+  if (ni->pio_bytes_mapped != 0 && ni->pio_ptr != NULL)
+  {
     rc = oo_resource_munmap(ci_netif_get_driver_handle(ni),
                             ni->pio_ptr, ni->pio_bytes_mapped);
-    if( rc < 0 )  LOG_NV(ci_log("%s: munmap pio %d", __FUNCTION__, rc));
+    if (rc < 0)
+      LOG_NV(ci_log("%s: munmap pio %d", __FUNCTION__, rc));
   }
 #endif
 
 #if CI_CFG_CTPIO
-  if( ni->ctpio_bytes_mapped != 0 && ni->ctpio_ptr != NULL ) {
+  if (ni->ctpio_bytes_mapped != 0 && ni->ctpio_ptr != NULL)
+  {
     rc = oo_resource_munmap(ci_netif_get_driver_handle(ni),
                             ni->ctpio_ptr, ni->ctpio_bytes_mapped);
-    if( rc < 0 )  LOG_NV(ci_log("%s: munmap pio %d", __FUNCTION__, rc));
+    if (rc < 0)
+      LOG_NV(ci_log("%s: munmap pio %d", __FUNCTION__, rc));
   }
 #endif
 
 #if CI_CFG_TCP_OFFLOAD_RECYCLER
-  if( ni->plugin_ptr != NULL ) {
+  if (ni->plugin_ptr != NULL)
+  {
     rc = oo_resource_munmap(ci_netif_get_driver_handle(ni),
                             ni->plugin_ptr, CI_PAGE_SIZE);
-    if( rc < 0 )  LOG_NV(ci_log("%s: munmap plugin %d", __FUNCTION__, rc));
+    if (rc < 0)
+      LOG_NV(ci_log("%s: munmap plugin %d", __FUNCTION__, rc));
   }
 #endif
 
-  if( ni->io_ptr != NULL ) {
+  if (ni->io_ptr != NULL)
+  {
     rc = oo_resource_munmap(ci_netif_get_driver_handle(ni),
                             ni->io_ptr, ni->state->io_mmap_bytes);
-    if( rc < 0 )  LOG_NV(ci_log("%s: munmap io %d", __FUNCTION__, rc));
+    if (rc < 0)
+      LOG_NV(ci_log("%s: munmap io %d", __FUNCTION__, rc));
   }
 
   rc = oo_resource_munmap(ci_netif_get_driver_handle(ni),
                           ni->state, ni->mmap_bytes);
   ni->state = NULL;
-  if( rc < 0 )  LOG_NV(ci_log("%s: munmap shared state %d", __FUNCTION__, rc));
+  if (rc < 0)
+    LOG_NV(ci_log("%s: munmap shared state %d", __FUNCTION__, rc));
 }
 
-
-static int netif_tcp_helper_mmap(ci_netif* ni)
+static int netif_tcp_helper_mmap(ci_netif *ni)
 {
-  ci_netif_state* ns = ni->state;
-  void* p;
+  ci_netif_state *ns = ni->state;
+  void *p;
   int rc;
 
   /* Initialise all mappings with NULL to roll back in case of error. */
@@ -1798,48 +1899,53 @@ static int netif_tcp_helper_mmap(ci_netif* ni)
   /****************************************************************************
    * Create timesync mapping.
    */
-  if( ns->timesync_bytes != 0 ) {
+  if (ns->timesync_bytes != 0)
+  {
     rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                           OO_MMAP_TYPE_NETIF,
                           CI_NETIF_MMAP_ID_TIMESYNC, ns->timesync_bytes,
                           OO_MMAP_FLAG_READONLY | OO_MMAP_FLAG_POPULATE, &p);
-    if( rc < 0 ) {
+    if (rc < 0)
+    {
       LOG_NV(ci_log("%s: oo_resource_mmap timesync %d", __FUNCTION__, rc));
       goto fail1;
     }
     ni->timesync = p;
   }
 
-
   /****************************************************************************
    * Create the I/O mapping.
    */
-  if( ns->io_mmap_bytes != 0 ) {
+  if (ns->io_mmap_bytes != 0)
+  {
     rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                           OO_MMAP_TYPE_NETIF,
                           CI_NETIF_MMAP_ID_IO, ns->io_mmap_bytes,
                           OO_MMAP_FLAG_POPULATE, &p);
-    if( rc < 0 ) {
+    if (rc < 0)
+    {
       LOG_NV(ci_log("%s: oo_resource_mmap io %d", __FUNCTION__, rc));
       goto fail1;
     }
-    ni->io_ptr = (char*) p;
+    ni->io_ptr = (char *)p;
   }
 
 #if CI_CFG_PIO
   /****************************************************************************
    * Create the PIO mapping.
    */
-  if( ns->pio_mmap_bytes != 0 ) {
+  if (ns->pio_mmap_bytes != 0)
+  {
     rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                           OO_MMAP_TYPE_NETIF,
                           CI_NETIF_MMAP_ID_PIO, ns->pio_mmap_bytes,
                           OO_MMAP_FLAG_POPULATE, &p);
-    if( rc < 0 ) {
+    if (rc < 0)
+    {
       LOG_NV(ci_log("%s: oo_resource_mmap pio %d", __FUNCTION__, rc));
       goto fail2;
     }
-    ni->pio_ptr = (uint8_t*) p;
+    ni->pio_ptr = (uint8_t *)p;
     /* Record length actually mapped as the value in the shared state can
      * change across NIC reboots. */
     ni->pio_bytes_mapped = ns->pio_mmap_bytes;
@@ -1850,16 +1956,18 @@ static int netif_tcp_helper_mmap(ci_netif* ni)
   /****************************************************************************
    * Create the CTPIO mapping.
    */
-  if( ns->ctpio_mmap_bytes != 0 ) {
+  if (ns->ctpio_mmap_bytes != 0)
+  {
     rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                           OO_MMAP_TYPE_NETIF,
                           CI_NETIF_MMAP_ID_CTPIO, ns->ctpio_mmap_bytes,
                           OO_MMAP_FLAG_POPULATE, &p);
-    if( rc < 0 ) {
+    if (rc < 0)
+    {
       LOG_NV(ci_log("%s: oo_resource_mmap ctpio %d", __FUNCTION__, rc));
       goto fail2;
     }
-    ni->ctpio_ptr = (uint8_t*) p;
+    ni->ctpio_ptr = (uint8_t *)p;
     /* Record length actually mapped as the value in the shared state can
      * change across NIC reboots. */
     ni->ctpio_bytes_mapped = ns->ctpio_mmap_bytes;
@@ -1875,19 +1983,21 @@ static int netif_tcp_helper_mmap(ci_netif* ni)
     int nic_i;
 
     OO_STACK_FOR_EACH_INTF_I(ni, nic_i)
-      if( ns->nic[nic_i].oo_vi_flags & OO_VI_FLAGS_PLUGIN_IO_EN )
-        have_plugin_io = true;
+    if (ns->nic[nic_i].oo_vi_flags & OO_VI_FLAGS_PLUGIN_IO_EN)
+      have_plugin_io = true;
 
-    if( have_plugin_io ) {
+    if (have_plugin_io)
+    {
       rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                             OO_MMAP_TYPE_NETIF,
                             CI_NETIF_MMAP_ID_PLUGIN, CI_PAGE_SIZE,
                             OO_MMAP_FLAG_POPULATE, &p);
-      if( rc < 0 ) {
+      if (rc < 0)
+      {
         LOG_NV(ci_log("%s: oo_resource_mmap plugin %d", __FUNCTION__, rc));
         goto fail2;
       }
-      ni->plugin_ptr = (uint8_t*) p;
+      ni->plugin_ptr = (uint8_t *)p;
     }
   }
 #endif
@@ -1895,27 +2005,31 @@ static int netif_tcp_helper_mmap(ci_netif* ni)
   /****************************************************************************
    * Create the I/O buffer mapping.
    */
-  if( ns->buf_mmap_bytes != 0 ) {
+  if (ns->buf_mmap_bytes != 0)
+  {
     rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                           OO_MMAP_TYPE_NETIF,
                           CI_NETIF_MMAP_ID_IOBUFS, ns->buf_mmap_bytes,
                           OO_MMAP_FLAG_POPULATE, &p);
-    if( rc < 0 ) {
+    if (rc < 0)
+    {
       LOG_NV(ci_log("%s: oo_resource_mmap iobufs %d", __FUNCTION__, rc));
       goto fail2;
     }
-    ni->buf_ptr = (char*) p;
+    ni->buf_ptr = (char *)p;
   }
 
   /****************************************************************************
    * Create the efct rxq shm mapping.
    */
-  if( ns->efct_shm_mmap_bytes != 0 ) {
+  if (ns->efct_shm_mmap_bytes != 0)
+  {
     rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                           OO_MMAP_TYPE_NETIF,
                           CI_NETIF_MMAP_ID_EFCT_SHM, ns->efct_shm_mmap_bytes,
                           OO_MMAP_FLAG_POPULATE, &p);
-    if( rc < 0 ) {
+    if (rc < 0)
+    {
       LOG_NV(ci_log("%s: oo_resource_mmap rxq shm %d", __FUNCTION__, rc));
       goto fail2;
     }
@@ -1924,35 +2038,33 @@ static int netif_tcp_helper_mmap(ci_netif* ni)
 
   return 0;
 
- fail2:
+fail2:
   netif_tcp_helper_munmap(ni);
- fail1:
+fail1:
   return rc;
 }
 
-
-static int oo_efct_superbuf_config_refresh(ef_vi* vi, int qid)
+static int oo_efct_superbuf_config_refresh(ef_vi *vi, int qid)
 {
   oo_efct_superbuf_config_refresh_t op;
-  ef_vi_efct_rxq* rxq = &vi->efct_rxq[qid];
+  ef_vi_efct_rxq *rxq = &vi->efct_rxq[qid];
   op.intf_i = rxq->resource_id;
   op.qid = qid;
   op.max_superbufs = CI_EFCT_MAX_SUPERBUFS;
-  CI_USER_PTR_SET(op.superbufs,rxq->superbuf);
+  CI_USER_PTR_SET(op.superbufs, rxq->superbuf);
   CI_USER_PTR_SET(op.current_mappings, rxq->current_mappings);
   return oo_resource_op(vi->dh, OO_IOC_EFCT_SUPERBUF_CONFIG_REFRESH, &op);
 }
 
-
-static int init_ef_vi(ci_netif* ni, int nic_i, int vi_state_offset,
+static int init_ef_vi(ci_netif *ni, int nic_i, int vi_state_offset,
                       int vi_io_offset, int vi_efct_shm_offset,
-                      char** vi_mem_ptr,
-                      ef_vi* vi, unsigned vi_instance, unsigned abs_idx,
-                      int evq_bytes, int txq_size, ef_vi_stats* vi_stats)
+                      char **vi_mem_ptr,
+                      ef_vi *vi, unsigned vi_instance, unsigned abs_idx,
+                      int evq_bytes, int txq_size, ef_vi_stats *vi_stats)
 {
-  ef_vi_state* state = (void*) ((char*) ni->state + vi_state_offset);
-  ci_netif_state_nic_t* nsn = &(ni->state->nic[nic_i]);
-  uint32_t* ids = (void*) (state + 1);
+  ef_vi_state *state = (void *)((char *)ni->state + vi_state_offset);
+  ci_netif_state_nic_t *nsn = &(ni->state->nic[nic_i]);
+  uint32_t *ids = (void *)(state + 1);
   unsigned vi_bar_off = vi_instance * 8192;
 
   ef_vi_init(vi, ef_vi_arch_from_efhw_arch(nsn->vi_arch), nsn->vi_variant,
@@ -1966,13 +2078,14 @@ static int init_ef_vi(ci_netif* ni, int nic_i, int vi_state_offset,
   vi->dh = ci_netif_get_driver_handle(ni);
   *vi_mem_ptr = ef_vi_init_qs(vi, *vi_mem_ptr, ids, evq_bytes / 8,
                               nsn->vi_rxq_size, nsn->rx_prefix_len, txq_size);
-  if( vi->max_efct_rxq ) {
+  if (vi->max_efct_rxq)
+  {
     int i;
     int rc = efct_vi_mmap_init_internal(vi,
-                        (void*)((char*)ni->efct_shm_ptr + vi_efct_shm_offset));
-    if( rc < 0 )
+                                        (void *)((char *)ni->efct_shm_ptr + vi_efct_shm_offset));
+    if (rc < 0)
       return rc;
-    for( i = 0; i < vi->max_efct_rxq; ++i )
+    for (i = 0; i < vi->max_efct_rxq; ++i)
       efct_vi_attach_rxq_internal(vi, i, nic_i,
                                   oo_efct_superbuf_config_refresh);
   }
@@ -1984,23 +2097,24 @@ static int init_ef_vi(ci_netif* ni, int nic_i, int vi_state_offset,
   return 0;
 }
 
-
-static void cleanup_ef_vi(ef_vi* vi)
+static void cleanup_ef_vi(ef_vi *vi)
 {
-  if( vi->max_efct_rxq )
+  if (vi->max_efct_rxq)
     efct_vi_munmap_internal(vi);
 }
 
-
-static void cleanup_all_vis(ci_netif* ni, unsigned vis_inited)
+static void cleanup_all_vis(ci_netif *ni, unsigned vis_inited)
 {
   int nic_i;
-  OO_STACK_FOR_EACH_INTF_I(ni, nic_i) {
+  OO_STACK_FOR_EACH_INTF_I(ni, nic_i)
+  {
     int i;
     int num_vis = ci_netif_num_vis(ni);
 
-    for( i = 0; i < num_vis; ++i ) {
-      if( vis_inited > 0 ) {
+    for (i = 0; i < num_vis; ++i)
+    {
+      if (vis_inited > 0)
+      {
         cleanup_ef_vi(&ni->nic_hw[nic_i].vis[i]);
         --vis_inited;
       }
@@ -2008,52 +2122,52 @@ static void cleanup_all_vis(ci_netif* ni, unsigned vis_inited)
   }
 }
 
-
-unsigned ci_netif_build_future_intf_mask(ci_netif* ni)
+unsigned ci_netif_build_future_intf_mask(ci_netif *ni)
 {
   int nic_i;
   unsigned mask = 0;
 
-  OO_STACK_FOR_EACH_INTF_I(ni, nic_i) {
+  OO_STACK_FOR_EACH_INTF_I(ni, nic_i)
+  {
     /* Disable future when there's an XDP prog attached because that prog may
      * alter the destination socket, in which case the future code would be
      * wrong.  XDP-attachment implies poll_in_kernel, which is what we actually
      * check here. */
-    ef_vi* vi = ci_netif_vi(ni, nic_i);
-    if(
+    ef_vi *vi = ci_netif_vi(ni, nic_i);
+    if (
 #ifdef OO_HAS_POLL_IN_KERNEL
-       ! ni->nic_hw[nic_i].poll_in_kernel &&
+        !ni->nic_hw[nic_i].poll_in_kernel &&
 #endif
         ~ef_vi_flags(vi) & EF_VI_RX_EVENT_MERGE &&
         vi->nic_type.arch != EF_VI_ARCH_EF100 &&
         /* TODO AF_XDP future detection is not currently supported */
-        vi->nic_type.arch != EF_VI_ARCH_AF_XDP )
+        vi->nic_type.arch != EF_VI_ARCH_AF_XDP)
       mask |= 1u << nic_i;
   }
   return mask;
 }
 
-static int af_xdp_kick(ef_vi* vi)
+static int af_xdp_kick(ef_vi *vi)
 {
-  ci_netif* ni = vi->xdp_kick_context;
-  ci_netif_nic_t* nic = CI_CONTAINER(ci_netif_nic_t, vis[0], vi);
+  ci_netif *ni = vi->xdp_kick_context;
+  ci_netif_nic_t *nic = CI_CONTAINER(ci_netif_nic_t, vis[0], vi);
   uint32_t intf_i = nic - ni->nic_hw;
   int fd = ci_netif_get_driver_handle(ni);
 
   return oo_resource_op(fd, OO_IOC_AF_XDP_KICK, &intf_i);
 }
 
-static int netif_tcp_helper_build(ci_netif* ni)
+static int netif_tcp_helper_build(ci_netif *ni)
 {
   /* On entry we require the following to be initialised:
   **
   **   ni->state (for both user and kernel builds)
   **   ci_netif_get_driver_handle(ni), ni->tcp_mmap (for user builds only)
   */
-  ci_netif_state* ns = ni->state;
+  ci_netif_state *ns = ni->state;
   int rc, nic_i, size, expected_buf_ofs;
   unsigned vi_io_offset, vi_state_offset, vi_efct_shm_offset;
-  char* vi_mem_ptr;
+  char *vi_mem_ptr;
   int vi_state_bytes;
   int vis_inited = 0;
 #if CI_CFG_PIO
@@ -2070,7 +2184,7 @@ static int netif_tcp_helper_build(ci_netif* ni)
    * Do other mmaps.
    */
   rc = netif_tcp_helper_mmap(ni);
-  if( rc < 0 )
+  if (rc < 0)
     goto fail1;
 
   /****************************************************************************
@@ -2088,20 +2202,22 @@ static int netif_tcp_helper_build(ci_netif* ni)
 
   ni->future_intf_mask = 0;
 
-  OO_STACK_FOR_EACH_INTF_I(ni, nic_i) {
-    ci_netif_state_nic_t* nsn = &ns->nic[nic_i];
-    ef_vi* vi;
+  OO_STACK_FOR_EACH_INTF_I(ni, nic_i)
+  {
+    ci_netif_state_nic_t *nsn = &ns->nic[nic_i];
+    ef_vi *vi;
     int i;
     int num_vis = ci_netif_num_vis(ni);
 
     /* Get interface properties. */
     rc = oo_cp_get_hwport_properties(ni->cplane, ns->intf_i_to_hwport[nic_i],
                                      NULL, NULL);
-    if( rc < 0 )
+    if (rc < 0)
       goto fail1;
 
     LOG_NV(ci_log("%s: ni->io_ptr=%p io_offset=%d mem_ptr=%p "
-                  "state_offset=%d", __FUNCTION__, ni->io_ptr,
+                  "state_offset=%d",
+                  __FUNCTION__, ni->io_ptr,
                   vi_io_offset, vi_mem_ptr, vi_state_offset));
 
     ci_assert(((vi_mem_ptr - ni->buf_ptr) & (CI_PAGE_SIZE - 1)) == 0);
@@ -2110,19 +2226,20 @@ static int netif_tcp_helper_build(ci_netif* ni)
     CI_TEST(rc >= 0);
 
     vi_state_bytes = 0;
-    for( i = 0; i < num_vis; ++i ) {
+    for (i = 0; i < num_vis; ++i)
+    {
       vi = &ni->nic_hw[nic_i].vis[i];
       rc = init_ef_vi(ni, nic_i, vi_state_offset + vi_state_bytes, vi_io_offset,
                       vi_efct_shm_offset,
                       &vi_mem_ptr, vi, nsn->vi_instance[i], nsn->vi_abs_idx[i],
                       i ? 0 : nsn->vi_evq_bytes, nsn->vi_txq_size,
                       &ni->state->vi_stats);
-      if( rc )
+      if (rc)
         goto fail2;
       ++vis_inited;
-      if( i )
+      if (i)
         ef_vi_add_queue(ci_netif_vi(ni, nic_i), vi);
-      if( NI_OPTS(ni).tx_push )
+      if (NI_OPTS(ni).tx_push)
         ef_vi_set_tx_push_threshold(vi, NI_OPTS(ni).tx_push_thresh);
 
       vi_state_bytes += ef_vi_calc_state_bytes(nsn->vi_rxq_size,
@@ -2139,8 +2256,9 @@ static int netif_tcp_helper_build(ci_netif* ni)
     ci_assert_equal(vi_state_bytes, ns->vi_state_bytes);
 
 #if CI_CFG_PIO
-    if( NI_OPTS(ni).pio &&
-        (ns->nic[nic_i].oo_vi_flags & OO_VI_FLAGS_PIO_EN) ) {
+    if (NI_OPTS(ni).pio &&
+        (ns->nic[nic_i].oo_vi_flags & OO_VI_FLAGS_PIO_EN))
+    {
       /* There should be a mapping for this NIC */
       ci_assert(nsn->pio_io_mmap_bytes != 0);
       /* There should be some left in the all-NICs count */
@@ -2150,8 +2268,8 @@ static int netif_tcp_helper_build(ci_netif* ni)
       /* Although the PIO regions are each in their own page, we have a
        * dense mapping for the host memory copy, starting at pio_bufs_ofs
        */
-      ni->nic_hw[nic_i].pio.pio_buffer = (uint8_t*)ns + ns->pio_bufs_ofs + 
-        pio_buf_offset;
+      ni->nic_hw[nic_i].pio.pio_buffer = (uint8_t *)ns + ns->pio_bufs_ofs +
+                                         pio_buf_offset;
       pio_buf_offset += nsn->pio_io_len;
       /* And set up rest of PIO struct so we can call ef_vi_pio_memcpy */
       vi_bar_off = nsn->vi_instance[0] * 8192;
@@ -2163,8 +2281,9 @@ static int netif_tcp_helper_build(ci_netif* ni)
     }
 #endif
 #if CI_CFG_CTPIO
-    if( vi->vi_flags & EF_VI_TX_CTPIO ) {
-      void* ctpio_ptr = ni->ctpio_ptr + ctpio_io_offset;
+    if (vi->vi_flags & EF_VI_TX_CTPIO)
+    {
+      void *ctpio_ptr = ni->ctpio_ptr + ctpio_io_offset;
       ci_assert_lt(ctpio_io_offset, ns->ctpio_mmap_bytes);
       vi->vi_ctpio_mmap_ptr = ctpio_ptr;
       ctpio_io_offset += CI_PAGE_SIZE;
@@ -2175,7 +2294,8 @@ static int netif_tcp_helper_build(ci_netif* ni)
     ni->nic_hw[nic_i].poll_in_kernel = NI_OPTS(ni).poll_in_kernel;
 #endif
 #if CI_CFG_TCP_OFFLOAD_RECYCLER
-    if( ns->nic[nic_i].oo_vi_flags & OO_VI_FLAGS_PLUGIN_IO_EN ) {
+    if (ns->nic[nic_i].oo_vi_flags & OO_VI_FLAGS_PLUGIN_IO_EN)
+    {
       ni->nic_hw[nic_i].plugin_io = ni->plugin_ptr + plugin_io_offset;
       plugin_io_offset += CI_PAGE_SIZE;
     }
@@ -2189,8 +2309,9 @@ static int netif_tcp_helper_build(ci_netif* ni)
 
   /* Set up ni->packets->sets_max */
   netif_tcp_helper_build2(ni);
-  ni->pkt_bufs = CI_ALLOC_ARRAY(char*, ni->packets->sets_max);
-  if( ni->pkt_bufs == NULL ) {
+  ni->pkt_bufs = CI_ALLOC_ARRAY(char *, ni->packets->sets_max);
+  if (ni->pkt_bufs == NULL)
+  {
     rc = -ENOMEM;
     goto fail2;
   }
@@ -2207,19 +2328,19 @@ static int netif_tcp_helper_build(ci_netif* ni)
   expected_buf_ofs += ns->vi_state_bytes * oo_stack_intf_max(ni);
   expected_buf_ofs = CI_ROUND_UP(expected_buf_ofs,
                                  __alignof__(oo_pktbuf_manager));
-  if( ns->buf_ofs != expected_buf_ofs ||
-      ni->packets->sets_max < 1 || 
-      size / sizeof(oo_pktbuf_set) < ni->packets->sets_max ) {
+  if (ns->buf_ofs != expected_buf_ofs ||
+      ni->packets->sets_max < 1 ||
+      size / sizeof(oo_pktbuf_set) < ni->packets->sets_max)
+  {
     /* This typically happens if someone puts a variable width type such as
      * long in ci_netif_state_s, and a 32 bit user level library is used
      * with a 64 bit driver.  (Or if user and kernel get out of sync).
      */
     /* Omitted check that size % sizeof(oo_pktbuf_set) == 0 because the
      * padding to nearest cache line makes it not necessarily true */
-    ci_log("%d %d %d", ns->buf_ofs != sizeof(ci_netif_state) +
-      ns->vi_state_bytes * oo_stack_intf_max(ni),
-      ni->packets->sets_max < 1,
-      size / sizeof(oo_pktbuf_set) < ni->packets->sets_max);
+    ci_log("%d %d %d", ns->buf_ofs != sizeof(ci_netif_state) + ns->vi_state_bytes * oo_stack_intf_max(ni),
+           ni->packets->sets_max < 1,
+           size / sizeof(oo_pktbuf_set) < ni->packets->sets_max);
     ci_log("ERROR: data structure layout mismatch between kernel and "
            "user level detected!");
     ci_log("ns->buf_ofs=%d (expected %d)", ns->buf_ofs, expected_buf_ofs);
@@ -2229,24 +2350,25 @@ static int netif_tcp_helper_build(ci_netif* ni)
     ci_log("  stack_intf_max = %d", oo_stack_intf_max(ni));
     ci_log("  alignof(oo_pktbuf_manager) = %zd",
            __alignof__(oo_pktbuf_manager));
-    ci_log("oo_pktbuf_set=%zd, size=%d, sets_max=%d", 
+    ci_log("oo_pktbuf_set=%zd, size=%d, sets_max=%d",
            sizeof(oo_pktbuf_set), size, ni->packets->sets_max);
     ci_log("a: %zd != 0", size % sizeof(oo_pktbuf_set));
-    ci_log("b: 1 <= %zd <= %d ", size / sizeof(oo_pktbuf_set), 
+    ci_log("b: 1 <= %zd <= %d ", size / sizeof(oo_pktbuf_set),
            ni->packets->sets_max);
     rc = -EINVAL;
     goto fail3;
   }
 
   ni->eps = CI_ALLOC_ARRAY(typeof(*ni->eps), ni->state->max_ep_bufs);
-  if( ni->eps == NULL ) {
+  if (ni->eps == NULL)
+  {
     rc = -ENOMEM;
     goto fail3;
   }
   {
     int i;
-    struct ci_extra_ep ref = { CI_FD_BAD };
-    for( i = 0; i < ni->state->max_ep_bufs; ++ i )
+    struct ci_extra_ep ref = {CI_FD_BAD};
+    for (i = 0; i < ni->state->max_ep_bufs; ++i)
       ni->eps[i] = ref;
   }
 
@@ -2255,7 +2377,7 @@ static int netif_tcp_helper_build(ci_netif* ni)
    * when the failure happened, as we didn't have access to the shared state at
    * that point.  We set the flag even if we decided in the first place that we
    * didn't need init_net's cplane.*/
-  if( ni->cplane_init_net == NULL )
+  if (ni->cplane_init_net == NULL)
     ns->flags |= CI_NETIF_FLAG_NO_INIT_NET_CPLANE;
 
   return 0;
@@ -2270,29 +2392,29 @@ fail1:
 
 #endif
 
-
-
 #ifndef __KERNEL__
 
 static int
-netif_tcp_helper_restore(ci_netif* ni, unsigned netif_mmap_bytes)
+netif_tcp_helper_restore(ci_netif *ni, unsigned netif_mmap_bytes)
 {
-  void* p;
+  void *p;
   int rc;
 
   rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                         OO_MMAP_TYPE_NETIF,
                         CI_NETIF_MMAP_ID_STATE, netif_mmap_bytes,
                         OO_MMAP_FLAG_DEFAULT, &p);
-  if( rc < 0 ) {
+  if (rc < 0)
+  {
     LOG_NV(ci_log("netif_tcp_helper_restore: oo_resource_mmap %d", rc));
     return rc;
   }
-  ni->state = (ci_netif_state*) p;
+  ni->state = (ci_netif_state *)p;
   ni->mmap_bytes = netif_mmap_bytes;
 
   rc = netif_tcp_helper_build(ni);
-  if( rc < 0 ) {
+  if (rc < 0)
+  {
     ci_log("%s: netif_tcp_helper_build %d", __FUNCTION__, rc);
     oo_resource_munmap(ci_netif_get_driver_handle(ni),
                        ni->state, netif_mmap_bytes);
@@ -2302,42 +2424,41 @@ netif_tcp_helper_restore(ci_netif* ni, unsigned netif_mmap_bytes)
   return rc;
 }
 
-static void ci_netif_deinit(ci_netif* ni);
+static void ci_netif_deinit(ci_netif *ni);
 
-
-ci_inline void netif_tcp_helper_free(ci_netif* ni)
+ci_inline void netif_tcp_helper_free(ci_netif *ni)
 {
-  if( ni->state != NULL ) {
+  if (ni->state != NULL)
+  {
     cleanup_all_vis(ni, ~0u);
     netif_tcp_helper_munmap(ni);
   }
-  if( ni->eps != NULL )
+  if (ni->eps != NULL)
     CI_FREE_OBJ(ni->eps);
-  if( ni->pkt_bufs != NULL )
+  if (ni->pkt_bufs != NULL)
     CI_FREE_OBJ(ni->pkt_bufs);
   ci_netif_deinit(ni);
 }
 
-
-static void init_resource_alloc(ci_resource_onload_alloc_t* ra,
-                                const ci_netif_config_opts* opts,
-                                unsigned flags, const char* name)
+static void init_resource_alloc(ci_resource_onload_alloc_t *ra,
+                                const ci_netif_config_opts *opts,
+                                unsigned flags, const char *name)
 {
   memset(ra, 0, sizeof(*ra));
   CI_USER_PTR_SET(ra->in_opts, opts);
-  ra->in_flags = (ci_uint16) flags;
+  ra->in_flags = (ci_uint16)flags;
   /* No need to NULL terminate these -- driver must assume they're not in
    * any case.
    */
   strncpy(ra->in_version, onload_short_version, sizeof(ra->in_version));
   strncpy(ra->in_uk_intf_ver, OO_UK_INTF_VER, sizeof(ra->in_uk_intf_ver));
-  if( flags & CI_NETIF_FLAG_DO_ALLOCATE_SCALABLE_FILTERS_RSS ) {
+  if (flags & CI_NETIF_FLAG_DO_ALLOCATE_SCALABLE_FILTERS_RSS)
+  {
     ra->in_cluster_size = CITP_OPTS.cluster_size;
     ra->in_cluster_restart = CITP_OPTS.cluster_restart_opt;
     strncpy(ra->in_name, CITP_OPTS.cluster_name, CI_CFG_STACK_NAME_LEN);
   }
-  else
-  if( name != NULL )
+  else if (name != NULL)
     strncpy(ra->in_name, name, CI_CFG_STACK_NAME_LEN);
 
   ra->in_memfd = -1;
@@ -2348,22 +2469,22 @@ static void init_resource_alloc(ci_resource_onload_alloc_t* ra,
     char mfd_name[CI_CFG_STACK_NAME_LEN + 8];
     snprintf(mfd_name, sizeof(mfd_name), "efct/%s", name);
     ra->in_memfd = memfd_create(mfd_name, MFD_CLOEXEC | MFD_HUGETLB);
-    if( ra->in_memfd < 0 && errno != ENOSYS )
+    if (ra->in_memfd < 0 && errno != ENOSYS)
       LOG_S(ci_log("%s: memfd_create failed %d", __FUNCTION__, errno));
   }
 #endif
 }
 
-
 static int
-netif_tcp_helper_alloc_u(ef_driver_handle fd, ci_netif* ni,
-                         const ci_netif_config_opts* opts, unsigned flags,
-                         const char* stack_name)
+netif_tcp_helper_alloc_u(ef_driver_handle fd, ci_netif *ni,
+                         const ci_netif_config_opts *opts, unsigned flags,
+                         const char *stack_name)
 {
+  LOG_E(ci_log("Kyle was here"));
   ci_resource_onload_alloc_t ra;
   int rc;
-  ci_netif_state* ns;
-  void* p;
+  ci_netif_state *ns;
+  void *p;
 
   /****************************************************************************
    * Allocate the TCP Helper resource.
@@ -2373,16 +2494,21 @@ netif_tcp_helper_alloc_u(ef_driver_handle fd, ci_netif* ni,
   /* oo_resource_alloc's ioctl does an interruptible sleep while waiting for
    * the cplane. If a non-fatal signal is received while we're asleep,
    * we get an EINTR and want to try again. */
-  while( (rc = oo_resource_alloc(fd, &ra)) == -EINTR );
+  while ((rc = oo_resource_alloc(fd, &ra)) == -EINTR)
+    ;
 
-  if( ra.in_memfd >= 0 )
+  if (ra.in_memfd >= 0)
     ci_sys_close(ra.in_memfd);
 
-  if( rc < 0 ) {
-    switch( rc ) {
-    case -ELIBACC: {
+  if (rc < 0)
+  {
+    switch (rc)
+    {
+    case -ELIBACC:
+    {
       static int once;
-      if( ! once ) {
+      if (!once)
+      {
         once = 1;
         ci_log("ERROR: Driver/Library version mismatch detected.");
         ci_log("This application will not be accelerated.");
@@ -2400,11 +2526,11 @@ netif_tcp_helper_alloc_u(ef_driver_handle fd, ci_netif* ni,
       break;
     case -ENODEV:
       LOG_E(ci_log("%s: ENODEV.\n"
-"This error can occur if:\n"
-" - no Solarflare network interfaces are active/UP, or they are running\n"
-"   packed stream firmware or are disabled, and\n"
-" - there are no AF_XDP interfaces registered with sfc_resource\n"
-"Please check your configuration.",
+                   "This error can occur if:\n"
+                   " - no Solarflare network interfaces are active/UP, or they are running\n"
+                   "   packed stream firmware or are disabled, and\n"
+                   " - there are no AF_XDP interfaces registered with sfc_resource\n"
+                   "Please check your configuration.",
                    __FUNCTION__));
       break;
     default:
@@ -2422,7 +2548,7 @@ netif_tcp_helper_alloc_u(ef_driver_handle fd, ci_netif* ni,
    */
   ni->nic_set = ra.out_nic_set;
   LOG_NC(ci_log("%s: nic set %" EFRM_NIC_SET_FMT, __FUNCTION__,
-	                efrm_nic_set_pri_arg(&ni->nic_set)));
+                efrm_nic_set_pri_arg(&ni->nic_set)));
   ni->mmap_bytes = ra.out_netif_mmap_bytes;
 
   /****************************************************************************
@@ -2430,27 +2556,30 @@ netif_tcp_helper_alloc_u(ef_driver_handle fd, ci_netif* ni,
    */
   rc = oo_resource_mmap(fd, OO_MMAP_TYPE_NETIF, CI_NETIF_MMAP_ID_STATE,
                         ra.out_netif_mmap_bytes, OO_MMAP_FLAG_DEFAULT, &p);
-  if( rc < 0 ) {
+  if (rc < 0)
+  {
     LOG_E(ci_log("%s: oo_resource_mmap %d", __FUNCTION__, rc));
     return rc;
   }
 
-  ns = ni->state = (ci_netif_state*) p;
+  ns = ni->state = (ci_netif_state *)p;
   ci_assert_equal(ra.out_netif_mmap_bytes, ns->netif_mmap_bytes);
 
   /****************************************************************************
    * Final Debug consistency check
    */
-  if( !!(ns->flags & CI_NETIF_FLAG_DEBUG) != CI_DEBUG(1+)0 ) {
+  if (!!(ns->flags & CI_NETIF_FLAG_DEBUG) != CI_DEBUG(1 +) 0)
+  {
     ci_log("ERROR: Driver/Library debug build mismatch detected (%d,%d)",
-           !!(ns->flags & CI_NETIF_FLAG_DEBUG), CI_DEBUG(1+)0 );
+           !!(ns->flags & CI_NETIF_FLAG_DEBUG), CI_DEBUG(1 +) 0);
     rc = -ELIBACC;
     goto fail;
   }
 
-  if( ns->flags & CI_NETIF_FLAG_ONLOAD_UNSUPPORTED ) {
+  if (ns->flags & CI_NETIF_FLAG_ONLOAD_UNSUPPORTED)
+  {
     ci_log("*** Warning: use of %s with this adapter is likely",
-	   onload_product);
+           onload_product);
     ci_log("***  to show suboptimal performance for all cases other than the");
     ci_log("***  most trivial benchmarks.  Please see your Solarflare");
     ci_log("***  representative/reseller to obtain an Onload-capable");
@@ -2461,8 +2590,16 @@ netif_tcp_helper_alloc_u(ef_driver_handle fd, ci_netif* ni,
    * Construct / attach to resources which are described in the shared state
    */
   rc = netif_tcp_helper_build(ni);
-  if( rc < 0 ) {
+  if (rc < 0)
+  {
     LOG_E(ci_log("%s: netif_tcp_helper_build failed rc=%d", __FUNCTION__, rc));
+    goto fail;
+  }
+
+  rc = dpdk_init();
+  if (rc < 0)
+  {
+    LOG_E(ci_log("UNABLE TO INIT DPDK"));
     goto fail;
   }
 
@@ -2474,7 +2611,6 @@ fail:
 }
 
 #endif
-
 
 /*****************************************************************************
  *                                                                           *
@@ -2488,23 +2624,22 @@ fail:
 static void ci_netif_sanity_checks(void)
 {
   /* These had better be true, or there'll be trouble! */
-  CI_BUILD_ASSERT( sizeof(citp_waitable_obj) <= CI_PAGE_SIZE );
-  CI_BUILD_ASSERT( sizeof(citp_waitable_obj) <= EP_BUF_SIZE );
-  CI_BUILD_ASSERT( EP_BUF_SIZE * EP_BUF_PER_PAGE == CI_PAGE_SIZE );
-  CI_BUILD_ASSERT( (1u << CI_SB_FLAG_WAKE_RX_B) == CI_SB_FLAG_WAKE_RX );
-  CI_BUILD_ASSERT( (1u << CI_SB_FLAG_WAKE_TX_B) == CI_SB_FLAG_WAKE_TX );
-  CI_BUILD_ASSERT( sizeof(ci_ni_aux_mem) == CI_AUX_MEM_SIZE );
+  CI_BUILD_ASSERT(sizeof(citp_waitable_obj) <= CI_PAGE_SIZE);
+  CI_BUILD_ASSERT(sizeof(citp_waitable_obj) <= EP_BUF_SIZE);
+  CI_BUILD_ASSERT(EP_BUF_SIZE * EP_BUF_PER_PAGE == CI_PAGE_SIZE);
+  CI_BUILD_ASSERT((1u << CI_SB_FLAG_WAKE_RX_B) == CI_SB_FLAG_WAKE_RX);
+  CI_BUILD_ASSERT((1u << CI_SB_FLAG_WAKE_TX_B) == CI_SB_FLAG_WAKE_TX);
+  CI_BUILD_ASSERT(sizeof(ci_ni_aux_mem) == CI_AUX_MEM_SIZE);
 
   /* AUX_PER_BUF aux buffers + header = ep buffer, where header is
    * oo_ep_header and fits in exactly one cache line. */
-  CI_BUILD_ASSERT( sizeof(struct oo_ep_header) <= CI_AUX_HEADER_SIZE );
-  CI_BUILD_ASSERT( CI_AUX_MEM_SIZE * AUX_PER_BUF + CI_AUX_HEADER_SIZE
-                   <= EP_BUF_SIZE );
+  CI_BUILD_ASSERT(sizeof(struct oo_ep_header) <= CI_AUX_HEADER_SIZE);
+  CI_BUILD_ASSERT(CI_AUX_MEM_SIZE * AUX_PER_BUF + CI_AUX_HEADER_SIZE <= EP_BUF_SIZE);
   /* This constraint isn't strictly necessary for functionality, but it makes
    * debugging/dumping saner */
-  CI_BUILD_ASSERT( offsetof(citp_waitable, sb_aflags) +
-                      sizeof(((citp_waitable*)0)->sb_aflags)
-                   <= CI_AUX_HEADER_SIZE );
+  CI_BUILD_ASSERT(offsetof(citp_waitable, sb_aflags) +
+                      sizeof(((citp_waitable *)0)->sb_aflags) <=
+                  CI_AUX_HEADER_SIZE);
 
 #ifndef NDEBUG
   {
@@ -2517,20 +2652,20 @@ static void ci_netif_sanity_checks(void)
 #endif
 
   /* Warn if we're wasting memory. */
-  if( sizeof(citp_waitable_obj) * 2 <= EP_BUF_SIZE )
+  if (sizeof(citp_waitable_obj) * 2 <= EP_BUF_SIZE)
     ci_log("%s: EP_BUF_SIZE=%d larger than necessary (citp_waitable_obj=%zu)",
            __FUNCTION__, EP_BUF_SIZE, sizeof(citp_waitable_obj));
 }
 #endif
 
-
-static int ci_netif_pkt_reserve(ci_netif* ni, int n, oo_pkt_p* p_pkt_list)
+static int ci_netif_pkt_reserve(ci_netif *ni, int n, oo_pkt_p *p_pkt_list)
 {
-  ci_ip_pkt_fmt* pkt;
+  ci_ip_pkt_fmt *pkt;
   int i;
 
-  for( i = 0; i < n; ++i ) {
-    if( (pkt = ci_netif_pkt_alloc(ni, 0)) == NULL )
+  for (i = 0; i < n; ++i)
+  {
+    if ((pkt = ci_netif_pkt_alloc(ni, 0)) == NULL)
       break;
     *p_pkt_list = OO_PKT_P(pkt);
     p_pkt_list = &pkt->next;
@@ -2539,11 +2674,11 @@ static int ci_netif_pkt_reserve(ci_netif* ni, int n, oo_pkt_p* p_pkt_list)
   return i;
 }
 
-
-static void ci_netif_pkt_reserve_free(ci_netif* ni, oo_pkt_p pkt_list, int n)
+static void ci_netif_pkt_reserve_free(ci_netif *ni, oo_pkt_p pkt_list, int n)
 {
-  ci_ip_pkt_fmt* pkt;
-  while( OO_PP_NOT_NULL(pkt_list) ) {
+  ci_ip_pkt_fmt *pkt;
+  while (OO_PP_NOT_NULL(pkt_list))
+  {
     CI_DEBUG(--n);
     pkt = PKT_CHK(ni, pkt_list);
     pkt_list = pkt->next;
@@ -2554,11 +2689,10 @@ static void ci_netif_pkt_reserve_free(ci_netif* ni, oo_pkt_p pkt_list, int n)
   ci_assert(OO_PP_IS_NULL(pkt_list));
 }
 
-
 #if CI_CFG_TCP_OFFLOAD_RECYCLER
-void ci_netif_send_plugin_app_ctrl(ci_netif* ni, int nic_index,
-                                   ci_ip_pkt_fmt* pkt,
-                                   const void* payload, size_t paylen)
+void ci_netif_send_plugin_app_ctrl(ci_netif *ni, int nic_index,
+                                   ci_ip_pkt_fmt *pkt,
+                                   const void *payload, size_t paylen)
 {
   pkt->intf_i = nic_index;
   pkt->q_id = CI_Q_ID_TCP_APP;
@@ -2576,17 +2710,17 @@ void ci_netif_send_plugin_app_ctrl(ci_netif* ni, int nic_index,
   ci_netif_send(ni, pkt);
 }
 
-
-void __ci_netif_ring_plugin_app_doorbell(ci_netif* ni, int nic_index)
+void __ci_netif_ring_plugin_app_doorbell(ci_netif *ni, int nic_index)
 {
   union ceph_control_pkt cmd = {
-    .add_credit = {
-      .cmd = XSN_CEPH_CTRL_ADD_CREDIT,
-      .credit = ni->state->nic[nic_index].plugin_app_credit,
-    },
+      .add_credit = {
+          .cmd = XSN_CEPH_CTRL_ADD_CREDIT,
+          .credit = ni->state->nic[nic_index].plugin_app_credit,
+      },
   };
-  ci_ip_pkt_fmt* pkt = ci_netif_pkt_alloc(ni, 0);
-  if( ! pkt ) {
+  ci_ip_pkt_fmt *pkt = ci_netif_pkt_alloc(ni, 0);
+  if (!pkt)
+  {
     /* Out-of-packets is an unfortunately-probable circumstance, since this
      * function is run immediately after we've just taken a load of packets to
      * refill the rxqs. The problem is mitigated by this function getting
@@ -2599,10 +2733,9 @@ void __ci_netif_ring_plugin_app_doorbell(ci_netif* ni, int nic_index)
 }
 #endif
 
-
 #ifndef __KERNEL__
 
-static int ci_netif_pkt_prefault(ci_netif* ni)
+static int ci_netif_pkt_prefault(ci_netif *ni)
 {
   /* Touch all allocated packet buffers so we don't incur the cost of
    * faulting them info this address space later.
@@ -2614,22 +2747,23 @@ static int ci_netif_pkt_prefault(ci_netif* ni)
    * Similarly, the cast into volatile is designed to prevent compiler
    * optimisations.
    */
-  ci_ip_pkt_fmt* pkt;
+  ci_ip_pkt_fmt *pkt;
   int i, n;
   int rc = 0;
 
-  if( NI_OPTS(ni).prefault_packets ) {
+  if (NI_OPTS(ni).prefault_packets)
+  {
     n = ni->packets->n_pkts_allocated;
-    for( i = 0; i < n; ++i ) {
+    for (i = 0; i < n; ++i)
+    {
       pkt = PKT(ni, i);
-      rc += *(volatile ci_int32*)(&pkt->refcount);
+      rc += *(volatile ci_int32 *)(&pkt->refcount);
     }
   }
   return rc;
 }
 
-
-static void ci_netif_pkt_prefault_reserve(ci_netif* ni)
+static void ci_netif_pkt_prefault_reserve(ci_netif *ni)
 {
   oo_pkt_p pkt_list;
   int n;
@@ -2639,18 +2773,18 @@ static void ci_netif_pkt_prefault_reserve(ci_netif* ni)
    * configured EF_MAX_PACKETS - ensures we will always max out the buffers
    * when EF_PREFAULT_PACKETS is bigger than both.
    */
-  int target_allocated = CI_MIN( NI_OPTS(ni).prefault_packets,
-                                 CI_MAX(NI_OPTS(ni).max_packets,
-                                        actual_max_packets) );
+  int target_allocated = CI_MIN(NI_OPTS(ni).prefault_packets,
+                                CI_MAX(NI_OPTS(ni).max_packets,
+                                       actual_max_packets));
   int already_reserved = (ni->packets->n_pkts_allocated - ni->packets->n_free);
 
-  if( ! NI_OPTS(ni).prefault_packets )
+  if (!NI_OPTS(ni).prefault_packets)
     return;
 
   ci_netif_lock(ni);
   /* Try to reserve enough so that total allocation reaches target level */
   n = ci_netif_pkt_reserve(ni, target_allocated - already_reserved, &pkt_list);
-  if( ni->packets->n_pkts_allocated < target_allocated )
+  if (ni->packets->n_pkts_allocated < target_allocated)
     LOG_E(ci_log("%s: Prefaulting only allocated %d of %d (reserved +%d)",
                  __FUNCTION__,
                  ni->packets->n_pkts_allocated,
@@ -2660,10 +2794,9 @@ static void ci_netif_pkt_prefault_reserve(ci_netif* ni)
   ci_netif_unlock(ni);
 }
 
-
-void ci_netif_cluster_prefault(ci_netif* ni)
+void ci_netif_cluster_prefault(ci_netif *ni)
 {
-  if( ni->flags & CI_NETIF_FLAGS_PREFAULTED )
+  if (ni->flags & CI_NETIF_FLAGS_PREFAULTED)
     return;
   ci_netif_pkt_prefault_reserve(ni);
   ci_netif_pkt_prefault(ni);
@@ -2673,7 +2806,7 @@ void ci_netif_cluster_prefault(ci_netif* ni)
   ni->flags |= CI_NETIF_FLAGS_PREFAULTED;
 }
 
-static int ci_netif_init(ci_netif* ni, ef_driver_handle fd)
+static int ci_netif_init(ci_netif *ni, ef_driver_handle fd)
 {
   int rc;
   ef_driver_handle init_net_fd;
@@ -2685,11 +2818,12 @@ static int ci_netif_init(ci_netif* ni, ef_driver_handle fd)
   ni->cplane_init_net = NULL;
 
   ni->cplane = malloc(sizeof(struct oo_cplane_handle));
-  if( ni->cplane == NULL )
+  if (ni->cplane == NULL)
     return -ENOMEM;
 
   rc = oo_cp_create(fd, ni->cplane, CITP_OPTS.sync_cplane, 0);
-  if( rc != 0 ) {
+  if (rc != 0)
+  {
     ci_log("%s: failed to get local control plane handle: %d", __func__, rc);
     goto fail;
   }
@@ -2697,26 +2831,31 @@ static int ci_netif_init(ci_netif* ni, ef_driver_handle fd)
   /* If we need veth acceleration, map in the control plane for the main
    * namespace. */
   rc = oo_resource_op(fd, OO_IOC_VETH_ACCELERATION_ENABLED, NULL);
-  if( rc > 0 ) {
+  if (rc > 0)
+  {
     ni->cplane_init_net = malloc(sizeof(struct oo_cplane_handle));
-    if( ni->cplane_init_net == NULL )
+    if (ni->cplane_init_net == NULL)
       goto fail;
 
     rc = ef_onload_driver_open(&init_net_fd, OO_STACK_DEV, 1);
-    if( rc != 0 ) {
+    if (rc != 0)
+    {
       ci_log("%s: failed to open driver handle: %d", __func__, rc);
     }
-    else {
+    else
+    {
       rc = oo_cp_create(init_net_fd, ni->cplane_init_net,
                         CITP_OPTS.sync_cplane, CP_CREATE_FLAGS_INIT_NET);
-      if( rc != 0 ) {
+      if (rc != 0)
+      {
         ci_log("%s: failed to get init_net control plane handle: %d", __func__,
                rc);
         ef_onload_driver_close(init_net_fd);
       }
     }
 
-    if( rc != 0 ) {
+    if (rc != 0)
+    {
       /* We can tolerate failure to map init_net's control plane. */
       ci_log("%s: support for containers will be limited", __func__);
       free(ni->cplane_init_net);
@@ -2726,14 +2865,15 @@ static int ci_netif_init(ci_netif* ni, ef_driver_handle fd)
 
   return 0;
 
- fail:
+fail:
   free(ni->cplane);
   return rc;
 }
 
-static void ci_netif_deinit(ci_netif* ni)
+static void ci_netif_deinit(ci_netif *ni)
 {
-  if( ni->cplane_init_net != NULL ) {
+  if (ni->cplane_init_net != NULL)
+  {
     oo_cp_destroy(ni->cplane_init_net);
     ef_onload_driver_close(ni->cplane_init_net->fd);
     free(ni->cplane_init_net);
@@ -2752,10 +2892,10 @@ static void ci_netif_deinit(ci_netif* ni)
 #define ONLOAD_HELPER_NAME "onload_helper"
 
 /* Run this in the second-level cloned process: exec */
-static void ci_netif_start_helper2(ci_netif* ni) __attribute__((noreturn));
-static void ci_netif_start_helper2(ci_netif* ni)
+static void ci_netif_start_helper2(ci_netif *ni) __attribute__((noreturn));
+static void ci_netif_start_helper2(ci_netif *ni)
 {
-  char* argv[5];
+  char *argv[5];
   char stack_id_str[strlen(OO_STRINGIFY(INT_MAX)) + 1];
   int rc;
 
@@ -2764,7 +2904,8 @@ static void ci_netif_start_helper2(ci_netif* ni)
   snprintf(stack_id_str, sizeof(stack_id_str), "%d", NI_ID(ni));
   argv[2] = stack_id_str;
   argv[3] = NULL;
-  if( CITP_OPTS.log_via_ioctl ) {
+  if (CITP_OPTS.log_via_ioctl)
+  {
     argv[3] = "-K";
     argv[4] = NULL;
   }
@@ -2772,15 +2913,15 @@ static void ci_netif_start_helper2(ci_netif* ni)
   rc = ci_sys_execvpe(ONLOAD_HELPER_NAME, argv, NULL);
   ci_assert_lt(rc, 0);
   (void)rc; /* appease gcc in NDEBUG build */
-  ci_log("spawning "ONLOAD_HELPER_NAME" for [%s]: execve() failed: %s",
+  ci_log("spawning " ONLOAD_HELPER_NAME " for [%s]: execve() failed: %s",
          ni->state->pretty_name, strerror(errno));
   _exit(4);
 }
 
 /* Run this in the first-level cloned process: fork and exit.
  * We should not exec here, because execve() overwrites exit_signal. */
-static void ci_netif_start_helper1(ci_netif* ni) __attribute__((noreturn));
-static void ci_netif_start_helper1(ci_netif* ni)
+static void ci_netif_start_helper1(ci_netif *ni) __attribute__((noreturn));
+static void ci_netif_start_helper1(ci_netif *ni)
 {
   int i;
   sigset_t sigset;
@@ -2790,7 +2931,7 @@ static void ci_netif_start_helper1(ci_netif* ni)
   /* The first part of "man 7 daemon": */
 
   /* Reset all signal handlers. */
-  for( i = 0; i < _NSIG; ++i )
+  for (i = 0; i < _NSIG; ++i)
     signal(i, SIG_DFL);
 
   /* Unblock all signals. */
@@ -2799,16 +2940,18 @@ static void ci_netif_start_helper1(ci_netif* ni)
 
   /* Get a new session. */
   rc = setsid();
-  if( rc == -1 ) {
-    ci_log("spawning "ONLOAD_HELPER_NAME" for [%s]: setsid() failed: %s",
+  if (rc == -1)
+  {
+    ci_log("spawning " ONLOAD_HELPER_NAME " for [%s]: setsid() failed: %s",
            ni->state->pretty_name, strerror(errno));
     _exit(1);
   }
 
   umask(0);
   rc = chdir("/");
-  if( rc == -1 ) {
-    ci_log("spawning "ONLOAD_HELPER_NAME" for [%s]: chdir(/) failed: %s",
+  if (rc == -1)
+  {
+    ci_log("spawning " ONLOAD_HELPER_NAME " for [%s]: chdir(/) failed: %s",
            ni->state->pretty_name, strerror(errno));
     _exit(1);
   }
@@ -2824,11 +2967,12 @@ static void ci_netif_start_helper1(ci_netif* ni)
    */
   rc = my_do_syscall3(__NR_clone, CLONE_FILES | CLONE_VFORK | SIGCHLD,
                       0, 0);
-  if( rc == 0 )
+  if (rc == 0)
     ci_netif_start_helper2(ni);
 
-  if( rc < 0 ) {
-    ci_log("spawning "ONLOAD_HELPER_NAME" for [%s]: "
+  if (rc < 0)
+  {
+    ci_log("spawning " ONLOAD_HELPER_NAME " for [%s]: "
            "second clone() failed %s",
            ni->state->pretty_name, strerror(errno));
     _exit(2);
@@ -2836,14 +2980,14 @@ static void ci_netif_start_helper1(ci_netif* ni)
 
   ci_assert_nequal(rc, 0);
   waitpid(rc, &wstatus, 0);
-  if( WIFEXITED(wstatus) && WEXITSTATUS(wstatus) == 0 )
+  if (WIFEXITED(wstatus) && WEXITSTATUS(wstatus) == 0)
     _exit(0);
 
   /* Error message was printed by the child process */
   _exit(3);
 }
 
-static int ci_netif_start_helper(ci_netif* ni)
+static int ci_netif_start_helper(ci_netif *ni)
 {
   int rc;
   int wstatus;
@@ -2853,56 +2997,57 @@ static int ci_netif_start_helper(ci_netif* ni)
    * application to be signalled.
    */
   rc = my_do_syscall3(__NR_clone, CLONE_FILES | CLONE_VFORK, 0, 0);
-  if( rc == 0 )
+  if (rc == 0)
     ci_netif_start_helper1(ni);
 
-  if( rc < 0 ) {
-    ci_log("spawning "ONLOAD_HELPER_NAME" for [%s]: "
+  if (rc < 0)
+  {
+    ci_log("spawning " ONLOAD_HELPER_NAME " for [%s]: "
            "first clone() failed %s",
            ni->state->pretty_name, strerror(errno));
     _exit(1);
   }
 
   rc = waitpid(rc, &wstatus, __WCLONE);
-  if( WIFEXITED(wstatus) && WEXITSTATUS(wstatus) == 0 )
+  if (WIFEXITED(wstatus) && WEXITSTATUS(wstatus) == 0)
     return 0;
 
-  LOG_S(ci_log("%s: spawning "ONLOAD_HELPER_NAME" for [%s]: exit status=%d",
+  LOG_S(ci_log("%s: spawning " ONLOAD_HELPER_NAME " for [%s]: exit status=%d",
                __func__, ni->state->pretty_name, wstatus));
   return -1;
 }
 #endif
 
-int ci_netif_ctor(ci_netif* ni, ef_driver_handle fd, const char* stack_name,
+int ci_netif_ctor(ci_netif *ni, ef_driver_handle fd, const char *stack_name,
                   unsigned flags)
 {
-  ci_netif_config_opts* opts;
-  struct oo_per_thread* per_thread;
+  ci_netif_config_opts *opts;
+  struct oo_per_thread *per_thread;
   int rc;
 
   per_thread = oo_per_thread_get();
-  opts = per_thread->thread_local_netif_opts != NULL?
-    per_thread->thread_local_netif_opts:
-    &ci_cfg_opts.netif_opts;
+  opts = per_thread->thread_local_netif_opts != NULL ? per_thread->thread_local_netif_opts : &ci_cfg_opts.netif_opts;
 
   ci_assert(ni);
   ci_netif_sanity_checks();
 
   rc = ci_netif_init(ni, fd);
-  if( rc < 0 )
+  if (rc < 0)
     return rc;
 
   /***************************************
-  * Allocate kernel helper and link into netif
-  */
-  if( (rc = netif_tcp_helper_alloc_u(fd, ni, opts, flags, stack_name)) < 0 ) {
+   * Allocate kernel helper and link into netif
+   */
+  if ((rc = netif_tcp_helper_alloc_u(fd, ni, opts, flags, stack_name)) < 0)
+  {
     ci_netif_deinit(ni);
     return rc;
   }
 
 #if CI_CFG_UL_INTERRUPT_HELPER
   rc = ci_netif_start_helper(ni);
-  if( rc != 0 ) {
+  if (rc != 0)
+  {
     /* The stack was fully initialised, so we have to call dtor() for full
      * destroy now. */
     ci_netif_dtor(ni);
@@ -2919,9 +3064,9 @@ int ci_netif_ctor(ci_netif* ni, ef_driver_handle fd, const char* stack_name,
   return 0;
 }
 
-#else  /* __KERNEL__ */
+#else /* __KERNEL__ */
 
-int ci_netif_set_rxq_limit(ci_netif* ni)
+int ci_netif_set_rxq_limit(ci_netif *ni)
 {
   int intf_i, n_intf, max_ring_pkts, fill_limit;
   int rc = 0, rxq_cap = 0;
@@ -2931,8 +3076,9 @@ int ci_netif_set_rxq_limit(ci_netif* ni)
    * RX ring at the expense of the last.
    */
   n_intf = 0;
-  OO_STACK_FOR_EACH_INTF_I(ni, intf_i) {
-    ef_vi* vi = ci_netif_vi(ni, intf_i);
+  OO_STACK_FOR_EACH_INTF_I(ni, intf_i)
+  {
+    ef_vi *vi = ci_netif_vi(ni, intf_i);
     rxq_cap = ef_vi_receive_capacity(vi);
     ++n_intf;
   }
@@ -2943,26 +3089,29 @@ int ci_netif_set_rxq_limit(ci_netif* ni)
    */
   max_ring_pkts = NI_OPTS(ni).max_rx_packets * 4 / 5;
   fill_limit = rxq_cap;
-  if( fill_limit * n_intf > max_ring_pkts )
+  if (fill_limit * n_intf > max_ring_pkts)
     fill_limit = max_ring_pkts / n_intf;
-  if( fill_limit < NI_OPTS(ni).rxq_limit ) {
-    if( fill_limit < rxq_cap )
-      LOG_W(ci_log("WARNING: "N_FMT "RX ring fill level reduced from %d to %d "
+  if (fill_limit < NI_OPTS(ni).rxq_limit)
+  {
+    if (fill_limit < rxq_cap)
+      LOG_W(ci_log("WARNING: " N_FMT "RX ring fill level reduced from %d to %d "
                    "max_ring_pkts=%d rxq_cap=%d n_intf=%d",
                    N_PRI_ARGS(ni), NI_OPTS(ni).rxq_limit, fill_limit,
                    max_ring_pkts, rxq_cap, n_intf));
     ni->opts.rxq_limit = fill_limit;
     ni->state->opts.rxq_limit = fill_limit;
   }
-  if( ni->nic_n == 0 ) {
+  if (ni->nic_n == 0)
+  {
     /* we do not use .rxq_limit, but let's make all checkers happy */
-     NI_OPTS(ni).rxq_limit = CI_CFG_RX_DESC_BATCH;
+    NI_OPTS(ni).rxq_limit = CI_CFG_RX_DESC_BATCH;
   }
-  else if( NI_OPTS(ni).rxq_limit < NI_OPTS(ni).rxq_min ) {
+  else if (NI_OPTS(ni).rxq_limit < NI_OPTS(ni).rxq_min)
+  {
     /* Do not allow user to create a stack that is too severely
      * constrained.
      */
-    LOG_E(ci_log("ERROR: "N_FMT "rxq_limit=%d is too small (rxq_min=%d)",
+    LOG_E(ci_log("ERROR: " N_FMT "rxq_limit=%d is too small (rxq_min=%d)",
                  N_PRI_ARGS(ni), NI_OPTS(ni).rxq_limit, NI_OPTS(ni).rxq_min);
           ci_log("HINT: Use a larger value for EF_RXQ_LIMIT or "
                  "EF_MAX_RX_PACKETS or EF_MAX_PACKETS"));
@@ -2977,27 +3126,29 @@ int ci_netif_set_rxq_limit(ci_netif* ni)
   return rc;
 }
 
-static void ci_netif_af_xdp_post_fill(ci_netif* ni)
+static void ci_netif_af_xdp_post_fill(ci_netif *ni)
 {
   /* some ZC UMEM implementation can take a jiffy to schedule HW rx ring refill */
   /* FIXME AF_XDP: fill umem rings before binding to umem */
-  if( ni->flags & CI_NETIF_FLAG_AF_XDP )
+  if (ni->flags & CI_NETIF_FLAG_AF_XDP)
     usleep_range(TICK_USEC * 2, TICK_USEC * 3);
 }
 
-static int __ci_netif_init_fill_rx_rings(ci_netif* ni)
+static int __ci_netif_init_fill_rx_rings(ci_netif *ni)
 {
   /* Saving rxq_limit as it may get modified during call to
    * ci_netif_rx_post().
    */
   int intf_i, rxq_limit = ni->state->rxq_limit;
-  OO_STACK_FOR_EACH_INTF_I(ni, intf_i) {
+  OO_STACK_FOR_EACH_INTF_I(ni, intf_i)
+  {
     int vi_i;
     int n_posted = 0;
-    for( vi_i = 0; vi_i < ci_netif_num_vis(ni); ++vi_i ) {
-      ef_vi* vi = &ni->nic_hw[intf_i].vis[vi_i];
+    for (vi_i = 0; vi_i < ci_netif_num_vis(ni); ++vi_i)
+    {
+      ef_vi *vi = &ni->nic_hw[intf_i].vis[vi_i];
       n_posted = ci_netif_rx_post(ni, intf_i, vi);
-      if( ef_vi_receive_fill_level(vi) < rxq_limit )
+      if (ef_vi_receive_fill_level(vi) < rxq_limit)
         return -ENOMEM;
     }
     (void)n_posted;
@@ -3010,14 +3161,14 @@ static int __ci_netif_init_fill_rx_rings(ci_netif* ni)
   return 0;
 }
 
-
-int ci_netif_init_fill_rx_rings(ci_netif* ni)
+int ci_netif_init_fill_rx_rings(ci_netif *ni)
 {
   oo_pkt_p pkt_list;
   int lim, rc, n_reserved, n_requested, n_accounted;
 
   rc = ci_tcp_helper_more_bufs(ni);
-  if( ni->packets->n_free == 0 ) {
+  if (ni->packets->n_free == 0)
+  {
     LOG_E(ci_log("%s: [%d] ERROR: failed to allocate initial packet set: %d",
                  __func__, NI_ID(ni), rc));
     return -ENOMEM;
@@ -3025,29 +3176,32 @@ int ci_netif_init_fill_rx_rings(ci_netif* ni)
   ni->packets->id = 0;
 
   ci_netif_mem_pressure_pkt_pool_fill(ni);
-  if( (rc = ci_netif_set_rxq_limit(ni)) < 0 )
+  if ((rc = ci_netif_set_rxq_limit(ni)) < 0)
     return rc;
 
   /* Reserve some packet buffers for the free pool. */
-  if( NI_OPTS(ni).prealloc_packets )
+  if (NI_OPTS(ni).prealloc_packets)
     n_requested = NI_OPTS(ni).max_packets;
   else
     n_requested = NI_OPTS(ni).min_free_packets;
   n_accounted = n_reserved = ci_netif_pkt_reserve(ni, n_requested, &pkt_list);
-  if( NI_OPTS(ni).prealloc_packets )
+  if (NI_OPTS(ni).prealloc_packets)
     n_accounted += ni->state->mem_pressure_pkt_pool_n;
-  if( n_accounted < n_requested ) {
-    if( NI_OPTS(ni).prealloc_packets )
+  if (n_accounted < n_requested)
+  {
+    if (NI_OPTS(ni).prealloc_packets)
       LOG_E(ci_log("%s: ERROR: Insufficient packet buffers available for "
                    "EF_PREALLOC_PACKETS=1 EF_MAX_PACKETS=%d got %d",
                    __FUNCTION__, n_requested, n_accounted));
     else
       LOG_E(ci_log("%s: ERROR: Insufficient packet buffers available for "
-                   "EF_MIN_FREE_PACKETS=%d", __FUNCTION__, n_requested));
+                   "EF_MIN_FREE_PACKETS=%d",
+                   __FUNCTION__, n_requested));
     return -ENOMEM;
   }
 
-  if( NI_OPTS(ni).prealloc_packets ) {
+  if (NI_OPTS(ni).prealloc_packets)
+  {
     /* Free the packets now, so they can be used to fill rings */
     ci_netif_pkt_reserve_free(ni, pkt_list, n_reserved);
   }
@@ -3056,20 +3210,24 @@ int ci_netif_init_fill_rx_rings(ci_netif* ni)
    * are short of packet buffers, we don't fill some rings completely and
    * leave others empty.
    */
-  for( lim = CI_CFG_RX_DESC_BATCH; lim <= NI_OPTS(ni).rxq_limit;
-       lim += CI_CFG_RX_DESC_BATCH ) {
+  for (lim = CI_CFG_RX_DESC_BATCH; lim <= NI_OPTS(ni).rxq_limit;
+       lim += CI_CFG_RX_DESC_BATCH)
+  {
     ni->state->rxq_limit = lim;
-    if( (rc = __ci_netif_init_fill_rx_rings(ni)) < 0 || ni->state->rxq_low ) {
+    if ((rc = __ci_netif_init_fill_rx_rings(ni)) < 0 || ni->state->rxq_low)
+    {
       rc = -ENOMEM;
-      if( lim < NI_OPTS(ni).rxq_min )
+      if (lim < NI_OPTS(ni).rxq_min)
         LOG_E(ci_log("%s: ERROR: Insufficient packet buffers to fill RX rings "
-                     "(rxq_limit=%d rxq_low=%d rxq_min=%d)", __FUNCTION__,
+                     "(rxq_limit=%d rxq_low=%d rxq_min=%d)",
+                     __FUNCTION__,
                      NI_OPTS(ni).rxq_limit, ni->state->rxq_low,
                      NI_OPTS(ni).rxq_min));
 #if CI_CFG_PKTS_AS_HUGE_PAGES
-      else if( NI_OPTS(ni).huge_pages == OO_IOBUFSET_FLAG_HUGE_PAGE_FORCE )
+      else if (NI_OPTS(ni).huge_pages == OO_IOBUFSET_FLAG_HUGE_PAGE_FORCE)
         LOG_E(ci_log("%s: ERROR: Failed to allocate huge pages to fill RX "
-                     "rings", __FUNCTION__));
+                     "rings",
+                     __FUNCTION__));
       else
 #endif
         rc = 0;
@@ -3079,30 +3237,29 @@ int ci_netif_init_fill_rx_rings(ci_netif* ni)
 
   ci_netif_af_xdp_post_fill(ni);
 
-  if( ! NI_OPTS(ni).prealloc_packets ) {
+  if (!NI_OPTS(ni).prealloc_packets)
+  {
     /* Free the packets now, once rings are full, to ensure availability of
      * packets as indicated by EF_MIN_FREE_PACKETS */
     ci_netif_pkt_reserve_free(ni, pkt_list, n_reserved);
   }
-  ni->state->rxq_limit =  NI_OPTS(ni).rxq_limit;
+  ni->state->rxq_limit = NI_OPTS(ni).rxq_limit;
 
 #if CI_CFG_PKTS_AS_HUGE_PAGES
   /* Initial packets allocated: allow other packets to be in non-huge pages
    * if necessary.
    */
-  if( NI_OPTS(ni).huge_pages == OO_IOBUFSET_FLAG_HUGE_PAGE_FORCE )
+  if (NI_OPTS(ni).huge_pages == OO_IOBUFSET_FLAG_HUGE_PAGE_FORCE)
     NI_OPTS(ni).huge_pages = OO_IOBUFSET_FLAG_HUGE_PAGE_TRY;
 #endif
   return rc;
 }
 
-
-
 #endif
 
 #ifndef __KERNEL__
 
-int ci_netif_dtor(ci_netif* ni)
+int ci_netif_dtor(ci_netif *ni)
 {
   ci_assert(ni);
 
@@ -3113,8 +3270,6 @@ int ci_netif_dtor(ci_netif* ni)
   return 0;
 }
 
-
-
 static int install_stack_by_id(ci_fd_t fp, unsigned id, bool is_service)
 {
   oo_stack_lookup_and_attach_t op;
@@ -3123,8 +3278,7 @@ static int install_stack_by_id(ci_fd_t fp, unsigned id, bool is_service)
   return oo_resource_op(fp, OO_IOC_INSTALL_STACK_BY_ID, &op);
 }
 
-
-static int install_stack_by_name(ci_fd_t fd, const char* name)
+static int install_stack_by_name(ci_fd_t fd, const char *name)
 {
   struct oo_op_install_stack op;
   /* NB. No need to ensure it is NULL terminated: kernel has to anyway. */
@@ -3132,9 +3286,8 @@ static int install_stack_by_name(ci_fd_t fd, const char* name)
   return oo_resource_op(fd, OO_IOC_INSTALL_STACK, &op);
 }
 
-
 /* This is used by utilities such as stackdump to restore an abitrary netif */
-int ci_netif_restore_id(ci_netif* ni, unsigned thr_id, bool is_service)
+int ci_netif_restore_id(ci_netif *ni, unsigned thr_id, bool is_service)
 {
   ef_driver_handle fd, fd2;
   ci_uint32 map_size;
@@ -3148,23 +3301,24 @@ int ci_netif_restore_id(ci_netif* ni, unsigned thr_id, bool is_service)
    * stone to give us something we can pass to ci_tcp_helper_stack_attach().
    */
   rc = ef_onload_driver_open(&fd2, OO_STACK_DEV, 1);
-  if( rc != 0 ) {
+  if (rc != 0)
+  {
     return rc;
   }
   rc = install_stack_by_id(fd2, thr_id, is_service);
-  if( rc != 0 ) {
+  if (rc != 0)
+  {
     CI_TRY(ef_onload_driver_close(fd2));
     return rc;
   }
   fd = __ci_tcp_helper_stack_attach(fd2, &ni->nic_set, &map_size, is_service);
-  if( fd < 0 )
+  if (fd < 0)
     return fd;
   CI_TRY(ef_onload_driver_close(fd2));
   return ci_netif_restore(ni, fd, map_size);
 }
 
-
-int ci_netif_restore_name(ci_netif* ni, const char* name)
+int ci_netif_restore_name(ci_netif *ni, const char *name)
 {
   ef_driver_handle fd, fd2;
   ci_uint32 map_size;
@@ -3177,14 +3331,14 @@ int ci_netif_restore_name(ci_netif* ni, const char* name)
   /* Create a new fd, and attach the netif to it.  This is just a stepping
    * stone to give us something we can pass to ci_tcp_helper_stack_attach().
    */
-  if( (rc = ef_onload_driver_open(&fd2, OO_STACK_DEV, 1)) < 0 )
+  if ((rc = ef_onload_driver_open(&fd2, OO_STACK_DEV, 1)) < 0)
     goto fail1;
-  if( (rc = install_stack_by_name(fd2, name)) < 0 )
+  if ((rc = install_stack_by_name(fd2, name)) < 0)
     goto fail2;
-  if( (rc = fd = ci_tcp_helper_stack_attach(fd2,
-                                            &ni->nic_set, &map_size)) < 0 )
+  if ((rc = fd = ci_tcp_helper_stack_attach(fd2,
+                                            &ni->nic_set, &map_size)) < 0)
     goto fail3;
-  if( (rc = ci_netif_restore(ni, fd, map_size)) < 0 )
+  if ((rc = ci_netif_restore(ni, fd, map_size)) < 0)
     goto fail4;
   ef_onload_driver_close(fd2);
 
@@ -3192,33 +3346,33 @@ int ci_netif_restore_name(ci_netif* ni, const char* name)
 
   return 0;
 
- fail4:
+fail4:
   ef_onload_driver_close(fd);
- fail3:
- fail2:
+fail3:
+fail2:
   ef_onload_driver_close(fd2);
- fail1:
+fail1:
   return rc;
 }
-
 
 /* this is called by ci_netif_resource_using_handle, and also when tranferring
  * a netif to a new process (e.g. if the fd is used after a fork/exec). For
  * now we still need the handle but this parameter may be removed one day.
  */
-int ci_netif_restore(ci_netif* ni, ef_driver_handle fd,
+int ci_netif_restore(ci_netif *ni, ef_driver_handle fd,
                      unsigned netif_mmap_bytes)
 {
   int rc = 0;
   ci_assert(ni);
-  
+
   LOG_NV(ci_log("%s: fd=%d", __FUNCTION__, fd));
 
   CI_TRY_RET(ci_netif_init(ni, fd));
 
-  if( (rc = netif_tcp_helper_restore(ni, netif_mmap_bytes)) != 0) {
+  if ((rc = netif_tcp_helper_restore(ni, netif_mmap_bytes)) != 0)
+  {
     ci_netif_deinit(ni);
-    ci_log("netif_tcp_helper_restore returned %d at %s:%d", rc, __FILE__, __LINE__); \
+    ci_log("netif_tcp_helper_restore returned %d at %s:%d", rc, __FILE__, __LINE__);
     return rc;
   }
 
