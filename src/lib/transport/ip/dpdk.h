@@ -1,3 +1,7 @@
+#ifdef __KERNEL__
+#error "Non-kernel file"
+#endif
+
 #ifndef __DPDK_H__
 #define __DPDK_H__
 

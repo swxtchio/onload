@@ -4,7 +4,6 @@ TARGET		:= $(CIIP_LIB)
 MMAKE_TYPE	:= LIB
 
 LIB_SRCS	:=		\
-		dpdk.c \
 		netif.c		\
 		iptimer.c	\
 		netif_event.c	\
@@ -56,8 +55,10 @@ LIB_SRCS	:=		\
 		netif_dtor.c	\
 		ringbuffer.c 
 
+
 ifneq ($(DRIVER),1)
 LIB_SRCS	+=		\
+		dpdk.c \
 		tcp_ioctl.c	\
 		init.c		\
 		udp_sockopts.c	\

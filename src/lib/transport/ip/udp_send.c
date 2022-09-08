@@ -680,11 +680,11 @@ static void ci_udp_sendmsg_send(ci_netif *ni, ci_udp_state *us,
 #ifdef __KERNEL__
   int i = 0;
 #endif
-  LOG_E(ci_log("CI UDP SENDMSG SEND pkt: %d", pkt->buf_len));
   int af = ipcache_af(&us->s.pkt);
   ci_addr_t pkt_daddr = TX_PKT_DADDR(af, pkt);
   unsigned tot_len;
   int old_ipcache_updated = (sinf == NULL) ? 0 : sinf->old_ipcache_updated;
+  LOG_E(ci_log("CI UDP SENDMSG SEND pkt: %d", pkt->buf_len));
 
   ci_assert(ci_netif_is_locked(ni));
 
@@ -886,8 +886,8 @@ send_pkt_via_os:
   ++us->stats.n_tx_os_late;
   fixup_pkt_not_transmitted(ni, pkt);
 
+  LOG_U(ci_log("SENDING VIA OS"));
   {
-    LOG_U(ci_log("SENDING VIA OS"));
     int rc = ci_udp_sendmsg_send_pkt_via_os(ni, us, pkt, flags, sinf);
     if (rc < 0)
     {
@@ -1606,10 +1606,10 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
 {
   ci_netif *ni = a->ni;
   ci_udp_state *us = a->us;
-  us->s.pkt.status = retrrc_nomac;
   struct udp_send_info sinf;
   int rc;
 
+  us->s.pkt.status = retrrc_nomac;
   LOG_U(ci_log("%s UDP SEND", __FUNCTION__));
 
   /* Caller should have checked this. */

@@ -13,7 +13,6 @@
 
 #include "ip_internal.h"
 #include "uk_intf_ver.h"
-#include "dpdk.h"
 #include <ci/internal/efabcfg.h>
 #include <ci/internal/banner.h>
 #include <onload/version.h>
@@ -26,6 +25,7 @@
 #include <cplane/cplane.h>
 #include <cplane/create.h>
 #include <net/if.h>
+#include "dpdk.h"
 #include <ci/internal/efabcfg.h>
 #if CI_CFG_PKTS_AS_HUGE_PAGES
 #include <sys/shm.h>
@@ -2596,13 +2596,6 @@ netif_tcp_helper_alloc_u(ef_driver_handle fd, ci_netif *ni,
     goto fail;
   }
 
-  rc = dpdk_init();
-  if (rc < 0)
-  {
-    LOG_E(ci_log("UNABLE TO INIT DPDK"));
-    goto fail;
-  }
-
   return 0;
 
 fail:
@@ -3017,6 +3010,11 @@ static int ci_netif_start_helper(ci_netif *ni)
   return -1;
 }
 #endif
+
+int ci_dpdk_init(void)
+{
+  return dpdk_init();
+}
 
 int ci_netif_ctor(ci_netif *ni, ef_driver_handle fd, const char *stack_name,
                   unsigned flags)

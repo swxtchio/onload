@@ -17,6 +17,7 @@
 
 #include "ip_internal.h"
 #include "netif_tx.h"
+#include "dpdk.h"
 #include <ci/tools/pktdump.h>
 #include <ci/internal/pio_buddy.h>
 
@@ -267,6 +268,15 @@ void __ci_netif_send(ci_netif *netif, ci_ip_pkt_fmt *pkt)
              OO_PKT_FMT(pkt), pkt->n_buffers,
              pkt_dma_addr(netif, pkt, pkt->intf_i),
              pkt->buf_len, CI_MAC_PRINTF_ARGS(oo_ether_dhost(pkt))));
+
+  intf_i = pkt->intf_i;
+  char *start = (char *)oo_ether_hdr(pkt);
+  rc = dpdk_send(start, pkt->buf_len);
+  if (rc < 0)
+  {
+    LOG_NT(log("FAILED TO DPDK SEND"));
+    goto done;
+  }
 
   /* Packets to non-primary VIs could be control messages to a plugin, so
    * there's no requirement that they be Ethernet (or any other recognisable
