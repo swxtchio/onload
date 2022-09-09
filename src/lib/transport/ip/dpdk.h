@@ -1,12 +1,9 @@
-#ifdef __KERNEL__
-#error "Non-kernel file"
-#endif
-
 #ifndef __DPDK_H__
 #define __DPDK_H__
+#include "ip_internal.h"
 
 int dpdk_init(void);
-int dpdk_send(const char *buf, const unsigned short buf_len);
+int dpdk_send(ci_ip_pkt_fmt *pkt);
 int dpdk_cleanup(void);
 
 #endif

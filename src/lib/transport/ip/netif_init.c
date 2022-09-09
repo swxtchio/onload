@@ -2480,7 +2480,6 @@ netif_tcp_helper_alloc_u(ef_driver_handle fd, ci_netif *ni,
                          const ci_netif_config_opts *opts, unsigned flags,
                          const char *stack_name)
 {
-  LOG_E(ci_log("Kyle was here"));
   ci_resource_onload_alloc_t ra;
   int rc;
   ci_netif_state *ns;

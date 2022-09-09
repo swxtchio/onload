@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2003-2020 Xilinx, Inc. */
 /**************************************************************************\
  */
@@ -31,6 +30,8 @@ citp_globals_t citp = {
     /* And the rest default to zero. */
 };
 
+// static pthread_mutex_t lock;
+
 static int citp_setup_logging_early(void)
 {
   /* If stderr is a tty, use it.  Else, use ioctl. */
@@ -41,6 +42,7 @@ static int citp_setup_logging_early(void)
     ci_log_fn = citp_log_fn_drv;
   }
   ci_set_log_prefix("onload: ");
+  // return ci_dpdk_init();
   return 0;
 }
 
@@ -602,6 +604,7 @@ static int
 citp_transport_init(void)
 {
   const char *s;
+  int rc;
 
   citp_get_process_name();
   citp_setup_logging_prefix();
@@ -619,6 +622,12 @@ citp_transport_init(void)
     citp_dump_opts(&CITP_OPTS);
     citp_dump_config();
     /* ?? ci_netif_config_opts_dump(&citp.netif_opts); */
+  }
+
+  rc = citp_dpdk_init();
+  if (rc < 0)
+  {
+    return rc;
   }
 
   citp_oo_get_cpu_khz(&citp.cpu_khz);
@@ -644,7 +653,7 @@ static int citp_transport_register(void)
   if (CITP_OPTS.ul_udp)
     citp_protocol_manager_add(&citp_udp_protocol_impl, 0);
 
-  return citp_dpdk_init();
+  return 0;
 }
 
 int _citp_do_init_inprogress = 0;

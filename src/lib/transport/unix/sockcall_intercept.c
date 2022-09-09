@@ -1,14 +1,16 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2003-2020 Xilinx, Inc. */
 /**************************************************************************\
-*//*! \file
-** <L5_PRIVATE L5_SOURCE>
-** \author
-**  \brief
-**   \date
-**    \cop  (c) Level 5 Networks Limited.
-** </L5_PRIVATE>
-*//*
+ */
+/*! \file
+ ** <L5_PRIVATE L5_SOURCE>
+ ** \author
+ **  \brief
+ **   \date
+ **    \cop  (c) Level 5 Networks Limited.
+ ** </L5_PRIVATE>
+ */
+/*
 \**************************************************************************/
 
 /*! \cidoxg_lib_transport_unix */
@@ -62,29 +64,27 @@
 **    not NULL value in debugging build.
 */
 
-#define CI_NOT_NULL     ((void *)-1)
-
+#define CI_NOT_NULL ((void *)-1)
 
 #ifdef __GNUC__
 
-# define strong_alias(name, aliasname) \
-  extern __typeof (name) aliasname __attribute__ ((alias (#name)));
+#define strong_alias(name, aliasname) \
+  extern __typeof(name) aliasname __attribute__((alias(#name)));
 
-# define OO_INTERCEPT(ret, name, args)    ret onload_##name args
+#define OO_INTERCEPT(ret, name, args) ret onload_##name args
 
-# define CI_MK_DECL(ret, fn, args)        strong_alias(onload_##fn, fn)
-# include <onload/declare_syscalls.h.tmpl>
+#define CI_MK_DECL(ret, fn, args) strong_alias(onload_##fn, fn)
+#include <onload/declare_syscalls.h.tmpl>
 
 #else
 
-# error Need support for this compiler.
+#error Need support for this compiler.
 
 #endif
 
-
 #if CI_CFG_USERSPACE_SYSCALL
 
-# define raw_syscall6 syscall6
+#define raw_syscall6 syscall6
 
 /* This function should be moved in to ci/internal/syscall.h, and be
  * implemented for other architectures. Note that the implementations in
@@ -94,12 +94,13 @@
 static long syscall6(long call, long a, long b, long c, long d, long e, long f)
 {
   long res;
-  asm volatile ("movq %[d],%%r10 ; movq %[e],%%r8 ; movq %[f],%%r9 ; syscall"
-    : "=a" (res)
-    : "0" (call), "D" (a), "S" (b), "d" (c),
-      [d] "g" (d), [e] "g" (e), [f] "g" (f)
-    : "r11", "rcx", "r8", "r10", "r9", "memory");
-  if (res < 0) {
+  asm volatile("movq %[d],%%r10 ; movq %[e],%%r8 ; movq %[f],%%r9 ; syscall"
+               : "=a"(res)
+               : "0"(call), "D"(a), "S"(b), "d"(c),
+                 [d] "g"(d), [e] "g"(e), [f] "g"(f)
+               : "r11", "rcx", "r8", "r10", "r9", "memory");
+  if (res < 0)
+  {
     errno = -res;
     res = -1;
   }
@@ -108,7 +109,7 @@ static long syscall6(long call, long a, long b, long c, long d, long e, long f)
 
 #else
 
-# define raw_syscall6 syscall
+#define raw_syscall6 syscall
 
 #endif
 
@@ -125,43 +126,49 @@ static long syscall6(long call, long a, long b, long c, long d, long e, long f)
  * From the other side, rare netif uses all endpoint and all packet spaces.
  * If we see such a problem, we'll think about it.
  */
-#define OO_RLIMIT_AS_FIX(user_rlim, oo_rlim, rlim_inf, kind, format, \
-                         format_cast) \
-  do {                                                                  \
-    oo_rlim = user_rlim +                                               \
-      citp_fdtable.size * sizeof(citp_fdtable_entry) +                  \
-      (CI_PAGE_SIZE << ci_log2_le(ci_cfg_opts.netif_opts.max_ep_bufs)) + \
-      CI_CFG_PKT_BUF_SIZE * ci_cfg_opts.netif_opts.max_packets;         \
-    if( oo_rlim < user_rlim ) /* Check for overflow */                  \
-      oo_rlim = rlim_inf;                                               \
-    ci_log("%s: RLIMIT_AS: "kind" limit requested "format               \
-           ", but set to "format, __FUNCTION__,                         \
-           (format_cast)user_rlim, (format_cast)oo_rlim);               \
-    user_rlim = oo_rlim;                                                \
-  } while(0)
+#define OO_RLIMIT_AS_FIX(user_rlim, oo_rlim, rlim_inf, kind, format,             \
+                         format_cast)                                            \
+  do                                                                             \
+  {                                                                              \
+    oo_rlim = user_rlim +                                                        \
+              citp_fdtable.size * sizeof(citp_fdtable_entry) +                   \
+              (CI_PAGE_SIZE << ci_log2_le(ci_cfg_opts.netif_opts.max_ep_bufs)) + \
+              CI_CFG_PKT_BUF_SIZE * ci_cfg_opts.netif_opts.max_packets;          \
+    if (oo_rlim < user_rlim) /* Check for overflow */                            \
+      oo_rlim = rlim_inf;                                                        \
+    ci_log("%s: RLIMIT_AS: " kind " limit requested " format                     \
+           ", but set to " format,                                               \
+           __FUNCTION__,                                                         \
+           (format_cast)user_rlim, (format_cast)oo_rlim);                        \
+    user_rlim = oo_rlim;                                                         \
+  } while (0)
 
 OO_INTERCEPT(int, setrlimit,
-             (__rlimit_resource_t resource, const struct rlimit* rlim))
+             (__rlimit_resource_t resource, const struct rlimit *rlim))
 {
   int rc;
   struct rlimit rl = *rlim;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_setrlimit(resource, rlim);
   }
 
-  Log_CALL(ci_log("%s(%d, {cur %lx, max %lx})", __FUNCTION__, 
-                  resource, rlim->rlim_cur, rlim->rlim_max));
+  Log_E(ci_log("%s(%d, {cur %lx, max %lx})", __FUNCTION__,
+               resource, rlim->rlim_cur, rlim->rlim_max));
 
-  switch( resource) {
+  switch (resource)
+  {
   case RLIMIT_NOFILE:
-    if( rl.rlim_max > citp_fdtable.size ) {
+    if (rl.rlim_max > citp_fdtable.size)
+    {
       ci_log("%s: RLIMIT_NOFILE: hard limit requested %lu, but set to %u",
              __FUNCTION__, rl.rlim_max, citp_fdtable.size);
       rl.rlim_max = citp_fdtable.size;
     }
-    if( rl.rlim_cur > rl.rlim_max ) {
+    if (rl.rlim_cur > rl.rlim_max)
+    {
       ci_log("%s: RLIMIT_NOFILE: soft limit requested %lu, but set to %lu",
              __FUNCTION__, rl.rlim_cur, rl.rlim_max);
       rl.rlim_cur = rl.rlim_max;
@@ -171,11 +178,13 @@ OO_INTERCEPT(int, setrlimit,
   case RLIMIT_AS:
   {
     rlim_t lim;
-    if( rl.rlim_max != RLIM_INFINITY ) {
+    if (rl.rlim_max != RLIM_INFINITY)
+    {
       OO_RLIMIT_AS_FIX(rl.rlim_max, lim, RLIM_INFINITY, "hard", "%lu",
                        unsigned long);
     }
-    if( rl.rlim_cur != RLIM_INFINITY ) {
+    if (rl.rlim_cur != RLIM_INFINITY)
+    {
       OO_RLIMIT_AS_FIX(rl.rlim_cur, lim, RLIM_INFINITY, "soft", "%lu",
                        unsigned long);
     }
@@ -193,35 +202,38 @@ OO_INTERCEPT(int, setrlimit,
   return rc;
 }
 
-
 #ifdef __USE_LARGEFILE64
 OO_INTERCEPT(int, setrlimit64,
-             (__rlimit_resource_t resource, const struct rlimit64* rlim))
+             (__rlimit_resource_t resource, const struct rlimit64 *rlim))
 {
   int rc;
   struct rlimit64 rl = *rlim;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_setrlimit64(resource, rlim);
   }
 
-  Log_CALL(ci_log("%s(%d, {cur %llx, max %llx})", __FUNCTION__, 
-                  resource, (unsigned long long) rlim->rlim_cur,
-                  (unsigned long long) rlim->rlim_max));
+  Log_CALL(ci_log("%s(%d, {cur %llx, max %llx})", __FUNCTION__,
+                  resource, (unsigned long long)rlim->rlim_cur,
+                  (unsigned long long)rlim->rlim_max));
 
-  switch( resource) {
+  switch (resource)
+  {
   case RLIMIT_NOFILE:
-    if( rl.rlim_max > citp_fdtable.size ) {
+    if (rl.rlim_max > citp_fdtable.size)
+    {
       ci_log("%s: RLIMIT_NOFILE: hard limit requested %llu, but set to %u",
-             __FUNCTION__, (unsigned long long) rl.rlim_max,
+             __FUNCTION__, (unsigned long long)rl.rlim_max,
              citp_fdtable.size);
       rl.rlim_max = citp_fdtable.size;
     }
-    if( rl.rlim_cur > rl.rlim_max ) {
+    if (rl.rlim_cur > rl.rlim_max)
+    {
       ci_log("%s: RLIMIT_NOFILE: soft limit requested %llu, but set to %llu",
-             __FUNCTION__, (unsigned long long) rl.rlim_cur,
-             (unsigned long long) rl.rlim_max);
+             __FUNCTION__, (unsigned long long)rl.rlim_cur,
+             (unsigned long long)rl.rlim_max);
       rl.rlim_cur = rl.rlim_max;
     }
     break;
@@ -229,11 +241,13 @@ OO_INTERCEPT(int, setrlimit64,
   case RLIMIT_AS:
   {
     rlim64_t lim;
-    if( rl.rlim_max != RLIM_INFINITY ) {
+    if (rl.rlim_max != RLIM_INFINITY)
+    {
       OO_RLIMIT_AS_FIX(rl.rlim_max, lim, RLIM64_INFINITY, "hard", "%llu",
                        unsigned long long);
     }
-    if( rl.rlim_cur != RLIM_INFINITY ) {
+    if (rl.rlim_cur != RLIM_INFINITY)
+    {
       OO_RLIMIT_AS_FIX(rl.rlim_cur, lim, RLIM64_INFINITY, "soft", "%llu",
                        unsigned long long);
     }
@@ -253,28 +267,29 @@ OO_INTERCEPT(int, setrlimit64,
 #endif
 #undef OO_RLIMIT_AS_FIX
 
-
 OO_INTERCEPT(int, socket,
              (int domain, int type, int protocol))
 {
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_socket(domain, type, protocol);
   }
 
   citp_enter_lib(&lib_context);
-  Log_CALL(ci_log("%s(%s, "CI_SOCK_TYPE_FMT", %d)", __FUNCTION__,
+  Log_CALL(ci_log("%s(%s, " CI_SOCK_TYPE_FMT ", %d)", __FUNCTION__,
                   domain_str(domain), CI_SOCK_TYPE_ARGS(type), protocol));
 
-  if( lib_context.thread->avoid_fds )
+  if (lib_context.thread->avoid_fds)
     rc = CITP_NOT_HANDLED;
   else
     rc = citp_protocol_manager_create_socket(domain, type, protocol);
-  
-  if( rc == CITP_NOT_HANDLED ) {
+
+  if (rc == CITP_NOT_HANDLED)
+  {
     rc = ci_sys_socket(domain, type, protocol); /* NOTE: done inside ENTER_LIB
                                                    because of later operations
                                                    that may lock */
@@ -288,14 +303,16 @@ OO_INTERCEPT(int, socket,
   return rc;
 }
 
-
 #ifndef NDEBUG
-static const char* sa_af2str(const struct sockaddr* sa, socklen_t sa_len)
+static const char *sa_af2str(const struct sockaddr *sa, socklen_t sa_len)
 {
-  if( sa == NULL || sa_len < sizeof(sa->sa_family) )
+  if (sa == NULL || sa_len < sizeof(sa->sa_family))
     return "NONE";
-  switch( sa->sa_family ) {
-#define AF2STR_CASE(a) case a: return #a;
+  switch (sa->sa_family)
+  {
+#define AF2STR_CASE(a) \
+  case a:              \
+    return #a;
     AF2STR_CASE(AF_INET);
     AF2STR_CASE(AF_INET6);
     AF2STR_CASE(AF_UNSPEC);
@@ -304,75 +321,77 @@ static const char* sa_af2str(const struct sockaddr* sa, socklen_t sa_len)
   }
   return "AF_UNKNOWN";
 }
-static void sa2str(const struct sockaddr* sa, socklen_t sa_len,
-                   char* str, size_t str_len)
+static void sa2str(const struct sockaddr *sa, socklen_t sa_len,
+                   char *str, size_t str_len)
 {
-  if( sa == NULL ) {
+  if (sa == NULL)
+  {
     strncpy(str, " NULL", str_len);
   }
-  else if( sa_len < sizeof(struct sockaddr_in) ) {
+  else if (sa_len < sizeof(struct sockaddr_in))
+  {
     strncpy(str, " INVALID", str_len);
   }
-  else if( sa->sa_family == AF_INET || sa->sa_family == AF_INET6 ) {
+  else if (sa->sa_family == AF_INET || sa->sa_family == AF_INET6)
+  {
     int len = 0;
     /* Warning: there may be issues with the string length below! */
     str[len++] = ' ';
-    if( sa->sa_family == AF_INET6 )
+    if (sa->sa_family == AF_INET6)
       str[len++] = '[';
     inet_ntop(sa->sa_family,
-              sa->sa_family == AF_INET ?
-              (const void*)&((const struct sockaddr_in*)sa)->sin_addr :
-              (const void*)&((const struct sockaddr_in6*)sa)->sin6_addr,
+              sa->sa_family == AF_INET ? (const void *)&((const struct sockaddr_in *)sa)->sin_addr : (const void *)&((const struct sockaddr_in6 *)sa)->sin6_addr,
               str + len, str_len - len);
     len = strnlen(str, str_len);
-    if( len >= str_len - 3 ) {
+    if (len >= str_len - 3)
+    {
       str[str_len - 1] = '\0';
       return;
     }
-    if( sa->sa_family == AF_INET6 && len != str_len )
+    if (sa->sa_family == AF_INET6 && len != str_len)
       str[len++] = ']';
     snprintf(str + len, str_len - len, ":%u",
-             CI_BSWAP_BE16(((struct sockaddr_in*)sa)->sin_port));
+             CI_BSWAP_BE16(((struct sockaddr_in *)sa)->sin_port));
     str[str_len - 1] = '\0';
   }
-  else {
+  else
+  {
     str[0] = '\0';
   }
 }
 
-
 #define OO_PRINT_SOCKADDR_FMT "%p<%s%s>, %d"
 #define OO_PRINT_SOCKADDR_ARG(sa, sa_len) \
-  sa, sa_af2str(sa, sa_len),                        \
-  &({struct {char str[INET6_ADDRSTRLEN+22];} _s;       \
-    sa2str(sa, sa_len, _s.str, sizeof(_s.str)); _s;}).str[0],  \
-  sa_len
+  sa, sa_af2str(sa, sa_len),              \
+      &({struct {char str[INET6_ADDRSTRLEN+22];} _s;       \
+    sa2str(sa, sa_len, _s.str, sizeof(_s.str)); _s; }).str[0],                      \
+      sa_len
 
 #define OO_PRINT_SOCKADDR_FMT_OUT "%p, %p<%d>"
 #define OO_PRINT_SOCKADDR_ARG_OUT(sa, p_sa_len) \
   sa, p_sa_len, (p_sa_len) == NULL || (sa) == NULL ? -1 : *(p_sa_len)
 #endif
 
-
 OO_INTERCEPT(int, bind,
-             (int fd, const struct sockaddr* sa, socklen_t sa_len))
+             (int fd, const struct sockaddr *sa, socklen_t sa_len))
 {
   int rc;
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_bind(fd, sa, sa_len);
   }
 
   citp_enter_lib(&lib_context);
   Log_CALL(
-    ci_log("%s(%d,"OO_PRINT_SOCKADDR_FMT")", __FUNCTION__, fd,
-           OO_PRINT_SOCKADDR_ARG(sa, sa_len));
-    )
+      ci_log("%s(%d," OO_PRINT_SOCKADDR_FMT ")", __FUNCTION__, fd,
+             OO_PRINT_SOCKADDR_ARG(sa, sa_len));)
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
+      if ((fdi = citp_fdtable_lookup(fd)))
+  {
     /* NOTE
      * 1. All protocol handlers MUST do their own call to
      * citp_fdinfo_release_ref()
@@ -381,7 +400,8 @@ OO_INTERCEPT(int, bind,
      */
     rc = citp_fdinfo_get_ops(fdi)->bind(fdi, sa, sa_len);
   }
-  else {
+  else
+  {
     Log_PT(log("PT: sys_bind(%d, sa, %d)", fd, sa_len));
     rc = ci_sys_bind(fd, sa, sa_len); /* NOTE: done inside ENTER_LIB because
                                          of the FDTABLE_ASSERT_VALID*/
@@ -392,15 +412,15 @@ OO_INTERCEPT(int, bind,
   return rc;
 }
 
-
 OO_INTERCEPT(int, listen,
              (int fd, int backlog))
 {
   int rc;
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_listen(fd, backlog);
   }
@@ -408,7 +428,8 @@ OO_INTERCEPT(int, listen,
   citp_enter_lib(&lib_context);
   Log_CALL(ci_log("%s(%d, %d)", __FUNCTION__, fd, backlog));
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
+  if ((fdi = citp_fdtable_lookup(fd)))
+  {
     /* NOTE
      * 1. All protocol handlers MUST do their own call to
      * citp_fdinfo_release_ref()
@@ -417,7 +438,8 @@ OO_INTERCEPT(int, listen,
      */
     rc = citp_fdinfo_get_ops(fdi)->listen(fdi, backlog);
   }
-  else {
+  else
+  {
     Log_PT(log("PT: sys_listen(%d, %d)", fd, backlog));
     rc = ci_sys_listen(fd, backlog); /* NOTE: done inside ENTER_LIB
                                         because of the FDTABLE_ASSERT_VALID
@@ -430,14 +452,14 @@ OO_INTERCEPT(int, listen,
   return rc;
 }
 
-
 static void oo_accept_os_hack_inheritance(int lfd, int afd)
 {
   /* the following accept() inheritance options, which are provided   */
   /* in our library, also need to be emulated in the system socket    */
   /* calls - for consistency                                          */
 #if !CI_CFG_ACCEPT_INHERITS_NONBLOCK
-  if (CITP_OPTS.accept_force_inherit_nonblock) {
+  if (CITP_OPTS.accept_force_inherit_nonblock)
+  {
     int pflags = ci_sys_fcntl(lfd, F_GETFL);
     int flags = ((pflags & O_NONBLOCK) ? O_NONBLOCK : 0) |
                 ((pflags & O_NDELAY) ? O_NDELAY : 0);
@@ -447,36 +469,39 @@ static void oo_accept_os_hack_inheritance(int lfd, int afd)
       CI_TRY(ci_sys_fcntl(afd, F_SETFL, tmp | flags));
   }
 #endif
-
 }
 
 OO_INTERCEPT(int, accept,
-             (int fd, struct sockaddr* sa, socklen_t* p_sa_len))
+             (int fd, struct sockaddr *sa, socklen_t *p_sa_len))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_accept(fd, sa, p_sa_len);
   }
 
   citp_enter_lib(&lib_context);
-  Log_CALL(ci_log("%s(%d,"OO_PRINT_SOCKADDR_FMT_OUT")",
+  Log_CALL(ci_log("%s(%d," OO_PRINT_SOCKADDR_FMT_OUT ")",
                   __FUNCTION__, fd,
                   OO_PRINT_SOCKADDR_ARG_OUT(sa, p_sa_len)));
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
+  if ((fdi = citp_fdtable_lookup(fd)))
+  {
     rc = citp_fdinfo_get_ops(fdi)->accept(fdi, sa, p_sa_len, 0, &lib_context);
     citp_fdinfo_release_ref(fdi, 0);
   }
-  else {
+  else
+  {
     /* May block for a long time - stop deferring signals during syscall */
     citp_exit_lib(&lib_context, FALSE);
     rc = ci_sys_accept(fd, sa, p_sa_len);
     citp_reenter_lib(&lib_context);
-    if( rc >= 0 ) {
+    if (rc >= 0)
+    {
       citp_fdtable_passthru(rc, 0);
       oo_accept_os_hack_inheritance(fd, rc);
     }
@@ -490,34 +515,38 @@ OO_INTERCEPT(int, accept,
 }
 
 OO_INTERCEPT(int, accept4,
-             (int fd, struct sockaddr* sa, socklen_t* p_sa_len, int flags))
+             (int fd, struct sockaddr *sa, socklen_t *p_sa_len, int flags))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_accept(fd, sa, p_sa_len);
   }
 
   citp_enter_lib(&lib_context);
-  Log_CALL(ci_log("%s(%d,"OO_PRINT_SOCKADDR_FMT_OUT",0x%x)",
+  Log_CALL(ci_log("%s(%d," OO_PRINT_SOCKADDR_FMT_OUT ",0x%x)",
                   __FUNCTION__, fd,
                   OO_PRINT_SOCKADDR_ARG_OUT(sa, p_sa_len),
                   flags));
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
+  if ((fdi = citp_fdtable_lookup(fd)))
+  {
     rc = citp_fdinfo_get_ops(fdi)->accept(fdi, sa, p_sa_len, flags,
                                           &lib_context);
     citp_fdinfo_release_ref(fdi, 0);
   }
-  else {
+  else
+  {
     /* May block for a long time - stop deferring signals during syscall */
     citp_exit_lib(&lib_context, FALSE);
     rc = ci_sys_accept4(fd, sa, p_sa_len, flags);
     citp_reenter_lib(&lib_context);
-    if( rc >= 0 ) {
+    if (rc >= 0)
+    {
       citp_fdtable_passthru(rc, 0);
       oo_accept_os_hack_inheritance(fd, rc);
     }
@@ -530,26 +559,26 @@ OO_INTERCEPT(int, accept4,
   return rc;
 }
 
-
 OO_INTERCEPT(int, connect,
-             (int fd, const struct sockaddr* sa, socklen_t sa_len))
+             (int fd, const struct sockaddr *sa, socklen_t sa_len))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_connect(fd, sa, sa_len);
   }
 
   citp_enter_lib(&lib_context);
   Log_CALL(
-    ci_log("%s(%d,"OO_PRINT_SOCKADDR_FMT")", __FUNCTION__, fd,
-           OO_PRINT_SOCKADDR_ARG(sa, sa_len));
-    )
+      ci_log("%s(%d," OO_PRINT_SOCKADDR_FMT ")", __FUNCTION__, fd,
+             OO_PRINT_SOCKADDR_ARG(sa, sa_len));)
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
+      if ((fdi = citp_fdtable_lookup(fd)))
+  {
     /* NOTE
      * 1. All protocol handlers MUST do their own call to
      * citp_fdinfo_release_ref()
@@ -558,7 +587,8 @@ OO_INTERCEPT(int, connect,
      */
     rc = citp_fdinfo_get_ops(fdi)->connect(fdi, sa, sa_len, &lib_context);
   }
-  else {
+  else
+  {
     Log_PT(log("PT: sys_connect(%d, , %d)", fd, sa_len));
     /* May block for a long time - stop deferring signals during syscall */
     citp_exit_lib(&lib_context, FALSE);
@@ -572,15 +602,15 @@ OO_INTERCEPT(int, connect,
   return rc;
 }
 
-
 OO_INTERCEPT(int, shutdown,
              (int fd, int how))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_shutdown(fd, how);
   }
@@ -588,9 +618,11 @@ OO_INTERCEPT(int, shutdown,
   citp_enter_lib(&lib_context);
   Log_CALL(ci_log("%s(%d,%d)", __FUNCTION__, fd, how));
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
+  if ((fdi = citp_fdtable_lookup(fd)))
+  {
     /* Validate 'how' parameter at first. */
-    if (!citp_shutdown_how_is_valid(how)) {
+    if (!citp_shutdown_how_is_valid(how))
+    {
       errno = EINVAL;
       citp_fdinfo_release_ref(fdi, 0);
       citp_exit_lib(&lib_context, FALSE);
@@ -601,7 +633,9 @@ OO_INTERCEPT(int, shutdown,
     rc = citp_fdinfo_get_ops(fdi)->shutdown(fdi, how);
     citp_fdinfo_release_ref(fdi, 0);
     citp_exit_lib(&lib_context, rc == 0);
-  } else {
+  }
+  else
+  {
     Log_PT(log("PT: sys_shutdown(%d, %d)", fd, how));
     citp_exit_lib(&lib_context, TRUE);
     rc = ci_sys_shutdown(fd, how);
@@ -610,34 +644,40 @@ OO_INTERCEPT(int, shutdown,
   return rc;
 }
 
-
 OO_INTERCEPT(int, getsockname,
-             (int fd, struct sockaddr* sa, socklen_t* p_sa_len))
+             (int fd, struct sockaddr *sa, socklen_t *p_sa_len))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_getsockname(fd, sa, p_sa_len);
   }
 
   citp_enter_lib(&lib_context);
-  Log_CALL(ci_log("%s(%d,"OO_PRINT_SOCKADDR_FMT_OUT")", __FUNCTION__, fd,
+  Log_CALL(ci_log("%s(%d," OO_PRINT_SOCKADDR_FMT_OUT ")", __FUNCTION__, fd,
                   OO_PRINT_SOCKADDR_ARG_OUT(sa, p_sa_len)));
 
   /* make sure we've been given a valid buffer: */
-  if( !sa || !p_sa_len ) {
+  if (!sa || !p_sa_len)
+  {
     errno = EFAULT;
     citp_exit_lib(&lib_context, FALSE);
     rc = -1;
-  } else {
-    if( (fdi = citp_fdtable_lookup(fd)) ) {
+  }
+  else
+  {
+    if ((fdi = citp_fdtable_lookup(fd)))
+    {
       rc = citp_fdinfo_get_ops(fdi)->getsockname(fdi, sa, p_sa_len);
       citp_fdinfo_release_ref(fdi, 0);
       citp_exit_lib(&lib_context, rc == 0);
-    } else {
+    }
+    else
+    {
       Log_PT(log("PT: sys_getsockname(%d)", fd));
       citp_exit_lib(&lib_context, TRUE);
       rc = ci_sys_getsockname(fd, sa, p_sa_len);
@@ -647,28 +687,31 @@ OO_INTERCEPT(int, getsockname,
   return rc;
 }
 
-
 OO_INTERCEPT(int, getpeername,
-             (int fd, struct sockaddr* sa, socklen_t* p_sa_len))
+             (int fd, struct sockaddr *sa, socklen_t *p_sa_len))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_getpeername(fd, sa, p_sa_len);
   }
 
   citp_enter_lib(&lib_context);
-  Log_CALL(ci_log("%s(%d,"OO_PRINT_SOCKADDR_FMT_OUT")", __FUNCTION__, fd,
+  Log_CALL(ci_log("%s(%d," OO_PRINT_SOCKADDR_FMT_OUT ")", __FUNCTION__, fd,
                   OO_PRINT_SOCKADDR_ARG_OUT(sa, p_sa_len)));
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
+  if ((fdi = citp_fdtable_lookup(fd)))
+  {
     rc = citp_fdinfo_get_ops(fdi)->getpeername(fdi, sa, p_sa_len);
     citp_fdinfo_release_ref(fdi, 0);
     citp_exit_lib(&lib_context, rc == 0);
-  } else {
+  }
+  else
+  {
     Log_PT(log("PT: sys_getpeername(%d)", fd));
     citp_exit_lib(&lib_context, TRUE);
     rc = ci_sys_getpeername(fd, sa, p_sa_len);
@@ -677,15 +720,15 @@ OO_INTERCEPT(int, getpeername,
   return rc;
 }
 
-
 OO_INTERCEPT(int, getsockopt,
-             (int fd, int level, int optname, void* optval, socklen_t* optlen))
+             (int fd, int level, int optname, void *optval, socklen_t *optlen))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_getsockopt(fd, level, optname, optval, optlen);
   }
@@ -694,17 +737,23 @@ OO_INTERCEPT(int, getsockopt,
   Log_CALL(ci_log("%s(%d, %d, %d, %p, %p(%d))", __FUNCTION__, fd, level,
                   optname, optval, optlen, *(socklen_t *)optlen));
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
-    if( CI_UNLIKELY((optlen == NULL) || (*(int *)optlen > 0 && optval == NULL)) ) {
+  if ((fdi = citp_fdtable_lookup(fd)))
+  {
+    if (CI_UNLIKELY((optlen == NULL) || (*(int *)optlen > 0 && optval == NULL)))
+    {
       errno = EFAULT;
       rc = -1;
-    } else {
-      rc = citp_fdinfo_get_ops(fdi)->getsockopt(fdi,level,optname,optval,
+    }
+    else
+    {
+      rc = citp_fdinfo_get_ops(fdi)->getsockopt(fdi, level, optname, optval,
                                                 optlen);
     }
     citp_fdinfo_release_ref(fdi, 0);
     citp_exit_lib(&lib_context, rc == 0);
-  } else {
+  }
+  else
+  {
     Log_PT(log("PT: sys_getsockopt(%d, %d, %d)", fd, level, optname));
     citp_exit_lib(&lib_context, TRUE);
     rc = ci_sys_getsockopt(fd, level, optname, optval, optlen);
@@ -713,16 +762,16 @@ OO_INTERCEPT(int, getsockopt,
   return rc;
 }
 
-
 OO_INTERCEPT(int, setsockopt,
              (int fd, int level, int optname,
-              const void* optval, socklen_t optlen))
+              const void *optval, socklen_t optlen))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_setsockopt(fd, level, optname, optval, optlen);
   }
@@ -731,12 +780,15 @@ OO_INTERCEPT(int, setsockopt,
   Log_CALL(ci_log("%s(%d, %d, %d, %p, %d)", __FUNCTION__, fd, level, optname,
                   optval, optlen));
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
+  if ((fdi = citp_fdtable_lookup(fd)))
+  {
     /* ATTENTION: All protocol handlers MUST do their
      * own call to citp_fdinfo_release_ref(). */
-    rc = citp_fdinfo_get_ops(fdi)->setsockopt(fdi,level,optname,optval,optlen);
+    rc = citp_fdinfo_get_ops(fdi)->setsockopt(fdi, level, optname, optval, optlen);
     citp_exit_lib(&lib_context, rc == 0);
-  } else {
+  }
+  else
+  {
     Log_PT(log("PT: sys_setsockopt(%d, %d, %d)", fd, level, optname));
     citp_exit_lib(&lib_context, TRUE);
     rc = ci_sys_setsockopt(fd, level, optname, optval, optlen);
@@ -745,24 +797,25 @@ OO_INTERCEPT(int, setsockopt,
   return rc;
 }
 
-
 OO_INTERCEPT(ssize_t, recv,
-             (int fd, void* buf, size_t len, int flags))
+             (int fd, void *buf, size_t len, int flags))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   struct msghdr m;
   struct iovec iov[1];
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_recv(fd, buf, len, flags);
   }
 
   Log_CALL(ci_log("%s(%d, %p, %u, 0x%x)", __FUNCTION__, fd, buf, (unsigned)len, flags));
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
+  if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
     iov[0].iov_base = buf;
     iov[0].iov_len = len;
     /* See note about convertions above in this file */
@@ -777,9 +830,10 @@ OO_INTERCEPT(ssize_t, recv,
     citp_fdinfo_release_ref_fast(fdi);
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
-    Log_PT(log("PT: sys_recv(%d, buf, %d, 0x%x)", fd, (int) len,
-               (unsigned) flags));
+  else
+  {
+    Log_PT(log("PT: sys_recv(%d, buf, %d, 0x%x)", fd, (int)len,
+               (unsigned)flags));
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_recv(fd, buf, len, flags);
   }
@@ -788,7 +842,7 @@ OO_INTERCEPT(ssize_t, recv,
 }
 
 OO_INTERCEPT(ssize_t, __recv_chk,
-             (int fd, void* buf, size_t count, size_t buflen, int flags))
+             (int fd, void *buf, size_t count, size_t buflen, int flags))
 {
   if (count > buflen)
     ci_sys___read_chk(fd, buf, count, buflen);
@@ -796,31 +850,33 @@ OO_INTERCEPT(ssize_t, __recv_chk,
 }
 
 OO_INTERCEPT(ssize_t, recvfrom,
-             (int fd, void* buf, size_t len, int flags,
-              struct sockaddr* from, socklen_t* fromlen))
+             (int fd, void *buf, size_t len, int flags,
+              struct sockaddr *from, socklen_t *fromlen))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   struct msghdr m;
   struct iovec iov[1];
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_recvfrom(fd, buf, len, flags, from, fromlen);
   }
 
-  Log_CALL(ci_log("%s(%d,%p,%u,0x%x,"OO_PRINT_SOCKADDR_FMT_OUT")",
+  Log_CALL(ci_log("%s(%d,%p,%u,0x%x," OO_PRINT_SOCKADDR_FMT_OUT ")",
                   __FUNCTION__,
                   fd, buf, (unsigned)len, flags,
                   OO_PRINT_SOCKADDR_ARG_OUT(from, fromlen)));
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
+  if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
     iov[0].iov_base = buf;
     iov[0].iov_len = len;
     m.msg_name = from;
     /* if both parameters are zero then we shouldn't segfault here */
-    if(CI_LIKELY( fromlen != NULL ))
+    if (CI_LIKELY(fromlen != NULL))
       m.msg_namelen = *fromlen;
     else
       m.msg_namelen = 0;
@@ -831,11 +887,14 @@ OO_INTERCEPT(ssize_t, recvfrom,
     m.msg_controllen = 0;
     /* msg_flags is output only */
     rc = citp_fdinfo_get_ops(fdi)->recv(fdi, &m, flags);
-    if (fromlen != NULL && from != NULL) {
+    if (fromlen != NULL && from != NULL)
+    {
       *fromlen = m.msg_namelen;
-    } else if (CI_UNLIKELY(rc >= 0 && fromlen == NULL && from != NULL)) {
-      /* Socket tester "func_recvfrom_addr_null_(dgram|stream)" 
-       * Linux errors *after* receipt with EFAULT when from!=NULL && 
+    }
+    else if (CI_UNLIKELY(rc >= 0 && fromlen == NULL && from != NULL))
+    {
+      /* Socket tester "func_recvfrom_addr_null_(dgram|stream)"
+       * Linux errors *after* receipt with EFAULT when from!=NULL &&
        * fromlen==NULL */
       errno = EFAULT;
       rc = CI_SOCKET_ERROR;
@@ -843,9 +902,10 @@ OO_INTERCEPT(ssize_t, recvfrom,
     citp_fdinfo_release_ref_fast(fdi);
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
-    Log_PT(log("PT: sys_recvfrom(%d, buf, %d, 0x%x)", fd, (int) len,
-               (unsigned) flags));
+  else
+  {
+    Log_PT(log("PT: sys_recvfrom(%d, buf, %d, 0x%x)", fd, (int)len,
+               (unsigned)flags));
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_recvfrom(fd, buf, len, flags, from, fromlen);
   }
@@ -854,8 +914,8 @@ OO_INTERCEPT(ssize_t, recvfrom,
 }
 
 OO_INTERCEPT(ssize_t, __recvfrom_chk,
-             (int fd, void* buf, size_t count, size_t buflen, int flags,
-              struct sockaddr* addr, socklen_t* addrlen))
+             (int fd, void *buf, size_t count, size_t buflen, int flags,
+              struct sockaddr *addr, socklen_t *addrlen))
 {
   if (count > buflen)
     ci_sys___read_chk(fd, buf, count, buflen);
@@ -863,29 +923,32 @@ OO_INTERCEPT(ssize_t, __recvfrom_chk,
 }
 
 OO_INTERCEPT(ssize_t, recvmsg,
-             (int fd, struct msghdr* msg, int flags))
+             (int fd, struct msghdr *msg, int flags))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_recvmsg(fd, msg, flags);
   }
 
-  Log_CALL(ci_log("%s(%d, %p, 0x%x)", __FUNCTION__, fd,msg,flags));
+  Log_CALL(ci_log("%s(%d, %p, 0x%x)", __FUNCTION__, fd, msg, flags));
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
-    if( msg->msg_iov == NULL && msg->msg_iovlen != 0 )
+  if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
+    if (msg->msg_iov == NULL && msg->msg_iovlen != 0)
       CI_SET_ERROR(rc, EFAULT);
     else
       rc = citp_fdinfo_get_ops(fdi)->recv(fdi, msg, flags);
     citp_fdinfo_release_ref_fast(fdi);
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
-    Log_PT(log("PT: sys_recvmsg(%d, msg, 0x%x)", fd, (unsigned) flags));
+  else
+  {
+    Log_PT(log("PT: sys_recvmsg(%d, msg, 0x%x)", fd, (unsigned)flags));
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_recvmsg(fd, msg, flags);
   }
@@ -893,39 +956,44 @@ OO_INTERCEPT(ssize_t, recvmsg,
   return rc;
 }
 
-
-OO_INTERCEPT(int, recvmmsg, 
-             (int fd, struct mmsghdr* msg, unsigned vlen,
-              int flags, ci_recvmmsg_timespec* timeout))
+OO_INTERCEPT(int, recvmmsg,
+             (int fd, struct mmsghdr *msg, unsigned vlen,
+              int flags, ci_recvmmsg_timespec *timeout))
 {
   citp_lib_context_t lib_context;
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_recvmmsg(fd, msg, vlen, flags, timeout);
   }
 
   Log_CALL(ci_log("%s(%d, %p, %u, 0x%x)", __FUNCTION__, fd, msg, vlen, flags));
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
-    if(CI_UNLIKELY( msg == NULL && vlen != 0 )) {
+  if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
+    if (CI_UNLIKELY(msg == NULL && vlen != 0))
+    {
       CI_SET_ERROR(rc, EFAULT);
     }
-    else if(CI_UNLIKELY( timeout != NULL &&
-                         (timeout->tv_sec < 0 || timeout->tv_nsec < 0) )) {
+    else if (CI_UNLIKELY(timeout != NULL &&
+                         (timeout->tv_sec < 0 || timeout->tv_nsec < 0)))
+    {
       CI_SET_ERROR(rc, EINVAL);
     }
-    else {
+    else
+    {
       rc = citp_fdinfo_get_ops(fdi)->recvmmsg(fdi, msg, vlen, flags, timeout);
     }
     citp_fdinfo_release_ref_fast(fdi);
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
+  else
+  {
     Log_PT(log("PT: sys_recvmmsg(%d, msg, %u, 0x%x)", fd, vlen,
-               (unsigned) flags));
+               (unsigned)flags));
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_recvmmsg(fd, msg, vlen, flags, timeout);
   }
@@ -933,25 +1001,26 @@ OO_INTERCEPT(int, recvmmsg,
   return rc;
 }
 
-
 OO_INTERCEPT(ssize_t, send,
-             (int fd, const void* msg, size_t len, int flags))
+             (int fd, const void *msg, size_t len, int flags))
 {
-  citp_fdinfo* fdi=0;
+  citp_fdinfo *fdi = 0;
   struct msghdr m;
   struct iovec iov[1];
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_send(fd, msg, len, flags);
   }
 
   Log_CALL(log("%s(%d, %p, %u, %x)", __FUNCTION__, fd, msg, (unsigned)len, flags));
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
-    iov[0].iov_base = (void*) msg;
+  if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
+    iov[0].iov_base = (void *)msg;
     iov[0].iov_len = len;
     /* See note about convertions above in this file */
     CI_DEBUG(m.msg_name = CI_NOT_NULL);
@@ -965,9 +1034,10 @@ OO_INTERCEPT(ssize_t, send,
     citp_fdinfo_release_ref_fast(fdi);
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
-    Log_PT(log("PT: sys_send(%d, msg, %d, 0x%x)", fd, (int) len,
-               (unsigned) flags));
+  else
+  {
+    Log_PT(log("PT: sys_send(%d, msg, %d, 0x%x)", fd, (int)len,
+               (unsigned)flags));
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_send(fd, msg, len, flags);
   }
@@ -975,32 +1045,32 @@ OO_INTERCEPT(ssize_t, send,
   return rc;
 }
 
-
 OO_INTERCEPT(ssize_t, sendto,
-             (int fd, const void* msg, size_t len, int flags,
-              const struct sockaddr* to, socklen_t tolen))
+             (int fd, const void *msg, size_t len, int flags,
+              const struct sockaddr *to, socklen_t tolen))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   struct msghdr m;
   struct iovec iov[1];
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_sendto(fd, msg, len, flags, to, tolen);
   }
 
   Log_CALL(
-    ci_log("%s(%d, %p, %u, %d, "OO_PRINT_SOCKADDR_FMT")", __FUNCTION__,
-           fd, msg,(unsigned)len,flags,
-           OO_PRINT_SOCKADDR_ARG(to, tolen));
-    )
+      ci_log("%s(%d, %p, %u, %d, " OO_PRINT_SOCKADDR_FMT ")", __FUNCTION__,
+             fd, msg, (unsigned)len, flags,
+             OO_PRINT_SOCKADDR_ARG(to, tolen));)
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
-    iov[0].iov_base = (void*) msg;
+      if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
+    iov[0].iov_base = (void *)msg;
     iov[0].iov_len = len;
-    m.msg_name = (void*) to;
+    m.msg_name = (void *)to;
     /* Linux ignores length of address if the address is NULL. I do not know
      * *BSD or any other system behaviour. */
     m.msg_namelen = (to != NULL) ? tolen : 0;
@@ -1014,8 +1084,9 @@ OO_INTERCEPT(ssize_t, sendto,
     citp_fdinfo_release_ref_fast(fdi);
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
-    Log_PT(log("PT: sys_sendto(%d, msg, %d, 0x%x)", fd, (int) len,
+  else
+  {
+    Log_PT(log("PT: sys_sendto(%d, msg, %d, 0x%x)", fd, (int)len,
                (unsigned)flags));
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_sendto(fd, msg, len, flags, to, tolen);
@@ -1024,36 +1095,38 @@ OO_INTERCEPT(ssize_t, sendto,
   return rc;
 }
 
-
 OO_INTERCEPT(ssize_t, sendmsg,
-             (int fd, const struct msghdr* msg, int flags))
+             (int fd, const struct msghdr *msg, int flags))
 {
   citp_lib_context_t lib_context;
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_sendmsg(fd, msg, flags);
   }
 
   Log_CALL(
-    ci_log("%s(%d, %p(iov[%zu]:%p, "OO_PRINT_SOCKADDR_FMT", cmsg[%zu]:%p),"
-           " 0x%x)", __FUNCTION__, fd, msg, msg->msg_iovlen, msg->msg_iov,
-           OO_PRINT_SOCKADDR_ARG(msg->msg_name, msg->msg_namelen),
-           msg->msg_controllen, msg->msg_control, flags)
-    )
+      ci_log("%s(%d, %p(iov[%zu]:%p, " OO_PRINT_SOCKADDR_FMT ", cmsg[%zu]:%p),"
+             " 0x%x)",
+             __FUNCTION__, fd, msg, msg->msg_iovlen, msg->msg_iov,
+             OO_PRINT_SOCKADDR_ARG(msg->msg_name, msg->msg_namelen),
+             msg->msg_controllen, msg->msg_control, flags))
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
-    if(CI_LIKELY( msg != NULL ))
+      if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
+    if (CI_LIKELY(msg != NULL))
       rc = citp_fdinfo_get_ops(fdi)->send(fdi, msg, flags);
     else
       CI_SET_ERROR(rc, EFAULT);
     citp_fdinfo_release_ref_fast(fdi);
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
-    Log_PT(log("PT: sys_sendmsg(%d, msg, 0x%x)", fd, (unsigned) flags));
+  else
+  {
+    Log_PT(log("PT: sys_sendmsg(%d, msg, 0x%x)", fd, (unsigned)flags));
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_sendmsg(fd, msg, flags);
   }
@@ -1061,29 +1134,33 @@ OO_INTERCEPT(ssize_t, sendmsg,
   return rc;
 }
 
-
-OO_INTERCEPT(int, sendmmsg, 
-             (int fd, struct mmsghdr* msg, unsigned vlen, int flags))
+OO_INTERCEPT(int, sendmmsg,
+             (int fd, struct mmsghdr *msg, unsigned vlen, int flags))
 {
   citp_lib_context_t lib_context;
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc, i;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_sendmmsg(fd, msg, vlen, flags);
   }
 
   Log_CALL(ci_log("%s(%d, %p, %u, 0x%x)", __FUNCTION__, fd, msg, vlen, flags));
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
-    if(CI_UNLIKELY( msg == NULL && vlen != 0 )) {
+  if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
+    if (CI_UNLIKELY(msg == NULL && vlen != 0))
+    {
       CI_SET_ERROR(rc, EFAULT);
     }
-    else {
-      for( i = 0; i < vlen; ++i )
-        if(CI_UNLIKELY( msg[i].msg_hdr.msg_iov == NULL && 
-                        msg[i].msg_hdr.msg_iovlen != 0 )) {
+    else
+    {
+      for (i = 0; i < vlen; ++i)
+        if (CI_UNLIKELY(msg[i].msg_hdr.msg_iov == NULL &&
+                        msg[i].msg_hdr.msg_iovlen != 0))
+        {
           CI_SET_ERROR(rc, EFAULT);
           goto release_and_exit;
         }
@@ -1093,7 +1170,8 @@ OO_INTERCEPT(int, sendmmsg,
     citp_fdinfo_release_ref_fast(fdi);
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
+  else
+  {
     Log_PT(log("PT: sys_sendmmsg(%d, msg, %u, 0x%x)", fd, vlen, flags));
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_sendmmsg(fd, msg, vlen, flags);
@@ -1104,72 +1182,73 @@ OO_INTERCEPT(int, sendmmsg,
 
 strong_alias(onload_sendmmsg, __sendmmsg);
 
-
 /* Internal poll/select timeout is calculated in milliseconds,
  * and in citp_ul_do_select/citp_ul_do_poll this value is multiplied by
  * citp.cpu_khz, assuming it not to overflow.
  * So we are dividing by 10GHz here.
  * This does limit us to maximum timeout of about 58 years.
  */
-#define MAX_POLL_SELECT_MILLISEC ((ci_uint64) -1 / 10000000)
+#define MAX_POLL_SELECT_MILLISEC ((ci_uint64)-1 / 10000000)
 static inline ci_uint64
-timespec2ms(const struct timespec* tv)
+timespec2ms(const struct timespec *tv)
 {
   ci_uint64 ms;
 
-  if( tv == NULL )
+  if (tv == NULL)
     return MAX_POLL_SELECT_MILLISEC;
   ms = (ci_uint64)tv->tv_sec * 1000 +
        (tv->tv_nsec + 500000) / 1000000;
 
   /* If spinning is enabled, user expects us to spin a bit
    * even with extra-small timeout. */
-  if( ms == 0 && tv->tv_nsec != 0 )
+  if (ms == 0 && tv->tv_nsec != 0)
     ms = 1;
-  if( ms >= MAX_POLL_SELECT_MILLISEC )
+  if (ms >= MAX_POLL_SELECT_MILLISEC)
     return MAX_POLL_SELECT_MILLISEC;
   return ms;
 }
 static inline ci_uint64
-timeval2ms(const struct timeval* tv)
+timeval2ms(const struct timeval *tv)
 {
   ci_uint64 ms;
 
-  if( tv == NULL )
+  if (tv == NULL)
     return MAX_POLL_SELECT_MILLISEC;
   ms = (ci_uint64)tv->tv_sec * 1000 +
-    (tv->tv_usec + 500) / 1000;
+       (tv->tv_usec + 500) / 1000;
 
   /* If spinning is enabled, user expects us to spin a bit
    * even with extra-small timeout. */
-  if( ms == 0 && tv->tv_usec != 0 )
+  if (ms == 0 && tv->tv_usec != 0)
     ms = 1;
-  if( ms >= MAX_POLL_SELECT_MILLISEC )
+  if (ms >= MAX_POLL_SELECT_MILLISEC)
     return MAX_POLL_SELECT_MILLISEC;
   return ms;
 }
 static inline void
-ms2timeval(ci_uint64 timeout, ci_uint64 spent, struct timeval* tv)
+ms2timeval(ci_uint64 timeout, ci_uint64 spent, struct timeval *tv)
 {
-  if( timeout > spent ) {
+  if (timeout > spent)
+  {
     tv->tv_sec = (timeout - spent) / 1000;
     tv->tv_usec = ((timeout - spent) % 1000) * 1000;
   }
-  else {
+  else
+  {
     tv->tv_sec = tv->tv_usec = 0;
   }
 }
 
-
 OO_INTERCEPT(int, select,
-             (int nfds, fd_set* rds, fd_set* wrs, fd_set* exs,
-              struct timeval* timeout))
+             (int nfds, fd_set *rds, fd_set *wrs, fd_set *exs,
+              struct timeval *timeout))
 {
   citp_lib_context_t lib_context;
   ci_uint64 timeout_ms, used_ms = 0;
   int rc;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_select(nfds, rds, wrs, exs, timeout);
   }
@@ -1179,9 +1258,10 @@ OO_INTERCEPT(int, select,
                   timeout ? (int)timeout->tv_sec : -1,
                   timeout ? (int)timeout->tv_usec : -1));
 
-  if(CI_UNLIKELY( (!CITP_OPTS.ul_select) || (nfds <= 0) ||
+  if (CI_UNLIKELY((!CITP_OPTS.ul_select) || (nfds <= 0) ||
                   (timeout != NULL &&
-                   (timeout->tv_sec < 0 || timeout->tv_usec < 0)))) {
+                   (timeout->tv_sec < 0 || timeout->tv_usec < 0))))
+  {
     rc = ci_sys_select(nfds, rds, wrs, exs, timeout);
     goto out;
   }
@@ -1193,13 +1273,14 @@ OO_INTERCEPT(int, select,
                          &lib_context, NULL);
 
   /* Linux-specific behaviour: change timeout parameter. */
-  if( timeout != NULL && used_ms != 0 ) {
-    if( timeout_ms > used_ms )
+  if (timeout != NULL && used_ms != 0)
+  {
+    if (timeout_ms > used_ms)
       ms2timeval(timeout_ms, used_ms, timeout);
     else
       timeout->tv_sec = timeout->tv_usec = 0;
   }
-  if( rc == CI_SOCKET_HANDOVER )
+  if (rc == CI_SOCKET_HANDOVER)
     rc = ci_sys_select(nfds, rds, wrs, exs, timeout);
 
 out:
@@ -1208,14 +1289,15 @@ out:
 }
 
 OO_INTERCEPT(int, pselect,
-             (int nfds, fd_set* rds, fd_set* wrs, fd_set* exs,
+             (int nfds, fd_set *rds, fd_set *wrs, fd_set *exs,
               const struct timespec *timeout_ts, const sigset_t *sigmask))
 {
   citp_lib_context_t lib_context;
   ci_uint64 timeout_ms, used_ms = 0;
   int rc = 0;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_pselect(nfds, rds, wrs, exs, timeout_ts, sigmask);
   }
@@ -1226,9 +1308,10 @@ OO_INTERCEPT(int, pselect,
                   timeout_ts ? (int)timeout_ts->tv_nsec : -1,
                   sigmask));
 
-  if( ! CITP_OPTS.ul_poll || nfds <= 0 ||
+  if (!CITP_OPTS.ul_poll || nfds <= 0 ||
       (timeout_ts != NULL &&
-       (timeout_ts->tv_sec < 0 || timeout_ts->tv_nsec < 0 ))) {
+       (timeout_ts->tv_sec < 0 || timeout_ts->tv_nsec < 0)))
+  {
     rc = ci_sys_pselect(nfds, rds, wrs, exs, timeout_ts, sigmask);
     goto out;
   }
@@ -1241,8 +1324,10 @@ OO_INTERCEPT(int, pselect,
                          &lib_context, sigmask);
 
   /* we should not return 0 without signal check; do it now: */
-  if( rc == CI_SOCKET_HANDOVER || (rc == 0 && sigmask != NULL) ) {
-    if( timeout_ts != NULL && used_ms != 0 ) {
+  if (rc == CI_SOCKET_HANDOVER || (rc == 0 && sigmask != NULL))
+  {
+    if (timeout_ts != NULL && used_ms != 0)
+    {
       struct timespec ts;
       ms2timespec(timeout_ms, used_ms, &ts);
       rc = ci_sys_pselect(nfds, rds, wrs, exs, &ts, sigmask);
@@ -1257,18 +1342,19 @@ out:
 }
 
 OO_INTERCEPT(int, poll,
-             (struct pollfd*__restrict__ fds, nfds_t nfds, int timeout))
+             (struct pollfd *__restrict__ fds, nfds_t nfds, int timeout))
 {
   citp_lib_context_t lib_context;
   int rc;
   ci_uint64 used_ms = 0;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_poll(fds, nfds, timeout);
   }
 
-  if( ! CITP_OPTS.ul_poll || nfds <= 0 )
+  if (!CITP_OPTS.ul_poll || nfds <= 0)
     return ci_sys_poll(fds, nfds, timeout);
 
   Log_CALL(ci_log("%s(%p, %ld, %d)", __FUNCTION__, fds, nfds, timeout));
@@ -1276,30 +1362,31 @@ OO_INTERCEPT(int, poll,
   citp_enter_lib(&lib_context);
   rc = citp_ul_do_poll(fds, nfds, timeout, &used_ms, &lib_context, NULL);
 
-  if( timeout != used_ms && rc == 0 )
+  if (timeout != used_ms && rc == 0)
     rc = ci_sys_poll(fds, nfds, timeout - used_ms);
 
   Log_CALL_RESULT(rc);
   return rc;
 }
 OO_INTERCEPT(int, __poll_chk,
-             (struct pollfd*__restrict__ fds, nfds_t nfds, int timeout,
+             (struct pollfd *__restrict__ fds, nfds_t nfds, int timeout,
               size_t __fdslen))
 {
-  if(  __fdslen < nfds * sizeof(struct pollfd) )
+  if (__fdslen < nfds * sizeof(struct pollfd))
     ci_sys___poll_chk(fds, nfds, timeout, __fdslen);
   return onload_poll(fds, nfds, timeout);
 }
 
 OO_INTERCEPT(int, ppoll,
-             (struct pollfd*__restrict__ fds, nfds_t nfds,
+             (struct pollfd *__restrict__ fds, nfds_t nfds,
               const struct timespec *timeout_ts, const sigset_t *sigmask))
 {
   citp_lib_context_t lib_context;
   ci_uint64 timeout_ms, used_ms = 0;
   int rc = 0;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_ppoll(fds, nfds, timeout_ts, sigmask);
   }
@@ -1309,9 +1396,10 @@ OO_INTERCEPT(int, ppoll,
                   timeout_ts ? (int)timeout_ts->tv_nsec : -1,
                   sigmask));
 
-  if( ! CITP_OPTS.ul_poll || nfds <= 0 ||
+  if (!CITP_OPTS.ul_poll || nfds <= 0 ||
       (timeout_ts != NULL &&
-       (timeout_ts->tv_sec < 0 || timeout_ts->tv_nsec < 0 ))) {
+       (timeout_ts->tv_sec < 0 || timeout_ts->tv_nsec < 0)))
+  {
     rc = ci_sys_ppoll(fds, nfds, timeout_ts, sigmask);
     goto out;
   }
@@ -1323,11 +1411,13 @@ OO_INTERCEPT(int, ppoll,
                        sigmask);
 
   /* Block in the OS, check signals */
-  if( rc == 0 && ( timeout_ms != used_ms ||
-                   (used_ms == 0 && sigmask != NULL) ) ) {
-    if( used_ms == 0 || timeout_ts == NULL )
+  if (rc == 0 && (timeout_ms != used_ms ||
+                  (used_ms == 0 && sigmask != NULL)))
+  {
+    if (used_ms == 0 || timeout_ts == NULL)
       rc = ci_sys_ppoll(fds, nfds, timeout_ts, sigmask);
-    else {
+    else
+    {
       struct timespec ts;
       ms2timespec(timeout_ms, used_ms, &ts);
       rc = ci_sys_ppoll(fds, nfds, &ts, sigmask);
@@ -1339,18 +1429,16 @@ out:
   return rc;
 }
 OO_INTERCEPT(int, __ppoll_chk,
-             (struct pollfd*__restrict__ fds, nfds_t nfds,
+             (struct pollfd *__restrict__ fds, nfds_t nfds,
               const struct timespec *timeout_ts, const sigset_t *sigmask,
               size_t __fdslen))
 {
-  if(  __fdslen < nfds * sizeof(struct pollfd) )
+  if (__fdslen < nfds * sizeof(struct pollfd))
     ci_sys___ppoll_chk(fds, nfds, timeout_ts, sigmask, __fdslen);
   return onload_ppoll(fds, nfds, timeout_ts, sigmask);
 }
 
-
 #include "ul_epoll.h"
-
 
 OO_INTERCEPT(int, epoll_create1,
              (int flags))
@@ -1358,37 +1446,37 @@ OO_INTERCEPT(int, epoll_create1,
   int rc = 0;
   citp_lib_context_t lib_context;
 
-  if(CI_UNLIKELY( citp.init_level < CITP_INIT_ALL )) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_epoll_create1(flags);
   }
 
   citp_enter_lib(&lib_context);
   Log_CALL(ci_log("%s(%d)", __FUNCTION__, flags));
-  if( ! CITP_OPTS.ul_epoll )
+  if (!CITP_OPTS.ul_epoll)
     goto pass_through;
 #if CI_CFG_EPOLL2
-  if( CITP_OPTS.ul_epoll == 2 )
+  if (CITP_OPTS.ul_epoll == 2)
     rc = citp_epollb_create(1, flags);
   else
 #endif
     rc = citp_epoll_create(1, flags);
-  if( rc == CITP_NOT_HANDLED )
+  if (rc == CITP_NOT_HANDLED)
     goto pass_through;
   FDTABLE_ASSERT_VALID();
   citp_exit_lib(&lib_context, rc >= 0);
   Log_CALL_RESULT(rc);
   return rc;
 
- pass_through:
+pass_through:
   rc = ci_sys_epoll_create1(flags);
-  if( rc >= 0 )
+  if (rc >= 0)
     citp_fdtable_passthru(rc, 0);
   citp_exit_lib(&lib_context, rc >= 0);
   Log_PT(log("PT: sys_epoll_create1(%x) = %d", flags, rc));
   return rc;
 }
-
 
 OO_INTERCEPT(int, epoll_create,
              (int size))
@@ -1396,63 +1484,66 @@ OO_INTERCEPT(int, epoll_create,
   int rc = 0;
   citp_lib_context_t lib_context;
 
-  if(CI_UNLIKELY( citp.init_level < CITP_INIT_ALL )) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_epoll_create(size);
   }
 
   citp_enter_lib(&lib_context);
   Log_CALL(ci_log("%s(%d)", __FUNCTION__, size));
-  if( ! CITP_OPTS.ul_epoll )
+  if (!CITP_OPTS.ul_epoll)
     goto pass_through;
 #if CI_CFG_EPOLL2
-  if( CITP_OPTS.ul_epoll == 2 )
+  if (CITP_OPTS.ul_epoll == 2)
     rc = citp_epollb_create(size, 0);
   else
 #endif
     rc = citp_epoll_create(size, 0);
-  if( rc == CITP_NOT_HANDLED )
+  if (rc == CITP_NOT_HANDLED)
     goto pass_through;
   FDTABLE_ASSERT_VALID();
   citp_exit_lib(&lib_context, rc >= 0);
   Log_CALL_RESULT(rc);
   return rc;
 
- pass_through:
+pass_through:
   rc = ci_sys_epoll_create(size);
-  if( rc >= 0 )
+  if (rc >= 0)
     citp_fdtable_passthru(rc, 0);
   citp_exit_lib(&lib_context, rc >= 0);
   Log_PT(log("PT: sys_epoll_create(%d) = %d", size, rc));
   return rc;
 }
 
-
 OO_INTERCEPT(int, epoll_ctl,
              (int epfd, int op, int fd, struct epoll_event *event))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   citp_lib_context_t lib_context;
 
-  if(CI_UNLIKELY( citp.init_level < CITP_INIT_ALL )) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     goto pass_through;
   }
-  if( ! CITP_OPTS.ul_epoll )
+  if (!CITP_OPTS.ul_epoll)
     goto pass_through;
 
   citp_enter_lib(&lib_context);
   Log_CALL(ci_log("%s(%d, %d, %d, %p)", __FUNCTION__, epfd, op, fd, event));
 
-  if( (fdi = citp_fdtable_lookup(epfd)) ) {
+  if ((fdi = citp_fdtable_lookup(epfd)))
+  {
     int rc;
-    if( fdi->protocol->type == CITP_EPOLL_FD )
+    if (fdi->protocol->type == CITP_EPOLL_FD)
       rc = citp_epoll_ctl(fdi, op, fd, event);
 #if CI_CFG_EPOLL2
-    else if (fdi->protocol->type == CITP_EPOLLB_FD )
+    else if (fdi->protocol->type == CITP_EPOLLB_FD)
       rc = citp_epollb_ctl(fdi, op, fd, event);
 #endif
-    else {
+    else
+    {
       citp_fdinfo_release_ref(fdi, 0);
       goto error;
     }
@@ -1465,31 +1556,33 @@ OO_INTERCEPT(int, epoll_ctl,
 error:
   citp_exit_lib(&lib_context, TRUE);
   Log_PT(log("PT: sys_epoll_ctl(%d, %d, %d, %p)", epfd, op, fd, event));
- pass_through:
+pass_through:
   return ci_sys_epoll_ctl(epfd, op, fd, event);
 }
 
-
 OO_INTERCEPT(int, epoll_wait,
-             (int epfd, struct epoll_event*events, int maxevents, int timeout))
+             (int epfd, struct epoll_event *events, int maxevents, int timeout))
 {
   citp_lib_context_t lib_context;
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
 
-  if(CI_UNLIKELY( citp.init_level < CITP_INIT_ALL )) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     goto pass_through;
   }
-  if( ! CITP_OPTS.ul_epoll )
+  if (!CITP_OPTS.ul_epoll)
     goto pass_through;
 
   citp_enter_lib(&lib_context);
   Log_CALL(ci_log("%s(%d, %p, %d, %d)", __FUNCTION__, epfd, events,
                   maxevents, timeout));
 
-  if( (fdi=citp_fdtable_lookup(epfd)) ) {
+  if ((fdi = citp_fdtable_lookup(epfd)))
+  {
     int rc = CI_SOCKET_HANDOVER;
-    if( fdi->protocol->type == CITP_EPOLL_FD ) {
+    if (fdi->protocol->type == CITP_EPOLL_FD)
+    {
       /* NB. citp_epoll_wait() calls citp_exit_lib(). */
       rc = citp_epoll_wait(fdi, events, NULL, maxevents,
                            oo_epoll_ms_to_frc(timeout), NULL,
@@ -1497,50 +1590,55 @@ OO_INTERCEPT(int, epoll_wait,
       citp_reenter_lib(&lib_context);
     }
 #if CI_CFG_EPOLL2
-    else if (fdi->protocol->type == CITP_EPOLLB_FD ) {
+    else if (fdi->protocol->type == CITP_EPOLLB_FD)
+    {
       rc = citp_epollb_wait(fdi, events, maxevents, timeout, NULL,
                             &lib_context);
     }
 #endif
     citp_fdinfo_release_ref(fdi, 0);
     citp_exit_lib(&lib_context, rc >= 0);
-    if( rc == CI_SOCKET_HANDOVER )
+    if (rc == CI_SOCKET_HANDOVER)
       goto error;
     Log_CALL_RESULT(rc);
     return rc;
   }
-  else {
+  else
+  {
     citp_exit_lib(&lib_context, TRUE);
   }
 
 error:
   Log_PT(log("PT: sys_epoll_wait(%d, %p, %d, %d)", epfd, events,
              maxevents, timeout));
- pass_through:
+pass_through:
   return ci_sys_epoll_wait(epfd, events, maxevents, timeout);
 }
 
 OO_INTERCEPT(int, epoll_pwait,
-             (int epfd, struct epoll_event*events, int maxevents, int timeout,
+             (int epfd, struct epoll_event *events, int maxevents, int timeout,
               const sigset_t *sigmask))
 {
   citp_lib_context_t lib_context;
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
 
-  if(CI_UNLIKELY( citp.init_level < CITP_INIT_ALL )) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     goto pass_through;
   }
-  if( ! CITP_OPTS.ul_epoll )
+  if (!CITP_OPTS.ul_epoll)
     goto pass_through;
 
   citp_enter_lib(&lib_context);
   Log_CALL(ci_log("%s(%d, %p, %d, %d, %p)", __FUNCTION__, epfd, events,
                   maxevents, timeout, sigmask));
 
-  if( (fdi=citp_fdtable_lookup(epfd)) ) {
+  if ((fdi = citp_fdtable_lookup(epfd)))
+  {
     int rc = CI_SOCKET_HANDOVER;
-    if( fdi->protocol->type == CITP_EPOLL_FD ) {
+    if (fdi->protocol->type == CITP_EPOLL_FD)
+    {
       /* NB. citp_epoll_wait() calls citp_exit_lib(). */
       rc = citp_epoll_wait(fdi, events, NULL, maxevents,
                            oo_epoll_ms_to_frc(timeout), sigmask,
@@ -1548,48 +1646,50 @@ OO_INTERCEPT(int, epoll_pwait,
       citp_reenter_lib(&lib_context);
     }
 #if CI_CFG_EPOLL2
-    else if (fdi->protocol->type == CITP_EPOLLB_FD ) {
+    else if (fdi->protocol->type == CITP_EPOLLB_FD)
+    {
       rc = citp_epollb_wait(fdi, events, maxevents, timeout, sigmask,
                             &lib_context);
     }
 #endif
     citp_fdinfo_release_ref(fdi, 0);
     citp_exit_lib(&lib_context, rc >= 0);
-    if( rc == CI_SOCKET_HANDOVER )
+    if (rc == CI_SOCKET_HANDOVER)
       goto error;
     Log_CALL_RESULT(rc);
     return rc;
   }
-  else {
+  else
+  {
     citp_exit_lib(&lib_context, TRUE);
   }
 
 error:
   Log_PT(log("PT: sys_epoll_pwait(%d, %p, %d, %d, %p)", epfd, events,
              maxevents, timeout, sigmask));
- pass_through:
+pass_through:
   return ci_sys_epoll_pwait(epfd, events, maxevents, timeout, sigmask);
 }
 
-
-
 OO_INTERCEPT(ssize_t, read,
-             (int fd, void* buf, size_t count))
+             (int fd, void *buf, size_t count))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   struct msghdr m;
   struct iovec iov[1];
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_BASIC_SYSCALLS);
     return ci_sys_read(fd, buf, count);
   }
 
   Log_CALL(ci_log("%s(%d, %p, %u)", __FUNCTION__, fd, buf, (unsigned)count));
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
+  if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
     iov[0].iov_base = buf;
     iov[0].iov_len = count;
     /* See note about convertions above in this file */
@@ -1600,7 +1700,7 @@ OO_INTERCEPT(ssize_t, read,
     CI_DEBUG(m.msg_control = CI_NOT_NULL);
     m.msg_controllen = 0;
     /* msg_flags is output only */
-    if( count == 0 )
+    if (count == 0)
       rc = 0;
     else
       rc = citp_fdinfo_get_ops(fdi)->recv(fdi, &m, 0);
@@ -1608,11 +1708,12 @@ OO_INTERCEPT(ssize_t, read,
     FDTABLE_ASSERT_VALID();
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
-    Log_PT(log("PT: sys_read(%d, buf, %d)", fd, (int) count));
+  else
+  {
+    Log_PT(log("PT: sys_read(%d, buf, %d)", fd, (int)count));
     FDTABLE_ASSERT_VALID();
     citp_exit_lib_if(&lib_context, TRUE);
-    rc =  ci_sys_read(fd, buf, count);
+    rc = ci_sys_read(fd, buf, count);
   }
 
   Log_CALL_RESULT(rc);
@@ -1620,7 +1721,7 @@ OO_INTERCEPT(ssize_t, read,
 }
 
 OO_INTERCEPT(ssize_t, __read_chk,
-             (int fd, void* buf, size_t count, size_t buflen))
+             (int fd, void *buf, size_t count, size_t buflen))
 {
   if (count > buflen)
     ci_sys___read_chk(fd, buf, count, buflen);
@@ -1628,23 +1729,25 @@ OO_INTERCEPT(ssize_t, __read_chk,
 }
 
 OO_INTERCEPT(ssize_t, write,
-             (int fd, const void* buf, size_t count))
+             (int fd, const void *buf, size_t count))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   struct msghdr m;
   struct iovec iov[1];
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_BASIC_SYSCALLS);
     return ci_sys_write(fd, buf, count);
   }
 
   Log_CALL(ci_log("%s(%d, %p, %u)", __FUNCTION__, fd, buf, (unsigned)count));
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
-    iov[0].iov_base = (void*) buf;
+  if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
+    iov[0].iov_base = (void *)buf;
     iov[0].iov_len = count;
     /* See note about convertions above in this file */
     CI_DEBUG(m.msg_name = CI_NOT_NULL);
@@ -1659,8 +1762,9 @@ OO_INTERCEPT(ssize_t, write,
     FDTABLE_ASSERT_VALID();
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
-    Log_PT(log("PT: sys_write(%d, buf, %d)", fd, (int) count));
+  else
+  {
+    Log_PT(log("PT: sys_write(%d, buf, %d)", fd, (int)count));
     FDTABLE_ASSERT_VALID();
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_write(fd, buf, count);
@@ -1670,33 +1774,37 @@ OO_INTERCEPT(ssize_t, write,
   return rc;
 }
 
-
 OO_INTERCEPT(ssize_t, readv,
-             (int fd, const struct iovec* vector, int count))
+             (int fd, const struct iovec *vector, int count))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   struct msghdr m;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_readv(fd, vector, count);
   }
 
   Log_CALL(ci_log("%s(%d, %p, %d)", __FUNCTION__, fd, vector, count));
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
+  if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
     /* Handle (vector = NULL, count != 0) case here.
      * For (vector = NULL, count = 0) rc = 0 should be returned.
      * len_is_zero variable is responsible for that case. */
-    if( CI_UNLIKELY(vector == NULL && count != 0) )
+    if (CI_UNLIKELY(vector == NULL && count != 0))
       CI_SET_ERROR(rc, EFAULT);
-    else {
+    else
+    {
       int len_is_zero = 1;
       int i;
-      for( i = 0; i < count; i++ ) {
-        if( vector[i].iov_len ) {
+      for (i = 0; i < count; i++)
+      {
+        if (vector[i].iov_len)
+        {
           len_is_zero = 0;
           break;
         }
@@ -1704,12 +1812,12 @@ OO_INTERCEPT(ssize_t, readv,
       /* See note about convertions above in this file */
       CI_DEBUG(m.msg_name = CI_NOT_NULL);
       m.msg_namelen = 0;
-      m.msg_iov = (struct iovec*) vector;
+      m.msg_iov = (struct iovec *)vector;
       m.msg_iovlen = count;
       CI_DEBUG(m.msg_control = CI_NOT_NULL);
       m.msg_controllen = 0;
       /* msg_flags is output only */
-      if( len_is_zero )
+      if (len_is_zero)
         rc = 0;
       else
         rc = citp_fdinfo_get_ops(fdi)->recv(fdi, &m, 0);
@@ -1717,7 +1825,8 @@ OO_INTERCEPT(ssize_t, readv,
     citp_fdinfo_release_ref_fast(fdi);
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
+  else
+  {
     Log_PT(log("PT: sys_readv(%d, vector, %d)", fd, count));
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_readv(fd, vector, count);
@@ -1726,27 +1835,28 @@ OO_INTERCEPT(ssize_t, readv,
   return rc;
 }
 
-
 OO_INTERCEPT(ssize_t, writev,
-             (int fd, const struct iovec* vector, int count))
+             (int fd, const struct iovec *vector, int count))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   struct msghdr m;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_writev(fd, vector, count);
   }
 
   Log_CALL(ci_log("%s(%d, %p, %d)", __FUNCTION__, fd, vector, count));
 
-  if( (fdi = citp_fdtable_lookup_fast(&lib_context, fd)) ) {
+  if ((fdi = citp_fdtable_lookup_fast(&lib_context, fd)))
+  {
     /* See note about convertions above in this file */
     CI_DEBUG(m.msg_name = CI_NOT_NULL);
     m.msg_namelen = 0;
-    m.msg_iov = (struct iovec*) vector;
+    m.msg_iov = (struct iovec *)vector;
     m.msg_iovlen = count;
     CI_DEBUG(m.msg_control = CI_NOT_NULL);
     m.msg_controllen = 0;
@@ -1755,7 +1865,8 @@ OO_INTERCEPT(ssize_t, writev,
     citp_fdinfo_release_ref_fast(fdi);
     citp_exit_lib(&lib_context, rc >= 0);
   }
-  else {
+  else
+  {
     Log_PT(log("PT: sys_writev(%d, vector, %d)", fd, count));
     citp_exit_lib_if(&lib_context, TRUE);
     rc = ci_sys_writev(fd, vector, count);
@@ -1764,78 +1875,86 @@ OO_INTERCEPT(ssize_t, writev,
   return rc;
 }
 
-
-OO_INTERCEPT(ci_splice_return_type, splice, (int in_fd, loff_t* in_off,
-                                             int out_fd, loff_t* out_off,
-                                             size_t len, unsigned int flags))
+OO_INTERCEPT(ci_splice_return_type, splice, (int in_fd, loff_t *in_off, int out_fd, loff_t *out_off, size_t len, unsigned int flags))
 {
   citp_lib_context_t lib_context;
   citp_fdinfo *out_fdi, *in_fdi;
   citp_pipe_fdi *in_pipe_fdi, *out_pipe_fdi;
   int rc = 0, via_os = 0;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_splice(in_fd, in_off, out_fd, out_off, len, flags);
   }
   citp_enter_lib(&lib_context);
   Log_CALL(ci_log("%s(%d, %p, %d, %p, %u, 0x%x)", __FUNCTION__,
-                  in_fd, in_off, out_fd, out_off, (unsigned)len, flags ));
+                  in_fd, in_off, out_fd, out_off, (unsigned)len, flags));
 
-  in_fdi  = citp_fdtable_lookup(in_fd);
+  in_fdi = citp_fdtable_lookup(in_fd);
   out_fdi = citp_fdtable_lookup(out_fd);
 
-  if( in_fdi && citp_fdinfo_get_type(in_fdi) == CITP_PIPE_FD &&
+  if (in_fdi && citp_fdinfo_get_type(in_fdi) == CITP_PIPE_FD &&
       out_fdi && citp_fdinfo_get_type(out_fdi) == CITP_PIPE_FD &&
       ((in_pipe_fdi = fdi_to_pipe_fdi(in_fdi))->ni ==
-       (out_pipe_fdi = fdi_to_pipe_fdi(out_fdi))->ni) ) {
-    if( in_off == NULL && out_off == NULL ) {
+       (out_pipe_fdi = fdi_to_pipe_fdi(out_fdi))->ni))
+  {
+    if (in_off == NULL && out_off == NULL)
+    {
       rc = citp_splice_pipe_pipe(in_pipe_fdi, out_pipe_fdi, len, flags);
     }
-    else {
+    else
+    {
       errno = ESPIPE;
       rc = CI_SOCKET_ERROR;
     }
   }
-  else if( in_fdi && citp_fdinfo_get_type(in_fdi) == CITP_PIPE_FD ) {
-    if( in_off == NULL ) {
+  else if (in_fdi && citp_fdinfo_get_type(in_fdi) == CITP_PIPE_FD)
+  {
+    if (in_off == NULL)
+    {
       rc = citp_pipe_splice_read(in_fdi, out_fd, out_off, len, flags,
                                  &lib_context);
     }
-    else {
+    else
+    {
       errno = ESPIPE;
       rc = CI_SOCKET_ERROR;
     }
   }
-  else if( out_fdi && citp_fdinfo_get_type(out_fdi) == CITP_PIPE_FD ) {
-    if( out_off == NULL ) {
+  else if (out_fdi && citp_fdinfo_get_type(out_fdi) == CITP_PIPE_FD)
+  {
+    if (out_off == NULL)
+    {
       rc = citp_pipe_splice_write(out_fdi, in_fd, in_off, len, flags,
                                   &lib_context);
     }
-    else {
+    else
+    {
       errno = ESPIPE;
       rc = CI_SOCKET_ERROR;
     }
   }
-  else {
+  else
+  {
     via_os = 1;
   }
 
-  if( out_fdi )
+  if (out_fdi)
     citp_fdinfo_release_ref(out_fdi, 0);
-  if( in_fdi )
+  if (in_fdi)
     citp_fdinfo_release_ref(in_fdi, 0);
   citp_exit_lib(&lib_context, rc >= 0);
 
-  if( via_os ) {
+  if (via_os)
+  {
     Log_PT(log("PT: sys_splice(%d, %p, %d, %p, %u, 0x%x)",
-               in_fd, in_off, out_fd, out_off, (unsigned) len, flags));
+               in_fd, in_off, out_fd, out_off, (unsigned)len, flags));
     rc = ci_sys_splice(in_fd, in_off, out_fd, out_off, len, flags);
   }
   Log_CALL_RESULT(rc);
   return rc;
 }
-
 
 OO_INTERCEPT(int, close,
              (int fd))
@@ -1843,7 +1962,8 @@ OO_INTERCEPT(int, close,
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_BASIC_SYSCALLS);
     return ci_sys_close(fd);
   }
@@ -1858,15 +1978,15 @@ OO_INTERCEPT(int, close,
   return rc;
 }
 
-
 static int fcntl_common(int fd, int cmd, long arg,
                         int (*sys_fcntl)(int, int, ...))
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return sys_fcntl(fd, cmd, arg);
   }
@@ -1875,15 +1995,18 @@ static int fcntl_common(int fd, int cmd, long arg,
 
   citp_enter_lib(&lib_context);
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
-    ci_assert (citp_fdinfo_get_ops (fdi)->fcntl);
+  if ((fdi = citp_fdtable_lookup(fd)))
+  {
+    ci_assert(citp_fdinfo_get_ops(fdi)->fcntl);
     /* We're losing the 64-bitness of the fcntl here, however none of the cmds
      * which change behaviour apply to sockets (they're all to do with large
      * file offsets) so we're fine */
     rc = citp_fdinfo_get_ops(fdi)->fcntl(fdi, cmd, arg);
     citp_fdinfo_release_ref(fdi, 0);
     citp_exit_lib(&lib_context, rc == 0);
-  } else {
+  }
+  else
+  {
     Log_PT(log("PT: sys_fcntl(%d, %d, ...)", fd, cmd));
     citp_exit_lib(&lib_context, TRUE);
     rc = sys_fcntl(fd, cmd, arg);
@@ -1891,7 +2014,6 @@ static int fcntl_common(int fd, int cmd, long arg,
   Log_CALL_RESULT(rc);
   return rc;
 }
-
 
 OO_INTERCEPT(int, fcntl,
              (int fd, int cmd, ...))
@@ -1905,7 +2027,6 @@ OO_INTERCEPT(int, fcntl,
 
   return fcntl_common(fd, cmd, arg, ci_sys_fcntl);
 }
-
 
 #if CI_LIBC_HAS_fcntl64
 OO_INTERCEPT(int, fcntl64,
@@ -1922,7 +2043,6 @@ OO_INTERCEPT(int, fcntl64,
 }
 #endif
 
-
 #ifdef __GLIBC__
 OO_INTERCEPT(int, ioctl,
              (int fd, unsigned long request, ...))
@@ -1931,34 +2051,38 @@ OO_INTERCEPT(int, ioctl,
              (int fd, int request, ...))
 #endif
 {
-  citp_fdinfo* fdi;
-  void* arg;
+  citp_fdinfo *fdi;
+  void *arg;
   va_list va;
   int rc;
   citp_lib_context_t lib_context;
 
   va_start(va, request);
-  arg = (void*)va_arg(va, long);
+  arg = (void *)va_arg(va, long);
   va_end(va);
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_ioctl(fd, request, arg);
   }
 
   citp_enter_lib(&lib_context);
-#ifdef  __GLIBC__
+#ifdef __GLIBC__
   Log_CALL(ci_log("%s(%d, %ld, ...)", __FUNCTION__, fd, request));
 #else
   Log_CALL(ci_log("%s(%d, %d, ...)", __FUNCTION__, fd, request));
 #endif
 
-  if( (fdi = citp_fdtable_lookup(fd)) ) {
+  if ((fdi = citp_fdtable_lookup(fd)))
+  {
     rc = citp_fdinfo_get_ops(fdi)->ioctl(fdi, request, arg);
     citp_fdinfo_release_ref(fdi, 0);
     citp_exit_lib(&lib_context, rc == 0);
-  } else {
-    Log_PT(log("PT: sys_ioctl(%d, %lu, ...)", fd, (unsigned long) request));
+  }
+  else
+  {
+    Log_PT(log("PT: sys_ioctl(%d, %lu, ...)", fd, (unsigned long)request));
     citp_exit_lib(&lib_context, TRUE);
     rc = ci_sys_ioctl(fd, request, arg);
   }
@@ -1966,14 +2090,14 @@ OO_INTERCEPT(int, ioctl,
   return rc;
 }
 
-
 OO_INTERCEPT(int, dup,
              (int fd))
 {
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_dup(fd);
   }
@@ -1981,9 +2105,10 @@ OO_INTERCEPT(int, dup,
   citp_enter_lib(&lib_context);
   Log_CALL(ci_log("%s(%d)", __FUNCTION__, fd));
 
-  if( fd >= 0 )
+  if (fd >= 0)
     rc = citp_ep_dup(fd, citp_ep_dup_dup, 0 /*unused*/);
-  else {
+  else
+  {
     errno = EBADF;
     rc = -1;
   }
@@ -1995,22 +2120,23 @@ OO_INTERCEPT(int, dup,
   return rc;
 }
 
-
 OO_INTERCEPT(int, dup2,
              (int oldfd, int newfd))
 {
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_dup2(oldfd, newfd);
   }
-  if( oldfd < 0 || newfd < 0 ) {
+  if (oldfd < 0 || newfd < 0)
+  {
     CI_SET_ERROR(rc, EBADF);
     return rc;
   }
-  if( oldfd == newfd )
+  if (oldfd == newfd)
     /* fixme: This is the wrong thing to do because oldfd might be bad. */
     return oldfd;
 
@@ -2026,22 +2152,24 @@ OO_INTERCEPT(int, dup2,
   return rc;
 }
 
-
 OO_INTERCEPT(int, dup3,
              (int oldfd, int newfd, int flags))
 {
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_dup3(oldfd, newfd, flags);
   }
-  if( oldfd < 0 || newfd < 0 ) {
+  if (oldfd < 0 || newfd < 0)
+  {
     CI_SET_ERROR(rc, oldfd == newfd ? EINVAL : EBADF);
     return rc;
   }
-  if( (flags & ~O_CLOEXEC) != 0 || oldfd == newfd ) {
+  if ((flags & ~O_CLOEXEC) != 0 || oldfd == newfd)
+  {
     CI_SET_ERROR(rc, EINVAL);
     return rc;
   }
@@ -2058,7 +2186,6 @@ OO_INTERCEPT(int, dup3,
   return rc;
 }
 
-
 /* x86/x86-64/ARM are not here: they've been converted to use thread-safe
  * stuff in oo_per_thread::vfork_scratch. The platforms listed below haven't
  * yet been adapted. */
@@ -2068,38 +2195,40 @@ void *onload___vfork_rtaddr = NULL;
 ci_uint64 onload___vfork_r31 = 0;
 #else
 ci_uint32 onload___vfork_r31 = 0;
-ci_uint32 onload___vfork_r3  = 0;
+ci_uint32 onload___vfork_r3 = 0;
 #endif
 #endif
 
-
-OO_INTERCEPT(void**, __vfork_is_vfork, (void))
+OO_INTERCEPT(void **, __vfork_is_vfork, (void))
 {
   return CITP_OPTS.vfork_mode == 2 ? oo_per_thread_get()->vfork_scratch : NULL;
 }
 
 #ifdef __i386__
-__attribute__ ((force_align_arg_pointer))
+__attribute__((force_align_arg_pointer))
 #endif
 OO_INTERCEPT(pid_t, __vfork_as_fork,
              (void))
 {
   int rc;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_LOGGING) )
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_LOGGING))
     citp_do_init(CITP_INIT_LOGGING);
 
   Log_CALL(ci_log("%s()", __FUNCTION__));
 
-  ci_assert_nequal( CITP_OPTS.vfork_mode, 2 ); 
-  if( CITP_OPTS.vfork_mode == 1 ) {
+  ci_assert_nequal(CITP_OPTS.vfork_mode, 2);
+  if (CITP_OPTS.vfork_mode == 1)
+  {
     int pipefd[2];
     uint8_t buf;
 
     rc = ci_sys_pipe2(pipefd, O_CLOEXEC);
-    if( rc ) {
+    if (rc)
+    {
       Log_V(log("Warning: Calling pipe2() in vfork() failed (%d).  "
-                "Trying pipe().", rc));
+                "Trying pipe().",
+                rc));
     }
     else
       goto fork;
@@ -2109,13 +2238,15 @@ OO_INTERCEPT(pid_t, __vfork_as_fork,
      * this race.
      */
     rc = ci_sys_pipe(pipefd);
-    if( rc ) {
+    if (rc)
+    {
       log("ERROR: Calling pipe() in vfork() failed (%d)", rc);
       return rc;
     }
 
     rc = ci_sys_fcntl(pipefd[1], F_SETFD, FD_CLOEXEC);
-    if( rc ) {
+    if (rc)
+    {
       log("ERROR: Calling fcntl() in vfork() failed (%d)", rc);
       close(pipefd[0]);
       close(pipefd[1]);
@@ -2124,14 +2255,16 @@ OO_INTERCEPT(pid_t, __vfork_as_fork,
 
   fork:
     rc = fork();
-    if( rc == -1 ) {
+    if (rc == -1)
+    {
       log("ERROR: Calling fork() in vfork() failed (%d)", rc);
       close(pipefd[0]);
       close(pipefd[1]);
       return rc;
     }
 
-    if( rc ) { /* Parent.  Block till child exits */
+    if (rc)
+    { /* Parent.  Block till child exits */
       Log_V(log("fork() [in place of vfork()] = %d", rc));
       close(pipefd[1]);
       ci_sys_read(pipefd[0], &buf, 1);
@@ -2140,17 +2273,17 @@ OO_INTERCEPT(pid_t, __vfork_as_fork,
     else /* child.  pipefd[1] closed when child exits */
       close(pipefd[0]);
   }
-  else {
+  else
+  {
     ci_assert_equal(CITP_OPTS.vfork_mode, 0);
     rc = fork();
-    Log_V(if( rc )  log("fork() [in place of vfork()] = %d", rc));
+    Log_V(if (rc) log("fork() [in place of vfork()] = %d", rc));
   }
   return rc;
 }
 
-
 OO_INTERCEPT(int, open,
-             (const char* pathname, int flags, ...))
+             (const char *pathname, int flags, ...))
 {
   mode_t mode;
   int rc;
@@ -2160,7 +2293,8 @@ OO_INTERCEPT(int, open,
   mode = va_arg(va, mode_t);
   va_end(va);
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_BASIC_SYSCALLS);
     return ci_sys_open(pathname, flags, mode);
   }
@@ -2174,17 +2308,16 @@ OO_INTERCEPT(int, open,
     citp_enter_lib(&lib_context);
     citp_fdtable_passthru(rc, 0);
     Log_PT(log("PT: sys_open(%s, %x, %x) = %d", pathname,
-               (unsigned) flags, (unsigned) mode, rc));
+               (unsigned)flags, (unsigned)mode, rc));
     citp_exit_lib(&lib_context, rc >= 0);
   }
   Log_CALL_RESULT(rc);
   return rc;
 }
 
-
 #ifdef __USE_LARGEFILE64
 OO_INTERCEPT(int, open64,
-             (const char* pathname, int flags, ...))
+             (const char *pathname, int flags, ...))
 {
   mode_t mode;
   int rc;
@@ -2194,7 +2327,8 @@ OO_INTERCEPT(int, open64,
   mode = va_arg(va, mode_t);
   va_end(va);
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_open(pathname, flags, mode);
   }
@@ -2203,13 +2337,13 @@ OO_INTERCEPT(int, open64,
 
   {
     citp_lib_context_t lib_context;
-    
+
     rc = ci_sys_open64(pathname, flags, mode);
-    
+
     citp_enter_lib(&lib_context);
     citp_fdtable_passthru(rc, 0);
     Log_PT(log("PT: sys_open64(%s, %x, %x) = %d", pathname,
-               (unsigned) flags, (unsigned) mode, rc));
+               (unsigned)flags, (unsigned)mode, rc));
     citp_exit_lib(&lib_context, rc >= 0);
   }
   Log_CALL_RESULT(rc);
@@ -2217,56 +2351,55 @@ OO_INTERCEPT(int, open64,
 }
 #endif
 
-
 OO_INTERCEPT(int, creat,
-             (const char* pathname, mode_t mode))
+             (const char *pathname, mode_t mode))
 {
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_creat(pathname, mode);
   }
 
   Log_CALL(ci_log("%s(\"%s\", 0x%x)", __FUNCTION__, pathname,
-                  (unsigned) mode));
+                  (unsigned)mode));
 
   rc = ci_sys_creat(pathname, mode);
   citp_enter_lib(&lib_context);
   citp_fdtable_passthru(rc, 0);
-  Log_PT(log("PT: sys_creat(%s, %x) = %d", pathname, (unsigned) mode, rc));
+  Log_PT(log("PT: sys_creat(%s, %x) = %d", pathname, (unsigned)mode, rc));
   citp_exit_lib(&lib_context, rc >= 0);
   Log_CALL_RESULT(rc);
   return rc;
 }
 
-
 #ifdef __USE_LARGEFILE64
 OO_INTERCEPT(int, creat64,
-             (const char* pathname, mode_t mode))
+             (const char *pathname, mode_t mode))
 {
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_creat64(pathname, mode);
   }
 
   Log_CALL(ci_log("%s(\"%s\", 0x%x)", __FUNCTION__, pathname,
-                  (unsigned) mode));
+                  (unsigned)mode));
 
   rc = ci_sys_creat64(pathname, mode);
   citp_enter_lib(&lib_context);
   citp_fdtable_passthru(rc, 0);
-  Log_PT(log("PT: sys_creat64(%s, %x) = %d", pathname, (unsigned) mode, rc));
+  Log_PT(log("PT: sys_creat64(%s, %x) = %d", pathname, (unsigned)mode, rc));
   citp_exit_lib(&lib_context, rc >= 0);
   Log_CALL_RESULT(rc);
   return rc;
 }
 #endif
-
 
 OO_INTERCEPT(int, socketpair,
              (int d, int type, int protocol, int sv[2]))
@@ -2274,28 +2407,29 @@ OO_INTERCEPT(int, socketpair,
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_socketpair(d, type, protocol, sv);
   }
 
-  Log_CALL(ci_log("%s(%d, %d, %d, [%d, %d])", __FUNCTION__,d,type,protocol,
+  Log_CALL(ci_log("%s(%d, %d, %d, [%d, %d])", __FUNCTION__, d, type, protocol,
                   sv ? sv[0] : -1, sv ? sv[1] : -1));
 
   rc = ci_sys_socketpair(d, type, protocol, sv);
   citp_enter_lib(&lib_context);
-  if( rc == 0 ) {
+  if (rc == 0)
+  {
     citp_fdtable_passthru(sv[0], 0);
     citp_fdtable_passthru(sv[1], 0);
   }
   Log_PT(log("PT: sys_socketpair(%d, %d, %d, sv) = %d  sv={%d,%d}",
-             d, type, protocol, rc, sv ? sv[0]:-1, sv ? sv[1]:-1));
+             d, type, protocol, rc, sv ? sv[0] : -1, sv ? sv[1] : -1));
   citp_exit_lib(&lib_context, rc == 0);
-  Log_CALL(ci_log("%s returning %d, [%d,%d] (errno %d)",__FUNCTION__,
-                  rc,sv[0],sv[1],errno));
+  Log_CALL(ci_log("%s returning %d, [%d,%d] (errno %d)", __FUNCTION__,
+                  rc, sv[0], sv[1], errno));
   return rc;
 }
-
 
 OO_INTERCEPT(int, pipe,
              (int fd[2]))
@@ -2303,11 +2437,13 @@ OO_INTERCEPT(int, pipe,
   int rc = CITP_NOT_HANDLED;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_pipe(fd);
   }
-  if( fd == NULL ) {
+  if (fd == NULL)
+  {
     errno = EFAULT;
     return -1;
   }
@@ -2315,22 +2451,25 @@ OO_INTERCEPT(int, pipe,
   Log_CALL(ci_log("%s([%d],[%d])", __FUNCTION__, fd[0], fd[1]));
   citp_enter_lib(&lib_context);
 
-  if( CITP_OPTS.ul_pipe ) {
-      rc = citp_pipe_create(fd, 0);
+  if (CITP_OPTS.ul_pipe)
+  {
+    rc = citp_pipe_create(fd, 0);
   }
-  if( rc == CITP_NOT_HANDLED ) {
-      rc = ci_sys_pipe(fd);
-      if( rc == 0 ) {
-          citp_fdtable_passthru(fd[0], 0);
-          citp_fdtable_passthru(fd[1], 0);
-      }
-      Log_PT(log("PT: sys_pipe(filedes) = %d  filedes={%d,%d}",
-                 rc, fd ? fd[0]:-1, fd ? fd[1]:-1));
+  if (rc == CITP_NOT_HANDLED)
+  {
+    rc = ci_sys_pipe(fd);
+    if (rc == 0)
+    {
+      citp_fdtable_passthru(fd[0], 0);
+      citp_fdtable_passthru(fd[1], 0);
+    }
+    Log_PT(log("PT: sys_pipe(filedes) = %d  filedes={%d,%d}",
+               rc, fd ? fd[0] : -1, fd ? fd[1] : -1));
   }
 
   citp_exit_lib(&lib_context, rc == 0);
-  Log_CALL(ci_log("%s returning %d, [%d,%d] (errno %d)",__FUNCTION__,
-                  rc,fd[0],fd[1],errno));
+  Log_CALL(ci_log("%s returning %d, [%d,%d] (errno %d)", __FUNCTION__,
+                  rc, fd[0], fd[1], errno));
   return rc;
 }
 OO_INTERCEPT(int, pipe2,
@@ -2339,49 +2478,54 @@ OO_INTERCEPT(int, pipe2,
   int rc = CITP_NOT_HANDLED;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_pipe2(fd, flags);
   }
-  if( fd == NULL || (flags & ~O_CLOEXEC) != 0)
+  if (fd == NULL || (flags & ~O_CLOEXEC) != 0)
     return ci_sys_pipe2(fd, flags);
 
   Log_CALL(ci_log("%s([%d],[%d], %x)", __FUNCTION__, fd[0], fd[1], flags));
   citp_enter_lib(&lib_context);
 
-  if( CITP_OPTS.ul_pipe ) {
-      rc = citp_pipe_create(fd, flags);
+  if (CITP_OPTS.ul_pipe)
+  {
+    rc = citp_pipe_create(fd, flags);
   }
-  if( rc == CITP_NOT_HANDLED ) {
-      rc = ci_sys_pipe2(fd, flags);
-      if( rc == 0 ) {
-          citp_fdtable_passthru(fd[0], 0);
-          citp_fdtable_passthru(fd[1], 0);
-      }
-      Log_PT(log("PT: sys_pipe(filedes) = %d  filedes={%d,%d}",
-                 rc, fd ? fd[0]:-1, fd ? fd[1]:-1));
+  if (rc == CITP_NOT_HANDLED)
+  {
+    rc = ci_sys_pipe2(fd, flags);
+    if (rc == 0)
+    {
+      citp_fdtable_passthru(fd[0], 0);
+      citp_fdtable_passthru(fd[1], 0);
+    }
+    Log_PT(log("PT: sys_pipe(filedes) = %d  filedes={%d,%d}",
+               rc, fd ? fd[0] : -1, fd ? fd[1] : -1));
   }
 
   citp_exit_lib(&lib_context, rc == 0);
-  Log_CALL(ci_log("%s returning %d, [%d,%d] (errno %d)",__FUNCTION__,
-                  rc,fd[0],fd[1],errno));
+  Log_CALL(ci_log("%s returning %d, [%d,%d] (errno %d)", __FUNCTION__,
+                  rc, fd[0], fd[1], errno));
   return rc;
 }
-
 
 OO_INTERCEPT(int, setuid, (uid_t uid))
 {
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_setuid(uid);
   }
   Log_CALL(ci_log("%s(%d)", __FUNCTION__, uid));
   rc = ci_sys_setuid(uid);
   citp_enter_lib(&lib_context);
-  if( rc == 0 ) {
+  if (rc == 0)
+  {
     CITP_FDTABLE_LOCK();
     oo_stackname_update(NULL);
     CITP_FDTABLE_UNLOCK();
@@ -2392,29 +2536,29 @@ OO_INTERCEPT(int, setuid, (uid_t uid))
   return rc;
 }
 
-
-
 /* Intecept fstat().
  *
  * On linux, this interception is necessary:
  * - since onloadfs files cannot have S_IFSOCK set in i_mode;
  * - for epoll, since it is a char device. */
-static void oo_update_fstat_mode(int fd, __mode_t* st_mode_p)
+static void oo_update_fstat_mode(int fd, __mode_t *st_mode_p)
 {
-  citp_fdinfo* fdi;
+  citp_fdinfo *fdi;
   citp_lib_context_t lib_context;
 
   citp_enter_lib(&lib_context);
-  if( (fdi = citp_fdtable_lookup(fd))) {
-    if( fdi != &citp_the_closed_fd ) {
+  if ((fdi = citp_fdtable_lookup(fd)))
+  {
+    if (fdi != &citp_the_closed_fd)
+    {
       *st_mode_p &= ~S_IFMT;
-      if( fdi->protocol->type == CITP_PIPE_FD ) {
+      if (fdi->protocol->type == CITP_PIPE_FD)
+      {
         *st_mode_p |= S_IFIFO;
         *st_mode_p &= ~0177;
       }
-      else
-      if( fdi->protocol->type == CITP_EPOLLB_FD ||
-          fdi->protocol->type == CITP_EPOLL_FD )
+      else if (fdi->protocol->type == CITP_EPOLLB_FD ||
+               fdi->protocol->type == CITP_EPOLL_FD)
         *st_mode_p = 0600;
       else
         *st_mode_p |= S_IFSOCK;
@@ -2430,7 +2574,8 @@ OO_INTERCEPT(int, __fxstat,
 {
   int rc;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys___fxstat(ver, fd, stat_buf);
   }
@@ -2438,12 +2583,11 @@ OO_INTERCEPT(int, __fxstat,
   Log_CALL(ci_log("%s(%d, %d, %p)", __FUNCTION__, ver, fd, stat_buf));
 
   rc = ci_sys___fxstat(ver, fd, stat_buf);
-  if( rc == 0 )
+  if (rc == 0)
     oo_update_fstat_mode(fd, &stat_buf->st_mode);
   Log_CALL_RESULT(rc);
   return rc;
 }
-
 
 #ifdef __USE_LARGEFILE64
 OO_INTERCEPT(int, __fxstat64,
@@ -2451,7 +2595,8 @@ OO_INTERCEPT(int, __fxstat64,
 {
   int rc;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys___fxstat64(ver, fd, stat_buf);
   }
@@ -2459,7 +2604,7 @@ OO_INTERCEPT(int, __fxstat64,
   Log_CALL(ci_log("%s(%d, %d, %p)", __FUNCTION__, ver, fd, stat_buf));
 
   rc = ci_sys___fxstat64(ver, fd, stat_buf);
-  if( rc == 0 )
+  if (rc == 0)
     oo_update_fstat_mode(fd, &stat_buf->st_mode);
   Log_CALL_RESULT(rc);
   return rc;
@@ -2473,7 +2618,8 @@ OO_INTERCEPT(int, fstat,
 {
   int rc;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_fstat(fd, stat_buf);
   }
@@ -2481,12 +2627,11 @@ OO_INTERCEPT(int, fstat,
   Log_CALL(ci_log("%s(%d, %p)", __FUNCTION__, fd, stat_buf));
 
   rc = ci_sys_fstat(fd, stat_buf);
-  if( rc == 0 )
+  if (rc == 0)
     oo_update_fstat_mode(fd, &stat_buf->st_mode);
   Log_CALL_RESULT(rc);
   return rc;
 }
-
 
 #ifdef __USE_LARGEFILE64
 OO_INTERCEPT(int, fstat64,
@@ -2494,7 +2639,8 @@ OO_INTERCEPT(int, fstat64,
 {
   int rc;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_fstat64(fd, stat_buf);
   }
@@ -2502,7 +2648,7 @@ OO_INTERCEPT(int, fstat64,
   Log_CALL(ci_log("%s(%d, %p)", __FUNCTION__, fd, stat_buf));
 
   rc = ci_sys_fstat64(fd, stat_buf);
-  if( rc == 0 )
+  if (rc == 0)
     oo_update_fstat_mode(fd, &stat_buf->st_mode);
   Log_CALL_RESULT(rc);
   return rc;
@@ -2511,14 +2657,14 @@ OO_INTERCEPT(int, fstat64,
 
 #endif /* _STAT_VER */
 
-
 OO_INTERCEPT(int, chroot,
-             (const char* path))
+             (const char *path))
 {
   int rc;
   citp_lib_context_t lib_context;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_chroot(path);
   }
@@ -2531,14 +2677,13 @@ OO_INTERCEPT(int, chroot,
   Log_CALL(ci_log("%s(\"%s\")", __FUNCTION__, path));
 
   Log_V(log("chroot intercepted"));
-  ci_setup_ipstack_params();     /* save values from /proc */
+  ci_setup_ipstack_params(); /* save values from /proc */
   ef_driver_save_fd();
   rc = ci_sys_chroot(path);
   citp_exit_lib(&lib_context, rc == 0);
   Log_CALL_RESULT(rc);
   return rc;
 }
-
 
 #if 0
 static void dump_args( char *const argv[] )
@@ -2548,7 +2693,7 @@ static void dump_args( char *const argv[] )
     ci_log( "  arg[%d]: \"%s\"", i, argv[i]);
 }
 #else
-# define dump_args(a)
+#define dump_args(a)
 #endif
 
 typedef int exec_fn_t(const char *filename, char *const argv[],
@@ -2559,30 +2704,33 @@ static int onload_exec(const char *path, char *const argv[],
                        const char *fname)
 {
   int rc;
-  char* const* new_env;
+  char *const *new_env;
   size_t env_bytes;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) )
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
     citp_do_init(CITP_INIT_ENVIRON);
 
   new_env = citp_environ_check_preload(envp, &env_bytes);
-  if( env_bytes ) {
-    void* e = alloca(env_bytes);
+  if (env_bytes)
+  {
+    void *e = alloca(env_bytes);
     new_env = e;
     citp_environ_make_preload(envp, e, env_bytes);
   }
 
   /* No citp_enter_lib() / citp_exit_lib() needed here */
-  Log_CALL(ci_log("%s(\"%s\", %p, %p)", fname, path,argv,envp));
-  if (!resolve_path) {
+  Log_CALL(ci_log("%s(\"%s\", %p, %p)", fname, path, argv, envp));
+  if (!resolve_path)
+  {
     Log_V(log("execve: %s", path));
     rc = ci_sys_execve(path, argv, new_env);
-  } else {
+  }
+  else
+  {
     Log_V(log("execvpe: %s", path));
     rc = ci_sys_execvpe(path, argv, new_env);
   }
-  Log_CALL(ci_log("%s returning %d (errno %d)", fname, rc, errno))
-  return rc;
+  Log_CALL(ci_log("%s returning %d (errno %d)", fname, rc, errno)) return rc;
 }
 
 OO_INTERCEPT(int, execve,
@@ -2591,13 +2739,11 @@ OO_INTERCEPT(int, execve,
   return onload_exec(path, argv, envp, CI_FALSE, __FUNCTION__);
 }
 
-
 OO_INTERCEPT(int, execv,
              (const char *path, char *const argv[]))
 {
   return onload_exec(path, argv, __environ, CI_FALSE, __FUNCTION__);
 }
-
 
 OO_INTERCEPT(int, execl,
              (const char *path, const char *arg, ...))
@@ -2606,12 +2752,11 @@ OO_INTERCEPT(int, execl,
   char **argv;
 
   va_start(args, arg);
-  argv = alloca(citp_environ_count_args(arg, args) * sizeof(char*));
+  argv = alloca(citp_environ_count_args(arg, args) * sizeof(char *));
   citp_environ_handle_args(argv, arg, args, NULL);
   va_end(args);
   return onload_exec(path, argv, __environ, CI_FALSE, __FUNCTION__);
 }
-
 
 OO_INTERCEPT(int, execlp,
              (const char *file, const char *arg, ...))
@@ -2620,12 +2765,11 @@ OO_INTERCEPT(int, execlp,
   char **argv;
 
   va_start(args, arg);
-  argv = alloca(citp_environ_count_args(arg, args) * sizeof(char*));
+  argv = alloca(citp_environ_count_args(arg, args) * sizeof(char *));
   citp_environ_handle_args(argv, arg, args, NULL);
   va_end(args);
   return onload_exec(file, argv, __environ, CI_TRUE, __FUNCTION__);
 }
-
 
 OO_INTERCEPT(int, execle,
              (const char *path, const char *arg, ...))
@@ -2634,12 +2778,11 @@ OO_INTERCEPT(int, execle,
   char **argv, **new_env;
 
   va_start(args, arg);
-  argv = alloca(citp_environ_count_args(arg, args) * sizeof(char*));
+  argv = alloca(citp_environ_count_args(arg, args) * sizeof(char *));
   citp_environ_handle_args(argv, arg, args, &new_env);
   va_end(args);
   return onload_exec(path, argv, new_env, CI_FALSE, __FUNCTION__);
 }
-
 
 OO_INTERCEPT(int, execvp,
              (const char *file, char *const argv[]))
@@ -2647,24 +2790,23 @@ OO_INTERCEPT(int, execvp,
   return onload_exec(file, argv, __environ, CI_TRUE, __FUNCTION__);
 }
 
-
 OO_INTERCEPT(int, execvpe,
              (const char *file, char *const argv[], char *const envp[]))
 {
   return onload_exec(file, argv, envp, CI_TRUE, __FUNCTION__);
 }
 
-
 OO_INTERCEPT(int, bproc_move,
              (int node))
 {
   static int (*sys_bproc_move)(int) = 0;
   int fd;
-  citp_fdinfo* fdinfo;
+  citp_fdinfo *fdinfo;
   int old_citp_log_fd = -1;
   int rc;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     sys_bproc_move = dlsym(RTLD_NEXT, "bproc_move");
     if (!sys_bproc_move)
@@ -2677,7 +2819,8 @@ OO_INTERCEPT(int, bproc_move,
   if (!sys_bproc_move)
     sys_bproc_move = dlsym(RTLD_NEXT, "bproc_move");
 
-  if (sys_bproc_move) {
+  if (sys_bproc_move)
+  {
     /* Flush out the FD table, closing all user-level sockets.
     ** This is safe because the process after migration loses all open file
     ** descriptors, we are just removing everything before the move.
@@ -2686,12 +2829,14 @@ OO_INTERCEPT(int, bproc_move,
     **  case if the move fails, ideally we need to be able to move with
     **  everything in place and tidy up afterwards.
     */
-    for (fd = 0; fd < citp_fdtable.inited_count; fd++) {
+    for (fd = 0; fd < citp_fdtable.inited_count; fd++)
+    {
       /* This is slow (taking and releasing the FD table lock lots) but it
       ** works.
       */
       fdinfo = citp_fdtable_lookup_noprobe(fd, 0);
-      if (fdinfo) {
+      if (fdinfo)
+      {
         close(fd);
         citp_fdinfo_release_ref(fdinfo, 0);
       }
@@ -2705,7 +2850,8 @@ OO_INTERCEPT(int, bproc_move,
     /* Stop the logging, we won't be abole to continue logging to a file
     ** descriptor after migration.
     */
-    if ((!CITP_OPTS.log_via_ioctl) && (citp.log_fd >= 0)) {
+    if ((!CITP_OPTS.log_via_ioctl) && (citp.log_fd >= 0))
+    {
       old_citp_log_fd = citp.log_fd;
       citp.log_fd = -1;
       __citp_fdtable_reserve(old_citp_log_fd, 0);
@@ -2745,15 +2891,17 @@ OO_INTERCEPT(long, syscall,
 
   Log_CALL(ci_log("%s(%ld)", __FUNCTION__, nr));
 
-#define NR(sc)               \
-  case __NR_##sc: {          \
-    void* p = onload_##sc;   \
+#define NR(sc)                               \
+  case __NR_##sc:                            \
+  {                                          \
+    void *p = onload_##sc;                   \
     return ((syscall_t)p)(a, b, c, d, e, f); \
   }
 
   typedef long (*syscall_t)(long, long, long, long, long, long);
-  switch( nr ) {
-    NR(setrlimit)   /* NB: libc's setrlimit() calls SYS_prlimit */
+  switch (nr)
+  {
+    NR(setrlimit) /* NB: libc's setrlimit() calls SYS_prlimit */
     NR(socket)
     NR(bind)
     NR(listen)
@@ -2799,16 +2947,15 @@ OO_INTERCEPT(long, syscall,
     NR(epoll_ctl)
     NR(epoll_wait)
     NR(epoll_pwait)
-    /* When adding new syscalls here, make sure to check that the libc API
-    matches the kernel API. It does for almost everything (on x86-64) but
-    there are a few exceptions.  */
-    default:
-      return syscall6(nr, a, b, c, d, e, f);
+  /* When adding new syscalls here, make sure to check that the libc API
+  matches the kernel API. It does for almost everything (on x86-64) but
+  there are a few exceptions.  */
+  default:
+    return syscall6(nr, a, b, c, d, e, f);
   }
 #undef NR
 }
 #endif
-
 
 OO_INTERCEPT(void, _exit, (int status))
 {
@@ -2821,7 +2968,6 @@ OO_INTERCEPT(void, _exit, (int status))
   oo_exit_hook(status << 8);
   return ci_sys__exit(status);
 }
-
 
 /* Glibc uses __sigaction, and all the following signal-related functions
  * are implemented via it:
@@ -2840,29 +2986,29 @@ OO_INTERCEPT(void, _exit, (int status))
 
 OO_INTERCEPT(int, sigaction,
              (int signum, const struct sigaction *act,
-              struct sigaction* oldact))
+              struct sigaction *oldact))
 {
   int rc;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_BASIC_SYSCALLS);
     return ci_sys_sigaction(signum, act, oldact);
   }
 
   Log_CALL(ci_log("%s(%d, %p, %p)", __FUNCTION__, signum, act, oldact));
-  if( act != NULL )
-    Log_CALL(ci_log("\tnew "OO_PRINT_SIGACTION_FMT,
+  if (act != NULL)
+    Log_CALL(ci_log("\tnew " OO_PRINT_SIGACTION_FMT,
                     OO_PRINT_SIGACTION_ARG(act)));
 
   rc = oo_do_sigaction(signum, act, oldact);
 
   Log_CALL_RESULT(rc);
-  if( rc == 0 && oldact != NULL )
-    Log_CALL(ci_log("\told "OO_PRINT_SIGACTION_FMT,
+  if (rc == 0 && oldact != NULL)
+    Log_CALL(ci_log("\told " OO_PRINT_SIGACTION_FMT,
                     OO_PRINT_SIGACTION_ARG(oldact)));
   return rc;
 }
-
 
 /* Communication beteen siginterrupt() and bsd_signal(). */
 static sigset_t oo_sigintr;
@@ -2873,7 +3019,8 @@ OO_INTERCEPT(int, siginterrupt,
   int rc;
   struct sigaction act;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
+  {
     citp_do_init(CITP_INIT_SYSCALLS);
     return ci_sys_siginterrupt(sig, flag);
   }
@@ -2881,23 +3028,25 @@ OO_INTERCEPT(int, siginterrupt,
   Log_CALL(ci_log("%s(%d, %d)", __FUNCTION__, sig, flag));
 
   rc = oo_do_sigaction(sig, NULL, &act);
-  if( rc < 0 )
+  if (rc < 0)
     goto out;
 
-  if( flag ) {
+  if (flag)
+  {
     act.sa_flags &= ~SA_RESTART;
     sigaddset(&oo_sigintr, sig);
   }
-  else {
+  else
+  {
     act.sa_flags |= SA_RESTART;
     sigdelset(&oo_sigintr, sig);
   }
 
   rc = oo_do_sigaction(sig, &act, NULL);
-  if( rc < 0 )
+  if (rc < 0)
     goto out;
 
- out:
+out:
   Log_CALL_RESULT(rc);
   return rc;
 }
@@ -2908,8 +3057,9 @@ OO_INTERCEPT(__sighandler_t, signal,
 {
   struct sigaction act, oact;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ||
-      handler == SIG_ERR ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ||
+      handler == SIG_ERR)
+  {
     /* handler == SIG_ERR should return with error; let's pass this case to
      * libc.
      */
@@ -2919,12 +3069,12 @@ OO_INTERCEPT(__sighandler_t, signal,
 
   Log_CALL(ci_log("%s(%d, %p)", __FUNCTION__, sig, handler));
   act.sa_handler = handler;
-  if( sigemptyset(&act.sa_mask) < 0 ||
-      sigaddset(&act.sa_mask, sig) < 0 )
+  if (sigemptyset(&act.sa_mask) < 0 ||
+      sigaddset(&act.sa_mask, sig) < 0)
     return SIG_ERR;
-  act.sa_flags = sigismember (&oo_sigintr, sig) ? 0 : SA_RESTART;
+  act.sa_flags = sigismember(&oo_sigintr, sig) ? 0 : SA_RESTART;
 
-  if( oo_do_sigaction(sig, &act, &oact) < 0 )
+  if (oo_do_sigaction(sig, &act, &oact) < 0)
     return SIG_ERR;
 
   Log_CALL_RESULT_PTR(oact.sa_handler);
@@ -2936,8 +3086,9 @@ OO_INTERCEPT(__sighandler_t, sysv_signal,
 {
   struct sigaction act, oact;
 
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ||
-      handler == SIG_ERR ) {
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) ||
+      handler == SIG_ERR)
+  {
     /* handler == SIG_ERR should return with error; let's pass this case to
      * libc.
      */
@@ -2947,11 +3098,11 @@ OO_INTERCEPT(__sighandler_t, sysv_signal,
 
   Log_CALL(ci_log("%s(%d, %p)", __FUNCTION__, sig, handler));
   act.sa_handler = handler;
-  if( sigemptyset(&act.sa_mask) < 0 )
+  if (sigemptyset(&act.sa_mask) < 0)
     return SIG_ERR;
   act.sa_flags = SA_ONESHOT | SA_NOMASK | SA_INTERRUPT;
 
-  if( oo_do_sigaction(sig, &act, &oact) < 0 )
+  if (oo_do_sigaction(sig, &act, &oact) < 0)
     return SIG_ERR;
 
   Log_CALL_RESULT_PTR(oact.sa_handler);
@@ -2963,7 +3114,7 @@ strong_alias(onload_sysv_signal, __sysv_signal);
 
 static void dns_intercept_pre(void)
 {
-  if( CI_UNLIKELY(citp.init_level < CITP_INIT_ALL) )
+  if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
     citp_do_init(CITP_INIT_SYSCALLS);
   ++oo_per_thread_get()->avoid_fds;
 }
@@ -2974,57 +3125,57 @@ static void dns_intercept_post(void)
   --oo_per_thread_get()->avoid_fds;
 }
 
-OO_INTERCEPT(struct hostent*, gethostbyname, (const char* a))
+OO_INTERCEPT(struct hostent *, gethostbyname, (const char *a))
 {
-  struct hostent* r;
+  struct hostent *r;
   dns_intercept_pre();
   r = ci_sys_gethostbyname(a);
   dns_intercept_post();
   return r;
 }
 
-OO_INTERCEPT(struct hostent*, gethostbyaddr, (const void* a, socklen_t b, int c))
+OO_INTERCEPT(struct hostent *, gethostbyaddr, (const void *a, socklen_t b, int c))
 {
-  struct hostent* r;
+  struct hostent *r;
   dns_intercept_pre();
   r = ci_sys_gethostbyaddr(a, b, c);
   dns_intercept_post();
   return r;
 }
 
-OO_INTERCEPT(void ,sethostent, (int a))
+OO_INTERCEPT(void, sethostent, (int a))
 {
   dns_intercept_pre();
   ci_sys_sethostent(a);
   dns_intercept_post();
 }
 
-OO_INTERCEPT(void ,endhostent, (void))
+OO_INTERCEPT(void, endhostent, (void))
 {
   dns_intercept_pre();
   ci_sys_endhostent();
   dns_intercept_post();
 }
 
-OO_INTERCEPT(struct hostent*, gethostent, (void))
+OO_INTERCEPT(struct hostent *, gethostent, (void))
 {
-  struct hostent* r;
+  struct hostent *r;
   dns_intercept_pre();
   r = ci_sys_gethostent();
   dns_intercept_post();
   return r;
 }
 
-OO_INTERCEPT(struct hostent*, gethostbyname2, (const char* a, int b))
+OO_INTERCEPT(struct hostent *, gethostbyname2, (const char *a, int b))
 {
-  struct hostent* r;
+  struct hostent *r;
   dns_intercept_pre();
   r = ci_sys_gethostbyname2(a, b);
   dns_intercept_post();
   return r;
 }
 
-OO_INTERCEPT(int, gethostent_r, (struct hostent* a, char* b, size_t c, struct hostent** d, int* e))
+OO_INTERCEPT(int, gethostent_r, (struct hostent * a, char *b, size_t c, struct hostent **d, int *e))
 {
   int r;
   dns_intercept_pre();
@@ -3033,7 +3184,7 @@ OO_INTERCEPT(int, gethostent_r, (struct hostent* a, char* b, size_t c, struct ho
   return r;
 }
 
-OO_INTERCEPT(int, gethostbyaddr_r, (const void* a, socklen_t b, int c, struct hostent* d, char* e, size_t f, struct hostent** g, int* h))
+OO_INTERCEPT(int, gethostbyaddr_r, (const void *a, socklen_t b, int c, struct hostent *d, char *e, size_t f, struct hostent **g, int *h))
 {
   int r;
   dns_intercept_pre();
@@ -3042,7 +3193,7 @@ OO_INTERCEPT(int, gethostbyaddr_r, (const void* a, socklen_t b, int c, struct ho
   return r;
 }
 
-OO_INTERCEPT(int, gethostbyname_r, (const char* a, struct hostent* b, char* c, size_t d, struct hostent** e, int* f))
+OO_INTERCEPT(int, gethostbyname_r, (const char *a, struct hostent *b, char *c, size_t d, struct hostent **e, int *f))
 {
   int r;
   dns_intercept_pre();
@@ -3051,7 +3202,7 @@ OO_INTERCEPT(int, gethostbyname_r, (const char* a, struct hostent* b, char* c, s
   return r;
 }
 
-OO_INTERCEPT(int, gethostbyname2_r, (const char* a, int b, struct hostent* c, char* d, size_t e, struct hostent** f, int* g))
+OO_INTERCEPT(int, gethostbyname2_r, (const char *a, int b, struct hostent *c, char *d, size_t e, struct hostent **f, int *g))
 {
   int r;
   dns_intercept_pre();
@@ -3060,7 +3211,7 @@ OO_INTERCEPT(int, gethostbyname2_r, (const char* a, int b, struct hostent* c, ch
   return r;
 }
 
-OO_INTERCEPT(int, getaddrinfo, (const char* a, const char* b, const struct addrinfo* c, struct addrinfo** d))
+OO_INTERCEPT(int, getaddrinfo, (const char *a, const char *b, const struct addrinfo *c, struct addrinfo **d))
 {
   int r;
   dns_intercept_pre();
@@ -3069,7 +3220,7 @@ OO_INTERCEPT(int, getaddrinfo, (const char* a, const char* b, const struct addri
   return r;
 }
 
-OO_INTERCEPT(int, getnameinfo, (const struct sockaddr* a, socklen_t b, char* c, socklen_t d, char* e, socklen_t f, int g))
+OO_INTERCEPT(int, getnameinfo, (const struct sockaddr *a, socklen_t b, char *c, socklen_t d, char *e, socklen_t f, int g))
 {
   int r;
   dns_intercept_pre();
@@ -3078,7 +3229,7 @@ OO_INTERCEPT(int, getnameinfo, (const struct sockaddr* a, socklen_t b, char* c, 
   return r;
 }
 
-OO_INTERCEPT(int, getaddrinfo_a, (int a, struct gaicb* b[], int c, struct sigevent* d))
+OO_INTERCEPT(int, getaddrinfo_a, (int a, struct gaicb *b[], int c, struct sigevent *d))
 {
   int r;
   dns_intercept_pre();
@@ -3087,7 +3238,7 @@ OO_INTERCEPT(int, getaddrinfo_a, (int a, struct gaicb* b[], int c, struct sigeve
   return r;
 }
 
-OO_INTERCEPT(int, gai_suspend, (const struct gaicb* const a[], int b, const struct timespec* c))
+OO_INTERCEPT(int, gai_suspend, (const struct gaicb *const a[], int b, const struct timespec *c))
 {
   int r;
   dns_intercept_pre();
@@ -3095,7 +3246,6 @@ OO_INTERCEPT(int, gai_suspend, (const struct gaicb* const a[], int b, const stru
   dns_intercept_post();
   return r;
 }
-
 
 /*
  * vi: sw=2:ai:aw

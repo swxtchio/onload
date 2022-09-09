@@ -21,7 +21,6 @@
 int oo_cp_create(int fd, struct oo_cplane_handle *cp, enum cp_sync_mode mode,
                  ci_uint32 flags)
 {
-  ci_log("KYLE WAS HERE CP create");
   static const ci_uint32 SUPPORTED_FLAGS = CP_CREATE_FLAGS_INIT_NET;
 
   size_t fwd_offset, fwd_len, fwd_rw_offset, fwd_rw_len;

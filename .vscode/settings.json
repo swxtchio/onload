@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "pkt_p.h": "c"
+        "pkt_p.h": "c",
+        "*.tmpl": "c"
     }
 }

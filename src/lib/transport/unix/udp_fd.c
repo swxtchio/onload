@@ -104,7 +104,6 @@ static int citp_udp_socket(int domain, int type, int protocol)
   fdi = &epi->fdinfo;
   citp_fdinfo_init(fdi, &citp_udp_protocol_impl);
 
-  Log_U(log(LPF "KYLE WAS HERE UDP SOCKET2"));
   rc = citp_netif_alloc_and_init(&fd, &ni);
   if (rc != 0)
   {

@@ -184,7 +184,6 @@ int onload_move_fd(int fd)
   Log_CALL(ci_log("%s(%d)", __func__, fd));
   citp_enter_lib(&lib_context);
 
-  LOG_U(ci_log("KYLE WAS HERE move fd"));
   rc = citp_netif_alloc_and_init(&fd_ni, &ni);
   if (rc != 0)
     goto out;
@@ -346,7 +345,6 @@ static int oo_extensions_version_check(void)
 int oo_extensions_init(void)
 {
   int rc;
-
   if ((rc = oo_extensions_version_check()) != 0)
     return rc;
 

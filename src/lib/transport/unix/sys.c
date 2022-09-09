@@ -1,31 +1,32 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2003-2020 Xilinx, Inc. */
 /**************************************************************************\
-*//*! \file
-** <L5_PRIVATE L5_SOURCE>
-** \author  
-**  \brief  
-**   \date  
-**    \cop  (c) Level 5 Networks Limited.
-** </L5_PRIVATE>
-*//*
+ */
+/*! \file
+ ** <L5_PRIVATE L5_SOURCE>
+ ** \author
+ **  \brief
+ **   \date
+ **    \cop  (c) Level 5 Networks Limited.
+ ** </L5_PRIVATE>
+ */
+/*
 \**************************************************************************/
-  
+
 /*! \cidoxg_lib_transport_unix */
- 
+
 /* This is required for RTLD_NEXT from dlfcn.h */
 #define _GNU_SOURCE
 
 #include <internal.h>
 #include <dlfcn.h>
 
-static int load_sym_fail(const char* sym)
+static int load_sym_fail(const char *sym)
 {
   Log_E(log("citp_find_calls: ERROR: dlsym(\"%s\") failed '%s'",
             sym, dlerror()));
   return -1;
 }
-
 
 static int
 citp_find_all_sys_calls(void)
@@ -45,53 +46,53 @@ citp_find_all_sys_calls(void)
   */
 
 #ifndef RTLD_NEXT
-  void* dlhandle;
-  const char* lib = "libc.so.6";  /* ?? */
+  void *dlhandle;
+  const char *lib = "libc.so.6"; /* ?? */
   dlhandle = dlopen(lib, RTLD_NOW | RTLD_GLOBAL);
-  if( dlhandle == 0 ) {    
+  if (dlhandle == 0)
+  {
     Log_E(log("%s: ERROR: dlopen(%s) failed dlerror=%s",
               __FUNCTION__, lib, dlerror()));
     return -1;
   }
-# define CI_MK_DECL_OPTIONAL(ret, fn, args)     \
+#define CI_MK_DECL_OPTIONAL(ret, fn, args) \
   ci_sys_##fn = dlsym(dlhandle, #fn);
 #else
-# define CI_MK_DECL_OPTIONAL(ret, fn, args)                             \
-  ci_sys_##fn = dlsym(RTLD_NEXT, #fn);                                  \
-  if( ci_sys_##fn == NULL ) {                                           \
-    /*                                                                  \
-     * NOTE: the socket tester uses dlopen() on libcitransport.so and so \
+#define CI_MK_DECL_OPTIONAL(ret, fn, args)                                 \
+  ci_sys_##fn = dlsym(RTLD_NEXT, #fn);                                     \
+  if (ci_sys_##fn == NULL)                                                 \
+  {                                                                        \
+    /*                                                                     \
+     * NOTE: the socket tester uses dlopen() on libcitransport.so and so   \
      *       lookup using RTLD_NEXT may fail in this case. If it does then \
-     *       try RTLD_DEFAULT to search all libraries.                  \
-     */                                                                 \
-    ci_sys_##fn = dlsym(RTLD_DEFAULT, #fn);                             \
+     *       try RTLD_DEFAULT to search all libraries.                     \
+     */                                                                    \
+    ci_sys_##fn = dlsym(RTLD_DEFAULT, #fn);                                \
   }
 #endif
-#define CI_MK_DECL(ret, fn, args)                                       \
-  CI_MK_DECL_OPTIONAL(ret, fn, args)                                    \
-  if( ci_sys_##fn == NULL )                                             \
+#define CI_MK_DECL(ret, fn, args)    \
+  CI_MK_DECL_OPTIONAL(ret, fn, args) \
+  if (ci_sys_##fn == NULL)           \
     return load_sym_fail(#fn);
 
 #include <onload/declare_syscalls.h.tmpl>
 
 #ifndef RTLD_NEXT
-  if( dlclose(dlhandle) != 0 )
+  if (dlclose(dlhandle) != 0)
     Log_E(log("%s: ERROR: dlclose != 0", __FUNCTION__));
 #endif
 
   return 0;
 }
 
-
-extern int __open(const char*, int, ...);
-extern ssize_t __read(int, void*, size_t);
-extern ssize_t __write(int, const void*, size_t);
+extern int __open(const char *, int, ...);
+extern ssize_t __read(int, void *, size_t);
+extern ssize_t __write(int, const void *, size_t);
 extern int __close(int);
 extern int __sigaction(int signum, const struct sigaction *act,
-                       struct sigaction* oldact);
+                       struct sigaction *oldact);
 
-int
-citp_basic_syscall_init(void)
+int citp_basic_syscall_init(void)
 {
   /* This is a small set of basic syscalls separated from the rest in order
    * to resolve order-of-initialization problems with other preload libraries.
@@ -115,9 +116,7 @@ citp_basic_syscall_init(void)
   return 0;
 }
 
-
-int
-citp_syscall_init(void)
+int citp_syscall_init(void)
 {
   if (citp_find_all_sys_calls() < 0)
     return -1;
@@ -125,9 +124,8 @@ citp_syscall_init(void)
   return 0;
 }
 
-
 #include <sys/stat.h>
-#define ONLOAD_DEV       "/dev/onload"
-#define citp_major(dev) ((dev) & 0xff00)
+#define ONLOAD_DEV "/dev/onload"
+#define citp_major(dev) ((dev)&0xff00)
 
 /*! \cidoxg_end */

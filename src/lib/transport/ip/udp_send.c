@@ -410,13 +410,11 @@ static int do_sys_sendmsg(tcp_helper_endpoint_t *ep, oo_os_file os_sock,
   memset(&kmsg, 0, sizeof(kmsg));
   if (user_buffers)
   {
-    LOG_E(ci_log("KYLE %s: UDP SEND user buffers", __FUNCTION__));
     oo_msg_iov_init(&kmsg, WRITE, msg->msg_iov, msg->msg_iovlen, bytes);
     bytes = sock_sendmsg(sock, &kmsg);
   }
   else
   {
-    LOG_E(ci_log("KYLE %s: UDP SEND kernel buffers", __FUNCTION__));
     bytes = kernel_sendmsg(sock, &kmsg,
                            (struct kvec *)msg->msg_iov, msg->msg_iovlen,
                            bytes);
@@ -684,7 +682,6 @@ static void ci_udp_sendmsg_send(ci_netif *ni, ci_udp_state *us,
   ci_addr_t pkt_daddr = TX_PKT_DADDR(af, pkt);
   unsigned tot_len;
   int old_ipcache_updated = (sinf == NULL) ? 0 : sinf->old_ipcache_updated;
-  LOG_E(ci_log("CI UDP SENDMSG SEND pkt: %d", pkt->buf_len));
 
   ci_assert(ci_netif_is_locked(ni));
 
@@ -768,7 +765,7 @@ done_hdr_update:
     }
     break;
   case retrrc_nomac:
-    ipcache_onloadable = 0;
+    ipcache_onloadable = 1;
     break;
   default:
     goto send_pkt_via_os;
@@ -1530,7 +1527,6 @@ back_to_fast_path:
 
     if (si_trylock_and_inc(ni, sinf, us->stats.n_tx_lock_snd))
     {
-      LOG_U(ci_log("SEND MESG SEND"));
       ci_udp_sendmsg_send(ni, us, pf.pkt, flags, sinf);
       ci_netif_pkt_release(ni, pf.pkt);
       ci_netif_unlock(ni);
@@ -1538,7 +1534,6 @@ back_to_fast_path:
     }
     else
     {
-      LOG_U(ci_log("SEND MESG ASYNC Q"));
       ci_udp_sendmsg_async_q_enqueue(ni, us, pf.pkt, flags);
     }
   }

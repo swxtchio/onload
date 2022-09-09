@@ -270,8 +270,7 @@ void __ci_netif_send(ci_netif *netif, ci_ip_pkt_fmt *pkt)
              pkt->buf_len, CI_MAC_PRINTF_ARGS(oo_ether_dhost(pkt))));
 
   intf_i = pkt->intf_i;
-  char *start = (char *)oo_ether_hdr(pkt);
-  rc = dpdk_send(start, pkt->buf_len);
+  rc = dpdk_send(pkt);
   if (rc < 0)
   {
     LOG_NT(log("FAILED TO DPDK SEND"));
