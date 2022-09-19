@@ -264,10 +264,12 @@ void __ci_netif_send(ci_netif *netif, ci_ip_pkt_fmt *pkt)
 
   ___ci_netif_dmaq_insert_prep_pkt(netif, pkt);
 
-  LOG_NT(log("%s: [%d] id=%d nseg=%d 0:[" EF_ADDR_FMT ":%d] dhost=" CI_MAC_PRINTF_FORMAT, __FUNCTION__, NI_ID(netif),
-             OO_PKT_FMT(pkt), pkt->n_buffers,
-             pkt_dma_addr(netif, pkt, pkt->intf_i),
-             pkt->buf_len, CI_MAC_PRINTF_ARGS(oo_ether_dhost(pkt))));
+  /*
+    LOG_NT(log("%s: [%d] id=%d nseg=%d 0:[" EF_ADDR_FMT ":%d] dhost=" CI_MAC_PRINTF_FORMAT, __FUNCTION__, NI_ID(netif),
+               OO_PKT_FMT(pkt), pkt->n_buffers,
+               pkt_dma_addr(netif, pkt, pkt->intf_i),
+               pkt->buf_len, CI_MAC_PRINTF_ARGS(oo_ether_dhost(pkt))));
+               */
 
   intf_i = pkt->intf_i;
   rc = dpdk_send(pkt);

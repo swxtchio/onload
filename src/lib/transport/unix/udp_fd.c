@@ -435,7 +435,7 @@ static int citp_udp_send(citp_fdinfo *fdinfo, const struct msghdr *msg,
   citp_sock_fdi *epi = fdi_to_sock_fdi(fdinfo);
   ci_udp_iomsg_args a;
   int rc;
-  Log_U(log(LPF "send(%d, msg, %#x)", fdinfo->fd, (unsigned)flags));
+  // Log_U(log(LPF "send(%d, msg, %#x)", fdinfo->fd, (unsigned)flags));
 
   ci_assert(msg != NULL);
 

@@ -3015,6 +3015,11 @@ int ci_dpdk_init(void)
   return dpdk_init();
 }
 
+int ci_dpdk_shutdown(void)
+{
+  return dpdk_cleanup();
+}
+
 int ci_netif_ctor(ci_netif *ni, ef_driver_handle fd, const char *stack_name,
                   unsigned flags)
 {

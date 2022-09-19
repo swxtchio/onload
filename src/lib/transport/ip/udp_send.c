@@ -1567,6 +1567,7 @@ no_space_or_too_big:
     return;
   }
 
+  LOG_E(ci_log("NO SPACE SENDING"));
   /* There may be insufficient room in the sendq. */
   rc = ci_udp_sendmsg_wait(ni, us, bytes_to_send, flags, sinf);
   if (CI_UNLIKELY(rc != 0))
@@ -1605,7 +1606,7 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
   int rc;
 
   us->s.pkt.status = retrrc_nomac;
-  LOG_U(ci_log("%s UDP SEND", __FUNCTION__));
+  // LOG_U(ci_log("%s UDP SEND", __FUNCTION__));
 
   /* Caller should have checked this. */
   ci_assert(msg != NULL);
@@ -1850,7 +1851,7 @@ no_error:
 #endif
 
   ci_assert_gt(sinf.ipcache.mtu, 0);
-  LOG_U(ci_log("%s SEND VIA ONLOAD", __FUNCTION__));
+  // LOG_U(ci_log("%s SEND VIA ONLOAD", __FUNCTION__));
   ci_udp_sendmsg_onload(ni, us, msg, flags, &sinf);
   if (sinf.stack_locked)
     ci_netif_unlock(ni);

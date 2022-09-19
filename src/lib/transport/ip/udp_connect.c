@@ -298,6 +298,7 @@ int ci_udp_bind_conclude(citp_socket *ep, const struct sockaddr *addr,
   /* OS source addrs have already been handed-over, so this must be one of
    * our src addresses.
    */
+  LOG_E(log("SETTING FILTERS"));
   rc = ci_udp_set_filters(ep, us);
   ci_assert(!UDP_GET_FLAG(us, CI_UDPF_EF_BIND));
   /*! \todo FIXME isn't the port the thing to be testing here? */
@@ -573,6 +574,7 @@ int ci_udp_connect_conclude(citp_socket *ep, ci_fd_t fd,
 
   if (onloadable)
   {
+    LOG_E(log("SETTING UDP FILTERS"));
     if ((rc = ci_udp_set_filters(ep, us)) != 0)
     {
       /* Failed to set filters.  Most likely we've run out of h/w filters. */

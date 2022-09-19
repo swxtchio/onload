@@ -133,6 +133,7 @@ void oo_exit_hook(int status)
   exit_lock_all_stacks();
 
   CITP_FDTABLE_UNLOCK_RD();
+  ci_dpdk_shutdown();
   citp_exit_lib(&lib_context, 1);
 }
 

@@ -9,7 +9,6 @@
 ** </L5_PRIVATE>
 \**************************************************************************/
 
-
 #include "ip_internal.h"
 #include <ci/tools/utils.h>
 #include <ci/efhw/device.h>
@@ -18,13 +17,12 @@
 #define LPF "NETIF "
 
 #if CI_CFG_DETAILED_CHECKS
-char* CI_NETIF_PTR(ci_netif* ni, oo_p off)
+char *CI_NETIF_PTR(ci_netif *ni, oo_p off)
 {
   ASSERT_VALID_NETIF_ADDR(ni, off, 1);
   return __CI_NETIF_PTR(ni, off);
 }
 #endif
-
 
 #if OO_DO_STACK_POLL
 /*--------------------------------------------------------------------
@@ -34,22 +32,24 @@ char* CI_NETIF_PTR(ci_netif* ni, oo_p off)
  *--------------------------------------------------------------------*/
 
 /*! set or clear global netif "timeout state" timer */
-ci_inline void ci_netif_timeout_set_timer(ci_netif* ni, ci_iptime_t prev_time)
+ci_inline void ci_netif_timeout_set_timer(ci_netif *ni, ci_iptime_t prev_time)
 {
   ci_iptime_t time = 0; /* shut up gcc */
   int i, found = 0;
 
-  for( i = 0; i < OO_TIMEOUT_Q_MAX; i++ ) {
-    ci_tcp_state* ts;
+  for (i = 0; i < OO_TIMEOUT_Q_MAX; i++)
+  {
+    ci_tcp_state *ts;
     struct oo_p_dllink_state timeout_q =
-                             oo_p_dllink_ptr(ni, &ni->state->timeout_q[i]);
+        oo_p_dllink_ptr(ni, &ni->state->timeout_q[i]);
 
-    if( oo_p_dllink_is_empty(ni, timeout_q) )
+    if (oo_p_dllink_is_empty(ni, timeout_q))
       continue;
     ts = TCP_STATE_FROM_LINK(oo_p_dllink_statep(ni, timeout_q.l->next).l);
-    if( TIME_LE(ts->t_last_sent, prev_time) )
+    if (TIME_LE(ts->t_last_sent, prev_time))
       return;
-    if( !found || TIME_LT(ts->t_last_sent, time) ) {
+    if (!found || TIME_LT(ts->t_last_sent, time))
+    {
       found = 1;
       time = ts->t_last_sent;
     }
@@ -57,26 +57,25 @@ ci_inline void ci_netif_timeout_set_timer(ci_netif* ni, ci_iptime_t prev_time)
   /* We can be called both from timer handler (when the timer is not
    * running) and from RX handler (the timer is running).
    * Take care about all cases. */
-  if( ! found )
+  if (!found)
     ci_ip_timer_clear(ni, &ni->state->timeout_tid);
-  else if( ci_ip_timer_pending(ni, &ni->state->timeout_tid) )
+  else if (ci_ip_timer_pending(ni, &ni->state->timeout_tid))
     ci_ip_timer_modify(ni, &ni->state->timeout_tid, time);
   else
     ci_ip_timer_set(ni, &ni->state->timeout_tid, time);
 }
 
-
 /*! add a state to the timeout list */
-ci_inline void ci_netif_timeout_add(ci_netif* ni, ci_tcp_state* ts, int idx)
+ci_inline void ci_netif_timeout_add(ci_netif *ni, ci_tcp_state *ts, int idx)
 {
   int is_first;
   struct oo_p_dllink_state my_list =
-                           oo_p_dllink_ptr(ni, &ni->state->timeout_q[idx]);
+      oo_p_dllink_ptr(ni, &ni->state->timeout_q[idx]);
   struct oo_p_dllink_state other_list =
-                           oo_p_dllink_ptr(ni, &ni->state->timeout_q[1-idx]);
+      oo_p_dllink_ptr(ni, &ni->state->timeout_q[1 - idx]);
   struct oo_p_dllink_state link =
-                           oo_p_dllink_sb(ni, &ts->s.b, &ts->timeout_q_link);
-  ci_tcp_state* other_ts;
+      oo_p_dllink_sb(ni, &ts->s.b, &ts->timeout_q_link);
+  ci_tcp_state *other_ts;
 
   OO_P_DLLINK_ASSERT_EMPTY(ni, link);
 
@@ -84,33 +83,34 @@ ci_inline void ci_netif_timeout_add(ci_netif* ni, ci_tcp_state* ts, int idx)
   oo_p_dllink_add_tail(ni, my_list, link);
 
   /* Set up the timer */
-  if( ! is_first )
+  if (!is_first)
     return;
 
-  if( oo_p_dllink_is_empty(ni, other_list) ) {
+  if (oo_p_dllink_is_empty(ni, other_list))
+  {
     ci_ip_timer_set(ni, &ni->state->timeout_tid, ts->t_last_sent);
     return;
   }
 
   other_ts = TCP_STATE_FROM_LINK(oo_p_dllink_statep(ni, other_list.l->next).l);
-  if( TIME_LT(ts->t_last_sent, other_ts->t_last_sent) )
+  if (TIME_LT(ts->t_last_sent, other_ts->t_last_sent))
     ci_ip_timer_modify(ni, &ni->state->timeout_tid, ts->t_last_sent);
   else
     ci_ip_timer_modify(ni, &ni->state->timeout_tid, other_ts->t_last_sent);
 }
 
 /*! remove a state from the timeout list */
-void ci_netif_timeout_remove(ci_netif* ni, ci_tcp_state* ts)
+void ci_netif_timeout_remove(ci_netif *ni, ci_tcp_state *ts)
 {
   int is_first, idx;
   struct oo_p_dllink_state link =
-                           oo_p_dllink_sb(ni, &ts->s.b, &ts->timeout_q_link);
+      oo_p_dllink_sb(ni, &ts->s.b, &ts->timeout_q_link);
 
-  ci_assert( (ts->s.b.state == CI_TCP_TIME_WAIT) ||
-              ci_tcp_is_timeout_orphan(ts));
-  ci_assert( !oo_p_dllink_is_empty(ni, link) );
+  ci_assert((ts->s.b.state == CI_TCP_TIME_WAIT) ||
+            ci_tcp_is_timeout_orphan(ts));
+  ci_assert(!oo_p_dllink_is_empty(ni, link));
 
-  if( ts->s.b.state == CI_TCP_TIME_WAIT )
+  if (ts->s.b.state == CI_TCP_TIME_WAIT)
     idx = OO_TIMEOUT_Q_TIMEWAIT;
   else
     idx = OO_TIMEOUT_Q_FINWAIT;
@@ -120,25 +120,25 @@ void ci_netif_timeout_remove(ci_netif* ni, ci_tcp_state* ts)
   oo_p_dllink_del_init(ni, link);
 
   /* if needed re-set or clear timer */
-  if( ! is_first )
+  if (!is_first)
     return;
 
   ci_netif_timeout_set_timer(ni, ts->t_last_sent);
 }
 
 /*! timeout a state from the list */
-void ci_netif_timeout_leave(ci_netif* netif, ci_tcp_state* ts)
+void ci_netif_timeout_leave(ci_netif *netif, ci_tcp_state *ts)
 {
   ci_assert(netif);
   ci_assert(ts);
-  ci_assert( (ts->s.b.state == CI_TCP_TIME_WAIT) ||
-              ci_tcp_is_timeout_orphan(ts) );
+  ci_assert((ts->s.b.state == CI_TCP_TIME_WAIT) ||
+            ci_tcp_is_timeout_orphan(ts));
 
 #ifndef NDEBUG
   if (ts->s.b.state == CI_TCP_TIME_WAIT)
-      LOG_TC(log(LPF "%d TIME_WAIT->CLOSED (2MSL expired)", S_FMT(ts)));
+    LOG_TC(log(LPF "%d TIME_WAIT->CLOSED (2MSL expired)", S_FMT(ts)));
   else
-      LOG_TC(log(LPF "%d Droping ORPHANed %s", S_FMT(ts), state_str(ts)));
+    LOG_TC(log(LPF "%d Droping ORPHANed %s", S_FMT(ts), state_str(ts)));
 #endif
 
   /* drop will call ci_netif_timeout_remove;
@@ -150,7 +150,7 @@ void ci_netif_timeout_leave(ci_netif* netif, ci_tcp_state* ts)
     this list when we are low on tcp states */
 /* todo: pass listening socket as a parameter
  * if we are satisfyed by a cached ep */
-void ci_netif_timeout_reap(ci_netif* ni)
+void ci_netif_timeout_reap(ci_netif *ni)
 {
   int i;
   int reaped = 0;
@@ -159,23 +159,27 @@ void ci_netif_timeout_reap(ci_netif* ni)
   ci_assert(ci_netif_is_locked(ni));
   ci_assert(OO_SP_IS_NULL(ni->state->free_eps_head));
 
-  for( i = 0; i < OO_TIMEOUT_Q_MAX; i++ ) {
+  for (i = 0; i < OO_TIMEOUT_Q_MAX; i++)
+  {
     struct oo_p_dllink_state list =
-                             oo_p_dllink_ptr(ni, &ni->state->timeout_q[i]);
+        oo_p_dllink_ptr(ni, &ni->state->timeout_q[i]);
     struct oo_p_dllink_state l, tmp;
 
-    oo_p_dllink_for_each_safe(ni, l, tmp, list) {
-      ci_tcp_state* ts = TCP_STATE_FROM_LINK(l.l);
+    oo_p_dllink_for_each_safe(ni, l, tmp, list)
+    {
+      ci_tcp_state *ts = TCP_STATE_FROM_LINK(l.l);
 
 #if CI_CFG_FD_CACHING
-      if( ts->s.b.sb_aflags & (CI_SB_AFLAG_ORPHAN | CI_SB_AFLAG_IN_CACHE) ) {
+      if (ts->s.b.sb_aflags & (CI_SB_AFLAG_ORPHAN | CI_SB_AFLAG_IN_CACHE))
+      {
 #else
-      if( ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN ) {
+      if (ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN)
+      {
 #endif
         LOG_NV(log(LPF "Reaping %d from %s", S_FMT(ts), state_str(ts)));
         ci_netif_timeout_leave(ni, ts);
         CITP_STATS_NETIF(++ni->state->stats.timewait_reap);
-        if( OO_SP_NOT_NULL(ni->state->free_eps_head) )
+        if (OO_SP_NOT_NULL(ni->state->free_eps_head))
           return;
 
         /* We've probably reaped a cached connection,
@@ -185,13 +189,12 @@ void ci_netif_timeout_reap(ci_netif* ni)
     }
   }
 
-  if( ! reaped )
+  if (!reaped)
     LOG_U(log(LPF "No more connections to reap from TIME_WAIT/FIN_WAIT2"));
 }
 
 /*! this is the timeout timer callback function */
-void
-ci_netif_timeout_state(ci_netif* ni)
+void ci_netif_timeout_state(ci_netif *ni)
 {
   int i;
 
@@ -199,17 +202,19 @@ ci_netif_timeout_state(ci_netif* ni)
 
   /* check last active state of each connection in TIME_WAIT */
 
-  for( i = 0; i < OO_TIMEOUT_Q_MAX; i++ ) {
-    ci_tcp_state* ts;
+  for (i = 0; i < OO_TIMEOUT_Q_MAX; i++)
+  {
+    ci_tcp_state *ts;
     struct oo_p_dllink_state list =
-                             oo_p_dllink_ptr(ni, &ni->state->timeout_q[i]);
+        oo_p_dllink_ptr(ni, &ni->state->timeout_q[i]);
 
-    while( ! oo_p_dllink_is_empty(ni, list) ) {
+    while (!oo_p_dllink_is_empty(ni, list))
+    {
       ts = TCP_STATE_FROM_LINK(oo_p_dllink_statep(ni, list.l->next).l);
-      ci_assert( (ts->s.b.state == CI_TCP_TIME_WAIT) ||
-                  ci_tcp_is_timeout_orphan(ts) );
+      ci_assert((ts->s.b.state == CI_TCP_TIME_WAIT) ||
+                ci_tcp_is_timeout_orphan(ts));
 
-      if( TIME_GT(ts->t_last_sent, ci_ip_time_now(ni)) )
+      if (TIME_GT(ts->t_last_sent, ci_ip_time_now(ni)))
         break; /* break from the inner loop */
 
       /* ci_netif_timeout_leave() calls ci_tcp_drop() calls
@@ -235,26 +240,24 @@ void ci_netif_timeout_restart(ci_netif *ni, ci_tcp_state *ts)
 {
   int is_tw = (ts->s.b.state == CI_TCP_TIME_WAIT);
   ci_assert(ts);
-  ci_assert( is_tw || ci_tcp_is_timeout_orphan(ts));
+  ci_assert(is_tw || ci_tcp_is_timeout_orphan(ts));
 
   /* take it off the list */
   ci_netif_timeout_remove(ni, ts);
   /* store time to leave TIMEWAIT state */
   ts->t_last_sent = ci_ip_time_now(ni) +
-      ( is_tw ?
-        NI_CONF(ni).tconst_2msl_time : NI_CONF(ni).tconst_fin_timeout );
+                    (is_tw ? NI_CONF(ni).tconst_2msl_time : NI_CONF(ni).tconst_fin_timeout);
   /* add to list */
   ci_netif_timeout_add(
-                ni, ts,
-                is_tw ?  OO_TIMEOUT_Q_TIMEWAIT : OO_TIMEOUT_Q_FINWAIT);
+      ni, ts,
+      is_tw ? OO_TIMEOUT_Q_TIMEWAIT : OO_TIMEOUT_Q_FINWAIT);
 }
-
 
 /*
 ** - add a connection to the timewait queue,
 ** - stop its timers
 */
-void ci_netif_timewait_enter(ci_netif* ni, ci_tcp_state* ts)
+void ci_netif_timewait_enter(ci_netif *ni, ci_tcp_state *ts)
 {
   ci_assert(ts);
 
@@ -270,7 +273,8 @@ void ci_netif_timewait_enter(ci_netif* ni, ci_tcp_state* ts)
   /* called before the state is changed to TIME_WAIT */
   ci_assert(ts->s.b.state != CI_TCP_TIME_WAIT);
   /* if already in the timeout list */
-  if ( ci_tcp_is_timeout_orphan(ts) ) {
+  if (ci_tcp_is_timeout_orphan(ts))
+  {
     ci_netif_timeout_remove(ni, ts);
   }
   OO_P_DLLINK_ASSERT_EMPTY_SB(ni, &ts->s.b, &ts->timeout_q_link);
@@ -283,26 +287,28 @@ void ci_netif_timewait_enter(ci_netif* ni, ci_tcp_state* ts)
   ci_netif_timeout_add(ni, ts, OO_TIMEOUT_Q_TIMEWAIT);
 }
 
-
-int ci_netif_timewait_try_to_free_filter(ci_netif* ni)
+int ci_netif_timewait_try_to_free_filter(ci_netif *ni)
 {
   int i;
   int found = 0;
 
   ci_assert(ci_netif_is_locked(ni));
 
-  for( i = 0; i < OO_TIMEOUT_Q_MAX; i++ ) {
+  for (i = 0; i < OO_TIMEOUT_Q_MAX; i++)
+  {
     struct oo_p_dllink_state list = oo_p_dllink_ptr(ni, &ni->state->timeout_q[i]);
     struct oo_p_dllink_state l, tmp;
 
-    oo_p_dllink_for_each_safe(ni, l, tmp, list) {
-      ci_tcp_state* ts = TCP_STATE_FROM_LINK(l.l);
+    oo_p_dllink_for_each_safe(ni, l, tmp, list)
+    {
+      ci_tcp_state *ts = TCP_STATE_FROM_LINK(l.l);
 
-      if( ts->s.s_flags & CI_SOCK_FLAG_FILTER ) {
+      if (ts->s.s_flags & CI_SOCK_FLAG_FILTER)
+      {
         /* No cached sockets here: orphaned or timewait only.
          * They really free the hw filter when we drop them. */
-        ci_assert( (ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN) ||
-                   ts->s.b.state == CI_TCP_TIME_WAIT );
+        ci_assert((ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN) ||
+                  ts->s.b.state == CI_TCP_TIME_WAIT);
 
         ci_netif_timeout_leave(ni, ts);
         CITP_STATS_NETIF(++ni->state->stats.timewait_reap_filter);
@@ -313,17 +319,16 @@ int ci_netif_timewait_try_to_free_filter(ci_netif* ni)
          * We reap ALL time-wait sockets in hope they'll help us.
          * Reaping finwait&friends is a more sensitive action - so we reap
          * one and go away. */
-        if( i == OO_TIMEOUT_Q_FINWAIT )
+        if (i == OO_TIMEOUT_Q_FINWAIT)
           return 1;
         found = 1;
       }
     }
-    if( found )
+    if (found)
       return 1;
   }
   return 0;
 }
-
 
 /*--------------------------------------------------------------------
  *
@@ -332,14 +337,14 @@ int ci_netif_timewait_try_to_free_filter(ci_netif* ni)
  *--------------------------------------------------------------------*/
 
 /*! add a state to the fin timeout list */
-void ci_netif_fin_timeout_enter(ci_netif* ni, ci_tcp_state* ts)
+void ci_netif_fin_timeout_enter(ci_netif *ni, ci_tcp_state *ts)
 {
   struct oo_p_dllink_state link =
-                           oo_p_dllink_sb(ni, &ts->s.b, &ts->timeout_q_link);
+      oo_p_dllink_sb(ni, &ts->s.b, &ts->timeout_q_link);
 
   /* check endpoint is an orphan */
 #if CI_CFG_FD_CACHING
-  ci_assert(ts->s.b.sb_aflags & (CI_SB_AFLAG_ORPHAN|CI_SB_AFLAG_IN_CACHE));
+  ci_assert(ts->s.b.sb_aflags & (CI_SB_AFLAG_ORPHAN | CI_SB_AFLAG_IN_CACHE));
 #else
   ci_assert(ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN);
 #endif
@@ -354,10 +359,10 @@ void ci_netif_fin_timeout_enter(ci_netif* ni, ci_tcp_state* ts)
    * queue on listener shutdown), so we've lost it's history, so can't check
    * unfortunately.
    */
-#if ! CI_CFG_FD_CACHING
+#if !CI_CFG_FD_CACHING
   OO_P_DLLINK_ASSERT_EMPTY(ni, link);
 #else
-  if( oo_p_dllink_is_empty(ni, link) )
+  if (oo_p_dllink_is_empty(ni, link))
 #endif
   {
     LOG_TC(log(LPF "%s: %d %s", __FUNCTION__, S_FMT(ts), state_str(ts)));
@@ -367,36 +372,33 @@ void ci_netif_fin_timeout_enter(ci_netif* ni, ci_tcp_state* ts)
   }
 }
 
-
-static int ci_netif_try_to_reap_udp_recv_q(ci_netif* ni,
-                                           ci_udp_recv_q* recv_q, 
-                                           int* add_to_reap_list)
+static int ci_netif_try_to_reap_udp_recv_q(ci_netif *ni,
+                                           ci_udp_recv_q *recv_q,
+                                           int *add_to_reap_list)
 {
   int freed_n;
   ci_uint32 reaped_b4 = recv_q->pkts_reaped;
   ci_udp_recv_q_reap(ni, recv_q);
   freed_n = recv_q->pkts_reaped - reaped_b4;
-  if( recv_q->pkts_reaped != recv_q->pkts_added )
+  if (recv_q->pkts_reaped != recv_q->pkts_added)
     ++(*add_to_reap_list);
   return freed_n;
 }
 
-
-void ci_netif_try_to_reap(ci_netif* ni, int stop_once_freed_n)
+void ci_netif_try_to_reap(ci_netif *ni, int stop_once_freed_n)
 {
   /* Look for packet buffers that can be reaped. */
 
   struct oo_p_dllink_state reap_list =
-                           oo_p_dllink_ptr(ni, &ni->state->reap_list);
+      oo_p_dllink_ptr(ni, &ni->state->reap_list);
   struct oo_p_dllink_state lnk, tmp;
   oo_p lnk_to_stop = OO_P_NULL;
-  citp_waitable_obj* wo;
+  citp_waitable_obj *wo;
   int freed_n = 0;
   int add_to_reap_list;
-  int reap_harder = ni->packets->sets_n == ni->packets->sets_max
-      || ni->state->mem_pressure;
+  int reap_harder = ni->packets->sets_n == ni->packets->sets_max || ni->state->mem_pressure;
 
-  if( oo_p_dllink_is_empty(ni, reap_list) )
+  if (oo_p_dllink_is_empty(ni, reap_list))
     return;
 
   /* Caller has told us how many packet buffers it needs.  But really we
@@ -405,18 +407,20 @@ void ci_netif_try_to_reap(ci_netif* ni, int stop_once_freed_n)
    */
   stop_once_freed_n <<= 1u;
 
-  oo_p_dllink_for_each_safe(ni, lnk, tmp, reap_list) {
+  oo_p_dllink_for_each_safe(ni, lnk, tmp, reap_list)
+  {
     add_to_reap_list = 0;
 
-    if( lnk.p == lnk_to_stop )
+    if (lnk.p == lnk_to_stop)
       break;
 
     oo_p_dllink_del(ni, lnk);
     oo_p_dllink_init(ni, lnk);
     wo = CI_CONTAINER(citp_waitable_obj, sock.reap_link, lnk.l);
 
-    if( wo->waitable.state & CI_TCP_STATE_TCP_CONN ) {
-      ci_tcp_state* ts = &wo->tcp;
+    if (wo->waitable.state & CI_TCP_STATE_TCP_CONN)
+    {
+      ci_tcp_state *ts = &wo->tcp;
       ci_int32 q_num_b4 = ts->recv1.num;
       ci_tcp_rx_reap_rxq_bufs(ni, ts);
 
@@ -427,18 +431,20 @@ void ci_netif_try_to_reap(ci_netif* ni, int stop_once_freed_n)
 #endif
 
       /* Try to reap the last packet */
-      if( reap_harder && ts->recv1.num == 1 &&
-          ci_sock_trylock(ni, &ts->s.b) ) {
+      if (reap_harder && ts->recv1.num == 1 &&
+          ci_sock_trylock(ni, &ts->s.b))
+      {
         q_num_b4 = ts->recv1.num;
         ci_tcp_rx_reap_rxq_bufs_socklocked(ni, ts);
         freed_n += q_num_b4 - ts->recv1.num;
         ci_sock_unlock(ni, &ts->s.b);
       }
-      if( ts->recv1.num > 1 )
+      if (ts->recv1.num > 1)
         add_to_reap_list = 1;
     }
-    else if( wo->waitable.state == CI_TCP_STATE_UDP ) {
-      ci_udp_state* us = &wo->udp;
+    else if (wo->waitable.state == CI_TCP_STATE_UDP)
+    {
+      ci_udp_state *us = &wo->udp;
       freed_n += ci_netif_try_to_reap_udp_recv_q(ni, &us->recv_q,
                                                  &add_to_reap_list);
 #if CI_CFG_TIMESTAMPING
@@ -447,20 +453,23 @@ void ci_netif_try_to_reap(ci_netif* ni, int stop_once_freed_n)
 #endif
     }
 
-    if( add_to_reap_list) {
+    if (add_to_reap_list)
+    {
       oo_p_dllink_add_tail(ni, reap_list, lnk);
-      if( OO_P_IS_NULL(lnk_to_stop) )
+      if (OO_P_IS_NULL(lnk_to_stop))
         lnk_to_stop = lnk.p;
     }
-    if( freed_n >= stop_once_freed_n )
+    if (freed_n >= stop_once_freed_n)
       break;
   }
 
-  if( freed_n < (stop_once_freed_n >> 1) ) {
+  if (freed_n < (stop_once_freed_n >> 1))
+  {
     /* We do not get here from ci_netif_pkt_alloc_slow,
      * because it uses stop_once_freed_n=1. */
     freed_n += ci_netif_pkt_try_to_free(ni, 0, stop_once_freed_n - freed_n);
-    if( freed_n < (stop_once_freed_n >> 1) && reap_harder ) {
+    if (freed_n < (stop_once_freed_n >> 1) && reap_harder)
+    {
       freed_n += ci_netif_pkt_try_to_free(ni, 1,
                                           stop_once_freed_n - freed_n);
     }
@@ -469,8 +478,7 @@ void ci_netif_try_to_reap(ci_netif* ni, int stop_once_freed_n)
   CITP_STATS_NETIF_ADD(ni, pkts_reaped, freed_n);
 }
 
-
-void ci_netif_rxq_low_on_recv(ci_netif* ni, ci_sock_cmn* s,
+void ci_netif_rxq_low_on_recv(ci_netif *ni, ci_sock_cmn *s,
                               int bytes_freed)
 {
   /* Called by the recv() paths when [ni->state->rxq_low] is non-zero.  It
@@ -482,10 +490,11 @@ void ci_netif_rxq_low_on_recv(ci_netif* ni, ci_sock_cmn* s,
    * caller a little work.
    */
   int intf_i;
-  if( bytes_freed <= 0 ||
-      (ni->state->rxq_low -= (bytes_freed / 1500 + 1)) > 0 )
+  if (bytes_freed <= 0 ||
+      (ni->state->rxq_low -= (bytes_freed / 1500 + 1)) > 0)
     return;
-  if( ! ci_netif_trylock(ni) ) {
+  if (!ci_netif_trylock(ni))
+  {
     /* TODO: Probably better to defer the work of refilling to lock holder. */
     ni->state->rxq_low = 1;
     return;
@@ -500,42 +509,44 @@ void ci_netif_rxq_low_on_recv(ci_netif* ni, ci_sock_cmn* s,
    * and ripe for reaping.  ci_netif_rx_post() will also try to reap more
    * buffers from other sockets if necessary.
    */
-  if( s->b.state == CI_TCP_STATE_UDP ) {
+  if (s->b.state == CI_TCP_STATE_UDP)
+  {
     ci_udp_recv_q_reap(ni, &SOCK_TO_UDP(s)->recv_q);
 #if CI_CFG_TIMESTAMPING
     ci_udp_recv_q_reap(ni, &SOCK_TO_UDP(s)->timestamp_q);
 #endif
   }
-  else if( s->b.state & CI_TCP_STATE_TCP_CONN ) {
+  else if (s->b.state & CI_TCP_STATE_TCP_CONN)
+  {
     ci_tcp_rx_reap_rxq_bufs(ni, SOCK_TO_TCP(s));
 #if CI_CFG_TIMESTAMPING
     ci_udp_recv_q_reap(ni, &SOCK_TO_TCP(s)->timestamp_q);
 #endif
   }
 
-  if( ni->state->mem_pressure & OO_MEM_PRESSURE_CRITICAL )
+  if (ni->state->mem_pressure & OO_MEM_PRESSURE_CRITICAL)
     /* See if we've freed enough to exit memory pressure.  Done here so
      * we'll fill the rings properly below if we succeed in exiting.
      */
-    if( ci_netif_mem_pressure_try_exit(ni) )
+    if (ci_netif_mem_pressure_try_exit(ni))
       CITP_STATS_NETIF_INC(ni, memory_pressure_exit_recv);
 
   OO_STACK_FOR_EACH_INTF_I(ni, intf_i)
-    ci_netif_rx_post_all_batch(ni, intf_i);
+  ci_netif_rx_post_all_batch(ni, intf_i);
   CITP_STATS_NETIF_INC(ni, rx_refill_recv);
   ci_netif_unlock(ni);
 }
 #endif /* OO_DO_STACK_POLL */
 
-
-void ci_netif_mem_pressure_pkt_pool_fill(ci_netif* ni)
+void ci_netif_mem_pressure_pkt_pool_fill(ci_netif *ni)
 {
-  ci_ip_pkt_fmt* pkt;
+  ci_ip_pkt_fmt *pkt;
   int intf_i, n = 0;
   OO_STACK_FOR_EACH_INTF_I(ni, intf_i)
-    n += (2*CI_CFG_RX_DESC_BATCH);
-  while( ni->state->mem_pressure_pkt_pool_n < n &&
-         (pkt = ci_netif_pkt_alloc(ni, 0)) != NULL ) {
+  n += (2 * CI_CFG_RX_DESC_BATCH);
+  while (ni->state->mem_pressure_pkt_pool_n < n &&
+         (pkt = ci_netif_pkt_alloc(ni, 0)) != NULL)
+  {
     pkt->flags |= CI_PKT_FLAG_RX;
     ++ni->state->n_rx_pkts;
     ++ni->state->mem_pressure_pkt_pool_n;
@@ -545,16 +556,16 @@ void ci_netif_mem_pressure_pkt_pool_fill(ci_netif* ni)
   }
 }
 
-
 #if OO_DO_STACK_POLL
-static void ci_netif_mem_pressure_pkt_pool_use(ci_netif* ni)
+static void ci_netif_mem_pressure_pkt_pool_use(ci_netif *ni)
 {
   /* Empty the special [mem_pressure_pkt_pool] into the free pool. */
-  ci_ip_pkt_fmt* pkt;
+  ci_ip_pkt_fmt *pkt;
 #ifdef __KERNEL__
   int is_locked = 1;
 #endif
-  while( ! OO_PP_IS_NULL(ni->state->mem_pressure_pkt_pool) ) {
+  while (!OO_PP_IS_NULL(ni->state->mem_pressure_pkt_pool))
+  {
     pkt = PKT(ni, ni->state->mem_pressure_pkt_pool);
     ni->state->mem_pressure_pkt_pool = pkt->next;
     --ni->state->mem_pressure_pkt_pool_n;
@@ -564,21 +575,19 @@ static void ci_netif_mem_pressure_pkt_pool_use(ci_netif* ni)
   }
 }
 
-
-static void ci_netif_mem_pressure_enter_critical(ci_netif* ni, int intf_i)
+static void ci_netif_mem_pressure_enter_critical(ci_netif *ni, int intf_i)
 {
-  if( ni->state->mem_pressure & OO_MEM_PRESSURE_CRITICAL )
+  if (ni->state->mem_pressure & OO_MEM_PRESSURE_CRITICAL)
     return;
 
   CITP_STATS_NETIF_INC(ni, memory_pressure_enter);
   ni->state->mem_pressure |= OO_MEM_PRESSURE_CRITICAL;
-  ni->state->rxq_limit = 2*CI_CFG_RX_DESC_BATCH;
+  ni->state->rxq_limit = 2 * CI_CFG_RX_DESC_BATCH;
   ci_netif_mem_pressure_pkt_pool_use(ni);
   ci_netif_rx_post_all_batch(ni, intf_i);
 }
 
-
-static void ci_netif_mem_pressure_exit_critical(ci_netif* ni)
+static void ci_netif_mem_pressure_exit_critical(ci_netif *ni)
 {
   ci_assert(OO_PP_IS_NULL(ni->state->mem_pressure_pkt_pool));
   ci_netif_mem_pressure_pkt_pool_fill(ni);
@@ -586,8 +595,7 @@ static void ci_netif_mem_pressure_exit_critical(ci_netif* ni)
   ni->state->mem_pressure &= ~OO_MEM_PRESSURE_CRITICAL;
 }
 
-
-int ci_netif_mem_pressure_try_exit(ci_netif* ni)
+int ci_netif_mem_pressure_try_exit(ci_netif *ni)
 {
   /* Exit memory pressure only when there are enough packet buffers free
    * (and available to RX path) to be able to fill all of the RX rings.
@@ -595,22 +603,24 @@ int ci_netif_mem_pressure_try_exit(ci_netif* ni)
    * Returns true if we do exit critical memory pressure.
    */
   int intf_i, pkts_needed = 0;
-  ci_ip_pkt_fmt* pkt;
+  ci_ip_pkt_fmt *pkt;
 
-  OO_STACK_FOR_EACH_INTF_I(ni, intf_i) {
-    ef_vi* vi = ci_netif_vi(ni, intf_i);
+  OO_STACK_FOR_EACH_INTF_I(ni, intf_i)
+  {
+    ef_vi *vi = ci_netif_vi(ni, intf_i);
     pkts_needed += NI_OPTS(ni).rxq_limit - ef_vi_receive_fill_level(vi);
   }
 
-  if( NI_OPTS(ni).max_rx_packets - ni->state->n_rx_pkts < pkts_needed ||
-      ni->packets->n_free < pkts_needed ) {
+  if (NI_OPTS(ni).max_rx_packets - ni->state->n_rx_pkts < pkts_needed ||
+      ni->packets->n_free < pkts_needed)
+  {
     /* TODO: May not be necessary in future, as rxq_low should be set, and
      * should provoke the recv() path to free packet bufs.  For now this is
      * needed though.
      */
     ci_netif_try_to_reap(ni, pkts_needed);
 
-    if( NI_OPTS(ni).max_rx_packets - ni->state->n_rx_pkts < pkts_needed )
+    if (NI_OPTS(ni).max_rx_packets - ni->state->n_rx_pkts < pkts_needed)
       return 0;
 
     /* The RX packet limit is okay, but do we have enough free buffers?
@@ -619,8 +629,9 @@ int ci_netif_mem_pressure_try_exit(ci_netif* ni)
      * TODO: Be more efficient here by grabbing the whole pool, taking what
      * we need, and put back.
      */
-    while( ni->packets->n_free < pkts_needed ) {
-      if( (pkt = ci_netif_pkt_alloc_nonb(ni)) == NULL )
+    while (ni->packets->n_free < pkts_needed)
+    {
+      if ((pkt = ci_netif_pkt_alloc_nonb(ni)) == NULL)
         return 0;
       --ni->state->n_async_pkts;
       CITP_STATS_NETIF_INC(ni, pkt_nonb_steal);
@@ -639,19 +650,21 @@ int ci_netif_mem_pressure_try_exit(ci_netif* ni)
  *
  *--------------------------------------------------------------------*/
 
-static int __ci_netif_rx_post(ci_netif* ni, ef_vi* vi, int intf_i,
-                               int bufset_id, int max)
+static int __ci_netif_rx_post(ci_netif *ni, ef_vi *vi, int intf_i,
+                              int bufset_id, int max)
 {
-  ci_ip_pkt_fmt* pkt;
+  ci_ip_pkt_fmt *pkt;
   int i;
   int posted = 0;
-  oo_pktbuf_set* bufset = &ni->packets->set[bufset_id];
+  oo_pktbuf_set *bufset = &ni->packets->set[bufset_id];
 
   ci_assert_ge(max, CI_CFG_RX_DESC_BATCH);
   ci_assert_ge(bufset->n_free, max);
 
-  do {
-    for( i = 0; i < CI_CFG_RX_DESC_BATCH; ++i ) {
+  do
+  {
+    for (i = 0; i < CI_CFG_RX_DESC_BATCH; ++i)
+    {
       /* We know we have free pkts, so this is faster than calling
       ** ci_netif_pkt_alloc().  Nasty, but this is really performance
       ** critical.
@@ -680,7 +693,7 @@ static int __ci_netif_rx_post(ci_netif* ni, ef_vi* vi, int intf_i,
          * to be less important on systems with DDIO).
          */
         int off;
-        for( off = 0; off < pkt->buf_len; off += EF_VI_DMA_ALIGN )
+        for (off = 0; off < pkt->buf_len; off += EF_VI_DMA_ALIGN)
           ci_clflush(pkt->dma_start + off);
         /* This seems like a good idea (only flush buffer if it was last
          * used for TX) but it seems to make latency worse by around 30ns:
@@ -692,19 +705,17 @@ static int __ci_netif_rx_post(ci_netif* ni, ef_vi* vi, int intf_i,
     }
     ni->packets->set[bufset_id].n_free -= CI_CFG_RX_DESC_BATCH;
     ni->packets->n_free -= CI_CFG_RX_DESC_BATCH;
-    ni->state->n_rx_pkts  += CI_CFG_RX_DESC_BATCH;
+    ni->state->n_rx_pkts += CI_CFG_RX_DESC_BATCH;
     ef_vi_receive_push(vi);
     posted += CI_CFG_RX_DESC_BATCH;
-  } while( max - posted >= CI_CFG_RX_DESC_BATCH );
+  } while (max - posted >= CI_CFG_RX_DESC_BATCH);
 
   return posted;
 }
 
+#define low_thresh(ni) ((ni)->state->rxq_limit / 2)
 
-#define low_thresh(ni)       ((ni)->state->rxq_limit / 2)
-
-
-int ci_netif_rx_post(ci_netif* netif, int intf_i, ef_vi* vi)
+int ci_netif_rx_post(ci_netif *netif, int intf_i, ef_vi *vi)
 {
   /* TODO: When under packet buffer pressure, post fewer on the receive
   ** queue.  As an easy first stab could have a threshold for the number of
@@ -714,12 +725,12 @@ int ci_netif_rx_post(ci_netif* netif, int intf_i, ef_vi* vi)
   ** possibly be consumed by existing sockets receive windows.  This would
   ** reduce resource consumption for apps that have few sockets.
   */
-  ci_ip_pkt_fmt* pkt;
+  ci_ip_pkt_fmt *pkt;
   int max_n_to_post, rx_allowed, n_to_post, n_posted = 0;
   int bufset_id = NI_PKT_SET(netif);
   int ask_for_more_packets = 0;
 
-  if( vi->nic_type.arch == EF_VI_ARCH_EFCT )
+  if (vi->nic_type.arch == EF_VI_ARCH_EFCT)
     return 0;
 
   ci_assert(ci_netif_is_locked(netif));
@@ -727,18 +738,19 @@ int ci_netif_rx_post(ci_netif* netif, int intf_i, ef_vi* vi)
 
   max_n_to_post = ci_netif_rx_vi_space(netif, vi);
   rx_allowed = NI_OPTS(netif).max_rx_packets - netif->state->n_rx_pkts;
-  if( max_n_to_post > rx_allowed )
+  if (max_n_to_post > rx_allowed)
     goto rx_limited;
- not_rx_limited:
+not_rx_limited:
 
   ci_assert_ge(max_n_to_post, CI_CFG_RX_DESC_BATCH);
   /* We could have enough packets in all sets together, but we need them
    * in one set. */
-  if( netif->packets->set[bufset_id].n_free < CI_CFG_RX_DESC_BATCH )
+  if (netif->packets->set[bufset_id].n_free < CI_CFG_RX_DESC_BATCH)
     goto find_new_bufset;
 
- good_bufset:
-  do {
+good_bufset:
+  do
+  {
     int n;
     n_to_post = CI_MIN(max_n_to_post, netif->packets->set[bufset_id].n_free);
     n = __ci_netif_rx_post(netif, vi, intf_i, bufset_id, n_to_post);
@@ -746,8 +758,10 @@ int ci_netif_rx_post(ci_netif* netif, int intf_i, ef_vi* vi)
     n_posted += n;
     ci_assert_ge(max_n_to_post, 0);
 
-    if( max_n_to_post < CI_CFG_RX_DESC_BATCH ) {
-      if( bufset_id != netif->packets->id ) {
+    if (max_n_to_post < CI_CFG_RX_DESC_BATCH)
+    {
+      if (bufset_id != netif->packets->id)
+      {
         ci_netif_pkt_set_change(netif, bufset_id,
                                 ask_for_more_packets);
       }
@@ -755,37 +769,38 @@ int ci_netif_rx_post(ci_netif* netif, int intf_i, ef_vi* vi)
       return n_posted;
     }
 
- find_new_bufset:
+  find_new_bufset:
     bufset_id = ci_netif_pktset_best(netif);
-    if( bufset_id == -1 ||
-        netif->packets->set[bufset_id].n_free < CI_CFG_RX_DESC_BATCH )
+    if (bufset_id == -1 ||
+        netif->packets->set[bufset_id].n_free < CI_CFG_RX_DESC_BATCH)
       goto not_enough_pkts;
     ask_for_more_packets = ci_netif_pkt_set_is_underfilled(netif,
                                                            bufset_id);
-  } while( 1 );
+  } while (1);
   /* unreachable */
 
-
- rx_limited:
+rx_limited:
   /* [rx_allowed] can go negative. */
-  if( rx_allowed < 0 )
+  if (rx_allowed < 0)
     rx_allowed = 0;
 #if OO_DO_STACK_POLL
   /* Only reap if ring is getting pretty empty. */
-  if( ef_vi_receive_fill_level(vi) + rx_allowed < low_thresh(netif) ) {
+  if (ef_vi_receive_fill_level(vi) + rx_allowed < low_thresh(netif))
+  {
     CITP_STATS_NETIF_INC(netif, reap_rx_limited);
     ci_netif_try_to_reap(netif, max_n_to_post - rx_allowed);
     rx_allowed = NI_OPTS(netif).max_rx_packets - netif->state->n_rx_pkts;
-    if( rx_allowed < 0 )
+    if (rx_allowed < 0)
       rx_allowed = 0;
     max_n_to_post = CI_MIN(max_n_to_post, rx_allowed);
-    if( ef_vi_receive_fill_level(vi) + max_n_to_post < low_thresh(netif) )
+    if (ef_vi_receive_fill_level(vi) + max_n_to_post < low_thresh(netif))
       /* Ask recv() path to refill when some buffers are freed. */
       netif->state->rxq_low = ci_netif_rx_vi_space(netif, vi) - max_n_to_post;
-    if( max_n_to_post >= CI_CFG_RX_DESC_BATCH )
+    if (max_n_to_post >= CI_CFG_RX_DESC_BATCH)
       goto not_rx_limited;
   }
-  if( netif->state->mem_pressure & OO_MEM_PRESSURE_CRITICAL ) {
+  if (netif->state->mem_pressure & OO_MEM_PRESSURE_CRITICAL)
+  {
     /* We want to always be able to post a small number of buffers to
      * the rxq when in critical memory pressure as otherwise we may
      * drop packets that would release queued buffers.
@@ -799,16 +814,16 @@ int ci_netif_rx_post(ci_netif* netif, int intf_i, ef_vi* vi)
   }
 #endif
   max_n_to_post = CI_MIN(max_n_to_post, rx_allowed);
-  if(CI_LIKELY( max_n_to_post >= CI_CFG_RX_DESC_BATCH ))
+  if (CI_LIKELY(max_n_to_post >= CI_CFG_RX_DESC_BATCH))
     goto not_rx_limited;
   CITP_STATS_NETIF_INC(netif, refill_rx_limited);
 #if OO_DO_STACK_POLL
-  if( ef_vi_receive_fill_level(vi) < CI_CFG_RX_DESC_BATCH )
+  if (ef_vi_receive_fill_level(vi) < CI_CFG_RX_DESC_BATCH)
     ci_netif_mem_pressure_enter_critical(netif, intf_i);
 #endif
   return n_posted;
 
- not_enough_pkts:
+not_enough_pkts:
   /* The best packet set has less than CI_CFG_RX_DESC_BATCH packets.
    * We should free some packets or allocate a new set. */
 
@@ -817,19 +832,21 @@ int ci_netif_rx_post(ci_netif* netif, int intf_i, ef_vi* vi)
   ask_for_more_packets = 1;
 
   /* Grab buffers from the non-blocking pool. */
-  while( (pkt = ci_netif_pkt_alloc_nonb(netif)) != NULL ) {
+  while ((pkt = ci_netif_pkt_alloc_nonb(netif)) != NULL)
+  {
     --netif->state->n_async_pkts;
     CITP_STATS_NETIF_INC(netif, pkt_nonb_steal);
     pkt->flags &= ~CI_PKT_FLAG_NONB_POOL;
     bufset_id = PKT_SET_ID(pkt);
     ci_netif_pkt_release_1ref(netif, pkt);
-    if( netif->packets->set[bufset_id].n_free >= CI_CFG_RX_DESC_BATCH )
+    if (netif->packets->set[bufset_id].n_free >= CI_CFG_RX_DESC_BATCH)
       goto good_bufset;
   }
 
   /* Still not enough -- allocate more memory if possible. */
-  if( netif->packets->sets_n < netif->packets->sets_max &&
-      ci_tcp_helper_more_bufs(netif) == 0 ) {
+  if (netif->packets->sets_n < netif->packets->sets_max &&
+      ci_tcp_helper_more_bufs(netif) == 0)
+  {
     bufset_id = netif->packets->sets_n - 1;
     ci_assert_equal(netif->packets->set[bufset_id].n_free,
                     1 << CI_CFG_PKTS_PER_SET_S);
@@ -838,36 +855,37 @@ int ci_netif_rx_post(ci_netif* netif, int intf_i, ef_vi* vi)
   }
 
 #if OO_DO_STACK_POLL
-  if( ef_vi_receive_fill_level(vi) < low_thresh(netif) ) {
+  if (ef_vi_receive_fill_level(vi) < low_thresh(netif))
+  {
     CITP_STATS_NETIF_INC(netif, reap_buf_limited);
     ci_netif_try_to_reap(netif, max_n_to_post);
     max_n_to_post = CI_MIN(max_n_to_post, netif->packets->n_free);
     bufset_id = ci_netif_pktset_best(netif);
-    if( bufset_id != -1 &&
-        netif->packets->set[bufset_id].n_free >= CI_CFG_RX_DESC_BATCH )
+    if (bufset_id != -1 &&
+        netif->packets->set[bufset_id].n_free >= CI_CFG_RX_DESC_BATCH)
       goto good_bufset;
     /* Ask recv() path to refill when some buffers are freed. */
     netif->state->rxq_low = ci_netif_rx_vi_space(netif, vi);
   }
 
   CITP_STATS_NETIF_INC(netif, refill_buf_limited);
-  if( ef_vi_receive_fill_level(vi) < CI_CFG_RX_DESC_BATCH )
+  if (ef_vi_receive_fill_level(vi) < CI_CFG_RX_DESC_BATCH)
     ci_netif_mem_pressure_enter_critical(netif, intf_i);
 #endif
   return n_posted;
 }
 
-
 #if OO_DO_STACK_POLL
-static void citp_waitable_deferred_work(ci_netif* ni, citp_waitable* w)
+static void citp_waitable_deferred_work(ci_netif *ni, citp_waitable *w)
 {
-  citp_waitable_obj* wo = CI_CONTAINER(citp_waitable_obj, waitable, w);
+  citp_waitable_obj *wo = CI_CONTAINER(citp_waitable_obj, waitable, w);
 
-  if( wo->waitable.state & CI_TCP_STATE_TCP )
+  if (wo->waitable.state & CI_TCP_STATE_TCP)
     ci_tcp_perform_deferred_socket_work(ni, &wo->tcp);
-  else if( wo->waitable.state == CI_TCP_STATE_UDP )
+  else if (wo->waitable.state == CI_TCP_STATE_UDP)
     ci_udp_perform_deferred_socket_work(ni, &wo->udp);
-  else {
+  else
+  {
     /* This happens when we move socket and continue to use it from another
      * thread or signal handler */
     ci_log("%s: unexpected status %s for socket [%d:%d]", __func__,
@@ -875,24 +893,26 @@ static void citp_waitable_deferred_work(ci_netif* ni, citp_waitable* w)
   }
 }
 
-
-int ci_netif_lock_or_defer_work(ci_netif* ni, citp_waitable* w)
+int ci_netif_lock_or_defer_work(ci_netif *ni, citp_waitable *w)
 {
 #if CI_CFG_FD_CACHING && !defined(NDEBUG)
   /* Cached sockets should not be deferring work - there are no user references
    */
-  if( (w->state & CI_TCP_STATE_TCP) && !(w->state == CI_TCP_LISTEN) )
+  if ((w->state & CI_TCP_STATE_TCP) && !(w->state == CI_TCP_LISTEN))
     ci_assert(!ci_tcp_is_cached(&CI_CONTAINER(citp_waitable_obj,
-                                              waitable, w)->tcp));
+                                              waitable, w)
+                                     ->tcp));
 #endif
   /* Orphaned sockets should not be deferring work - no-one has a reference to
    * them, and the queue link can be used for other things.
    */
   ci_assert(!(w->sb_aflags & CI_SB_AFLAG_ORPHAN));
 
-  if( ni->state->defer_work_count >= NI_OPTS(ni).defer_work_limit ) {
+  if (ni->state->defer_work_count >= NI_OPTS(ni).defer_work_limit)
+  {
     int rc = ci_netif_lock(ni);
-    if( rc == 0 ) {
+    if (rc == 0)
+    {
       CITP_STATS_NETIF_INC(ni, defer_work_limited);
       citp_waitable_deferred_work(ni, w);
       return 1;
@@ -903,7 +923,8 @@ int ci_netif_lock_or_defer_work(ci_netif* ni, citp_waitable* w)
      */
   }
 
-  if( ci_bit_test_and_set(&w->sb_aflags, CI_SB_AFLAG_DEFERRED_BIT) ) {
+  if (ci_bit_test_and_set(&w->sb_aflags, CI_SB_AFLAG_DEFERRED_BIT))
+  {
     /* Already set.  Another thread is trying to defer some work for this
      * socket.  However, we must do **our** work in time, so let's push it
      * forward.
@@ -917,7 +938,8 @@ int ci_netif_lock_or_defer_work(ci_netif* ni, citp_waitable* w)
      * really rare, and it is simpler just to push on.
      */
     int rc = ci_netif_lock(ni);
-    if( rc == 0 ) {
+    if (rc == 0)
+    {
       /* We should not remove CI_SB_AFLAG_DEFERRED_BIT, because it was set
        * by someone else, and that someone else is responsible for
        * removing. */
@@ -937,19 +959,24 @@ int ci_netif_lock_or_defer_work(ci_netif* ni, citp_waitable* w)
     return 0;
   }
 
-  while( 1 ) {
+  while (1)
+  {
     ci_uint64 new_v, v = ni->state->lock.lock;
-    if( ! (v & CI_EPLOCK_LOCKED) ) {
-      if( ci_netif_trylock(ni) ) {
+    if (!(v & CI_EPLOCK_LOCKED))
+    {
+      if (ci_netif_trylock(ni))
+      {
         ci_bit_clear(&w->sb_aflags, CI_SB_AFLAG_DEFERRED_BIT);
         citp_waitable_deferred_work(ni, w);
         return 1;
       }
     }
-    else {
+    else
+    {
       w->next_id = v & CI_EPLOCK_NETIF_SOCKET_LIST;
       new_v = (v & ~CI_EPLOCK_NETIF_SOCKET_LIST) | (W_ID(w) + 1);
-      if( ci_cas64u_succeed(&ni->state->lock.lock, v, new_v) ) {
+      if (ci_cas64u_succeed(&ni->state->lock.lock, v, new_v))
+      {
         ++ni->state->defer_work_count;
         return 0;
       }
@@ -957,16 +984,16 @@ int ci_netif_lock_or_defer_work(ci_netif* ni, citp_waitable* w)
   }
 }
 
-
-static void ci_netif_perform_deferred_socket_work(ci_netif* ni,
+static void ci_netif_perform_deferred_socket_work(ci_netif *ni,
                                                   unsigned sock_id)
 {
-  citp_waitable* w;
+  citp_waitable *w;
   oo_sp sockp;
 
   ci_assert(ci_netif_is_locked(ni));
 
-  do {
+  do
+  {
     ci_assert(sock_id > 0);
     --sock_id;
     sockp = OO_SP_FROM_INT(ni, sock_id);
@@ -976,20 +1003,19 @@ static void ci_netif_perform_deferred_socket_work(ci_netif* ni,
     CITP_STATS_NETIF(++ni->state->stats.deferred_work);
 
     citp_waitable_deferred_work(ni, w);
-  }
-  while( sock_id > 0 );
+  } while (sock_id > 0);
 }
 
-
-ci_uint64 ci_netif_purge_deferred_socket_list(ci_netif* ni)
+ci_uint64 ci_netif_purge_deferred_socket_list(ci_netif *ni)
 {
   ci_uint64 l;
 
   ci_assert(ci_netif_is_locked(ni));
 
-  while( (l = ni->state->lock.lock) & CI_EPLOCK_NETIF_SOCKET_LIST ) {
-    if( ci_cas64u_succeed(&ni->state->lock.lock, l,
-                        l &~ CI_EPLOCK_NETIF_SOCKET_LIST) )
+  while ((l = ni->state->lock.lock) & CI_EPLOCK_NETIF_SOCKET_LIST)
+  {
+    if (ci_cas64u_succeed(&ni->state->lock.lock, l,
+                          l & ~CI_EPLOCK_NETIF_SOCKET_LIST))
       ci_netif_perform_deferred_socket_work(ni,
                                             l & CI_EPLOCK_NETIF_SOCKET_LIST);
 
@@ -1004,13 +1030,14 @@ ci_uint64 ci_netif_purge_deferred_socket_list(ci_netif* ni)
   return l;
 }
 
-void ci_netif_merge_atomic_counters(ci_netif* ni)
+void ci_netif_merge_atomic_counters(ci_netif *ni)
 {
   ci_int32 val;
-#define merge(ni, field) \
-  do {                                                          \
-    val = ni->state->atomic_##field;                            \
-  } while( ci_cas32_fail(&ni->state->atomic_##field, val, 0) );\
+#define merge(ni, field)                                       \
+  do                                                           \
+  {                                                            \
+    val = ni->state->atomic_##field;                           \
+  } while (ci_cas32_fail(&ni->state->atomic_##field, val, 0)); \
   ni->state->field += val;
 
   merge(ni, n_rx_pkts);
@@ -1018,11 +1045,11 @@ void ci_netif_merge_atomic_counters(ci_netif* ni)
 #undef merge
 }
 
-
 #if CI_CFG_UL_INTERRUPT_HELPER
 static
 #endif
-int oo_want_proactive_packet_allocation(ci_netif* ni)
+    int
+    oo_want_proactive_packet_allocation(ci_netif *ni)
 {
   ci_uint32 current_free;
 
@@ -1030,54 +1057,55 @@ int oo_want_proactive_packet_allocation(ci_netif* ni)
    * stack allocation when we don't have any packet sets, and aren't going to
    * get any.
    */
-  if( ni->packets->sets_n == 0 )
+  if (ni->packets->sets_n == 0)
     return 0;
 
   current_free = ni->packets->set[NI_PKT_SET(ni)].n_free;
 
   /* All the packets allocated */
-  if( pkt_sets_n(ni) == pkt_sets_max(ni) )
+  if (pkt_sets_n(ni) == pkt_sets_max(ni))
     return 0;
 
   /* We need to have a decent number of free packets. */
-  if( ni->packets->n_free > NI_OPTS(ni).free_packets_low ) {
+  if (ni->packets->n_free > NI_OPTS(ni).free_packets_low)
+  {
     /* But these free packets may be distributed between sets in
      * unfortunate way, so we do additional checks. */
 
     /* Good if the packets are underused */
-    if( ni->packets->n_free > ni->packets->n_pkts_allocated / 3 )
+    if (ni->packets->n_free > ni->packets->n_pkts_allocated / 3)
       return 0;
 
     /* Good: a lot of packets in the current set and also some packets in
      * non-current sets, so it'll be possible to switch to another set when
      * this one is empty. */
-    if( current_free > PKTS_PER_SET / 2 &&
-        ni->packets->n_free > PKTS_PER_SET * 3 / 4 )
+    if (current_free > PKTS_PER_SET / 2 &&
+        ni->packets->n_free > PKTS_PER_SET * 3 / 4)
       return 0;
 
     /* Good: a lot of packets in non-current sets, and
      * some of them have at least CI_CFG_RX_DESC_BATCH packets. */
-    if( ni->packets->n_free - current_free >
-        CI_MAX(PKTS_PER_SET / 2, CI_CFG_RX_DESC_BATCH * (pkt_sets_n(ni) - 1)) )
+    if (ni->packets->n_free - current_free >
+        CI_MAX(PKTS_PER_SET / 2, CI_CFG_RX_DESC_BATCH * (pkt_sets_n(ni) - 1)))
       return 0;
   }
 
   CITP_STATS_NETIF_INC(ni, proactive_packet_allocation);
   LOG_NC(ci_log("%s: [%d] proactive packet allocation: "
                 "%d sets n_freepkts=%d free_packets_low=%d "
-                "current_set.n_free=%d", __func__, NI_ID(ni),
+                "current_set.n_free=%d",
+                __func__, NI_ID(ni),
                 pkt_sets_n(ni), ni->packets->n_free,
                 NI_OPTS(ni).free_packets_low, current_free));
   return 1;
 }
-
 
 /* Handling for lock flags that is common to UL and kernel paths.
  * flags_to_handle allows restricting work in DL context.
  * flags_to_handle will be cleared from lock and return value
  * unless work failed/need redoing.
  */
-ci_uint64 ci_netif_unlock_slow_common(ci_netif* ni, ci_uint64 lock_val,
+ci_uint64 ci_netif_unlock_slow_common(ci_netif *ni, ci_uint64 lock_val,
                                       ci_uint64 flags_to_handle)
 {
   ci_uint64 set_flags = 0;
@@ -1085,64 +1113,72 @@ ci_uint64 ci_netif_unlock_slow_common(ci_netif* ni, ci_uint64 lock_val,
 
   /* Do this first, because ci_netif_purge_deferred_socket_list() acts on the
    * lock directly. */
-  if( lock_val & CI_EPLOCK_NETIF_SOCKET_LIST ) {
+  if (lock_val & CI_EPLOCK_NETIF_SOCKET_LIST)
+  {
     /* assume caller always asks to handle these flags */
     ci_assert_flags(flags_to_handle, CI_EPLOCK_NETIF_SOCKET_LIST);
     CITP_STATS_NETIF_INC(ni, unlock_slow_socket_list);
     lock_val = ci_netif_purge_deferred_socket_list(ni);
   }
-  ci_assert(! (lock_val & CI_EPLOCK_NETIF_SOCKET_LIST));
+  ci_assert(!(lock_val & CI_EPLOCK_NETIF_SOCKET_LIST));
 
   /* Clear all flags before we handle them, to avoid racing against other
    * threads that set those flags. (note: SOCKET_LIST got handled above) */
   lock_val = ef_eplock_clear_flags(&ni->state->lock,
-                          flags_to_handle & ~CI_EPLOCK_NETIF_SOCKET_LIST);
+                                   flags_to_handle & ~CI_EPLOCK_NETIF_SOCKET_LIST);
 
   /* Restrict work below to what has been requested */
   test_val = lock_val & flags_to_handle;
 
-  if( test_val & CI_EPLOCK_NETIF_IS_PKT_WAITER ) {
-    if( ci_netif_pkt_tx_can_alloc_now(ni) ) {
+  if (test_val & CI_EPLOCK_NETIF_IS_PKT_WAITER)
+  {
+    if (ci_netif_pkt_tx_can_alloc_now(ni))
+    {
       set_flags |= CI_EPLOCK_NETIF_PKT_WAKE;
       CITP_STATS_NETIF_INC(ni, unlock_slow_pkt_waiter);
     }
-    else {
+    else
+    {
       set_flags |= CI_EPLOCK_NETIF_IS_PKT_WAITER;
     }
   }
 
-  if( test_val & CI_EPLOCK_NETIF_NEED_POLL ) {
+  if (test_val & CI_EPLOCK_NETIF_NEED_POLL)
+  {
     CITP_STATS_NETIF(++ni->state->stats.deferred_polls);
 #ifdef __KERNEL__
-    if( test_val & CI_EPLOCK_NETIF_PRIME_IF_IDLE )
+    if (test_val & CI_EPLOCK_NETIF_PRIME_IF_IDLE)
       ni->state->poll_did_wake = 0;
 #endif
     ci_netif_poll(ni);
-    if( test_val & CI_EPLOCK_NETIF_PRIME_IF_IDLE )
+    if (test_val & CI_EPLOCK_NETIF_PRIME_IF_IDLE)
 #ifdef __KERNEL__
-      if( ! ni->state->poll_did_wake )
+      if (!ni->state->poll_did_wake)
 #endif
         set_flags |= CI_EPLOCK_NETIF_NEED_PRIME;
   }
 
-#if CI_CFG_UL_INTERRUPT_HELPER && ! defined (__KERNEL__)
-  if( test_val & CI_EPLOCK_NETIF_CLOSE_ENDPOINT ) {
+#if CI_CFG_UL_INTERRUPT_HELPER && !defined(__KERNEL__)
+  if (test_val & CI_EPLOCK_NETIF_CLOSE_ENDPOINT)
+  {
     ci_netif_close_pending(ni);
   }
 
-  if( test_val & CI_EPLOCK_NETIF_NEED_WAKE ) {
+  if (test_val & CI_EPLOCK_NETIF_NEED_WAKE)
+  {
     /* Tell kernel to wake up endpoints */
     struct oo_p_dllink_state post_poll_list =
-                             oo_p_dllink_ptr(ni, &ni->state->post_poll_list);
+        oo_p_dllink_ptr(ni, &ni->state->post_poll_list);
     struct oo_p_dllink_state lnk, tmp_lnk;
-    citp_waitable* w;
+    citp_waitable *w;
     struct oo_wakeup_eps op;
     oo_sp eps[64];
 
     op.eps_num = 0;
     CI_USER_PTR_SET(op.eps, eps);
 
-    oo_p_dllink_for_each_safe(ni, lnk, tmp_lnk, post_poll_list) {
+    oo_p_dllink_for_each_safe(ni, lnk, tmp_lnk, post_poll_list)
+    {
       oo_p_dllink_del_init(ni, lnk);
 
       w = CI_CONTAINER(citp_waitable, post_poll_link, lnk.l);
@@ -1152,40 +1188,42 @@ ci_uint64 ci_netif_unlock_slow_common(ci_netif* ni, ci_uint64 lock_val,
        * simultaneously, so that user's poll() returns all ready sockets in
        * one go.
        */
-      if( op.eps_num == sizeof(eps) / sizeof(eps[0]) ) {
+      if (op.eps_num == sizeof(eps) / sizeof(eps[0]))
+      {
         oo_resource_op(ci_netif_get_driver_handle(ni),
                        OO_IOC_WAKEUP_WAITERS, &op);
         op.eps_num = 0;
-
       }
     }
 
-    if( op.eps_num != 0 )
+    if (op.eps_num != 0)
       oo_resource_op(ci_netif_get_driver_handle(ni),
                      OO_IOC_WAKEUP_WAITERS, &op);
-
   }
 
-  if( test_val & CI_EPLOCK_NETIF_NEED_PKT_SET ||
-      oo_want_proactive_packet_allocation(ni) ) {
+  if (test_val & CI_EPLOCK_NETIF_NEED_PKT_SET ||
+      oo_want_proactive_packet_allocation(ni))
+  {
     /* assume caller always asks to handle this flag */
     ci_assert_flags(flags_to_handle, CI_EPLOCK_NETIF_NEED_PKT_SET);
     ci_tcp_helper_more_bufs(ni);
   }
 
-  if( test_val & CI_EPLOCK_NETIF_NEED_SOCK_BUFS ) {
+  if (test_val & CI_EPLOCK_NETIF_NEED_SOCK_BUFS)
+  {
     /* assume caller always asks to handle this flag */
     ci_assert_flags(flags_to_handle, CI_EPLOCK_NETIF_NEED_SOCK_BUFS);
     ci_tcp_helper_more_socks(ni);
   }
 #endif
 
-  if( test_val & CI_EPLOCK_NETIF_HAS_DEFERRED_PKTS ) {
-    if( ! oo_deferred_send(ni) )
+  if (test_val & CI_EPLOCK_NETIF_HAS_DEFERRED_PKTS)
+  {
+    if (!oo_deferred_send(ni))
       set_flags |= CI_EPLOCK_NETIF_HAS_DEFERRED_PKTS;
   }
 
-  if( test_val & CI_EPLOCK_NETIF_MERGE_ATOMIC_COUNTERS )
+  if (test_val & CI_EPLOCK_NETIF_MERGE_ATOMIC_COUNTERS)
     ci_netif_merge_atomic_counters(ni);
 
   ef_eplock_holder_set_flags(&ni->state->lock, set_flags);
@@ -1194,14 +1232,13 @@ ci_uint64 ci_netif_unlock_slow_common(ci_netif* ni, ci_uint64 lock_val,
   return lock_val | set_flags;
 }
 
-
 #ifdef __KERNEL__
-static void ci_netif_unlock_slow(ci_netif* ni)
+static void ci_netif_unlock_slow(ci_netif *ni)
 {
   efab_eplock_unlock_and_wake(ni, 0 /* in_dl_context */);
 }
 #else
-static void ci_netif_unlock_slow(ci_netif* ni)
+static void ci_netif_unlock_slow(ci_netif *ni)
 {
   /* All we are doing here is seeing if we can avoid a syscall.  Everything
   ** we do here has to be checked again if we do take the
@@ -1212,37 +1249,39 @@ static void ci_netif_unlock_slow(ci_netif* ni)
   int intf_i;
   int rc = 0;
   ci_uint64 all_handled_flags =
-        CI_EPLOCK_NETIF_UL_MASK | CI_EPLOCK_NETIF_SOCKET_LIST;
+      CI_EPLOCK_NETIF_UL_MASK | CI_EPLOCK_NETIF_SOCKET_LIST;
 
-  if( ~ni->state->flags & CI_NETIF_FLAG_EVQ_KERNEL_PRIME_ONLY )
+  if (~ni->state->flags & CI_NETIF_FLAG_EVQ_KERNEL_PRIME_ONLY)
     all_handled_flags |= CI_EPLOCK_NETIF_NEED_PRIME;
 
-  ci_assert(ci_netif_is_locked(ni));  /* double unlock? */
+  ci_assert(ci_netif_is_locked(ni)); /* double unlock? */
 
   CITP_STATS_NETIF_INC(ni, unlock_slow);
 
-  do {
+  do
+  {
     l = ni->state->lock.lock;
     l = ci_netif_unlock_slow_common(ni, l, all_handled_flags);
 
     /* If the NEED_PRIME flag was set, handle it here */
-    if( l & all_handled_flags & CI_EPLOCK_NETIF_NEED_PRIME ) {
+    if (l & all_handled_flags & CI_EPLOCK_NETIF_NEED_PRIME)
+    {
       CITP_STATS_NETIF_INC(ni, unlock_slow_need_prime);
       CITP_STATS_NETIF_INC(ni, unlock_slow_prime_ul);
       ci_assert(NI_OPTS(ni).int_driven);
       /* TODO: When interrupt driven, evq_primed is never cleared, so we
-      * don't know here which subset of interfaces needs to be primed.
-      * Would be more efficient if we did.
-      */
+       * don't know here which subset of interfaces needs to be primed.
+       * Would be more efficient if we did.
+       */
       OO_STACK_FOR_EACH_INTF_I(ni, intf_i)
-        ef_eventq_prime(ci_netif_vi(ni, intf_i));
+      ef_eventq_prime(ci_netif_vi(ni, intf_i));
     }
 
     /* If some flags should be handled in kernel, then there is no point in
      * looping here.  Dive! */
     k_flags |= l & ((CI_EPLOCK_NETIF_UNLOCK_FLAGS & ~all_handled_flags) | CI_EPLOCK_FL_NEED_WAKE);
-#if ! CI_CFG_UL_INTERRUPT_HELPER
-    if( k_flags != 0 )
+#if !CI_CFG_UL_INTERRUPT_HELPER
+    if (k_flags != 0)
       break;
 #else
     /* In kernel we can handle following flags only: */
@@ -1252,19 +1291,19 @@ static void ci_netif_unlock_slow(ci_netif* ni)
                        CI_EPLOCK_FL_NEED_WAKE));
     l = ef_eplock_clear_flags(&ni->state->lock, k_flags);
 #endif
-  } while ( !ef_eplock_try_unlock(&ni->state->lock, &l,
-                                  CI_EPLOCK_NETIF_UNLOCK_FLAGS |
-                                  CI_EPLOCK_NETIF_SOCKET_LIST |
-                                  CI_EPLOCK_FL_NEED_WAKE) );
+  } while (!ef_eplock_try_unlock(&ni->state->lock, &l,
+                                 CI_EPLOCK_NETIF_UNLOCK_FLAGS |
+                                     CI_EPLOCK_NETIF_SOCKET_LIST |
+                                     CI_EPLOCK_FL_NEED_WAKE));
 
   /* We've handled everything we needed to, so can return without
    * dropping to the kernel.
    */
-  if( k_flags == 0 )
+  if (k_flags == 0)
     return;
 
   CITP_STATS_NETIF_INC(ni, unlock_slow_syscall);
-#if ! CI_CFG_UL_INTERRUPT_HELPER
+#if !CI_CFG_UL_INTERRUPT_HELPER
   rc = oo_resource_op(ci_netif_get_driver_handle(ni),
                       OO_IOC_EPLOCK_WAKE, NULL);
 #else
@@ -1272,24 +1311,24 @@ static void ci_netif_unlock_slow(ci_netif* ni)
                       OO_IOC_EPLOCK_WAKE_AND_DO, &k_flags);
 #endif
 
-  if( rc < 0 )  LOG_NV(ci_log("%s: rc=%d", __FUNCTION__, rc));
+  if (rc < 0)
+    LOG_NV(ci_log("%s: rc=%d", __FUNCTION__, rc));
 }
 #endif /* __KERNEL__ */
 
-
-void ci_netif_unlock(ci_netif* ni)
+void ci_netif_unlock(ci_netif *ni)
 {
 #ifdef __KERNEL__
   ci_assert_nflags(ni->flags, CI_NETIF_FLAG_IN_DL_CONTEXT);
-#elif ! defined(NDEBUG)
+#elif !defined(NDEBUG)
   int saved_errno = errno;
 #endif
   ci_assert_nflags(ni->state->flags, CI_NETIF_FLAG_PKT_ACCOUNT_PENDING);
 
   ci_assert_equal(ni->state->in_poll, 0);
-  if(CI_LIKELY( ni->state->lock.lock == CI_EPLOCK_LOCKED &&
+  if (CI_LIKELY(ni->state->lock.lock == CI_EPLOCK_LOCKED &&
                 ci_cas64u_succeed(&ni->state->lock.lock,
-                                  CI_EPLOCK_LOCKED, 0) ))
+                                  CI_EPLOCK_LOCKED, 0)))
     return;
   ci_netif_unlock_slow(ni);
 
@@ -1298,7 +1337,7 @@ void ci_netif_unlock(ci_netif* ni)
   ci_assert_equal(saved_errno, errno);
 #endif
 }
-#else /* OO_DO_STACK_POLL */
+#else  /* OO_DO_STACK_POLL */
 /* FIXME Sort it out somehow.
  * This call is used from:
  * (1) efab_tcp_helper_sock_sleep() when CI_SLEEP_NETIF_LOCKED is set;
@@ -1307,46 +1346,47 @@ void ci_netif_unlock(ci_netif* ni)
  * onload_helper process) will take care about all the lock flags
  * eventually.
  */
-void ci_netif_unlock(ci_netif* ni)
+void ci_netif_unlock(ci_netif *ni)
 {
   ci_uint64 l;
-  do {
+  do
+  {
     l = ni->state->lock.lock;
-  } while( ci_cas64u_fail(&ni->state->lock.lock, l, l & ~CI_EPLOCK_LOCKED) );
+  } while (ci_cas64u_fail(&ni->state->lock.lock, l, l & ~CI_EPLOCK_LOCKED));
 }
 #endif /* OO_DO_STACK_POLL */
 
-
-void ci_netif_error_detected(ci_netif* ni, unsigned error_flag,
-                             const char* caller)
+void ci_netif_error_detected(ci_netif *ni, unsigned error_flag,
+                             const char *caller)
 {
-  if( ni->error_flags & error_flag )
+  if (ni->error_flags & error_flag)
     return;
   ci_log("%s: ERROR: [%d] runtime error %x detected in %s()",
          __FUNCTION__, NI_ID(ni), error_flag, caller);
-  ci_log("%s: ERROR: [%d] errors detected: %x %x "CI_NETIF_ERRORS_FMT,
+  ci_log("%s: ERROR: [%d] errors detected: %x %x " CI_NETIF_ERRORS_FMT,
          __FUNCTION__, NI_ID(ni), ni->error_flags, ni->state->error_flags,
          CI_NETIF_ERRORS_PRI_ARG(ni->error_flags | ni->state->error_flags));
   ni->error_flags |= error_flag;
   ni->state->error_flags |= ni->error_flags;
 }
 
-
 #if OO_DO_STACK_POLL
 #if CI_CFG_EPOLL3
 #ifndef __KERNEL__
-int ci_netif_get_ready_list(ci_netif* ni)
+int ci_netif_get_ready_list(ci_netif *ni)
 {
   int i = 0;
 
   ci_netif_lock(ni);
-  do {
-    if( !((ni->state->ready_lists_in_use >> i) & 1) ) {
+  do
+  {
+    if (!((ni->state->ready_lists_in_use >> i) & 1))
+    {
       ni->state->ready_list_pid[i] = getpid();
       ni->state->ready_lists_in_use |= 1 << i;
       break;
     }
-  } while( ++i < CI_CFG_N_READY_LISTS );
+  } while (++i < CI_CFG_N_READY_LISTS);
   ci_netif_unlock(ni);
 
   return i < CI_CFG_N_READY_LISTS ? i : -1;
@@ -1354,35 +1394,36 @@ int ci_netif_get_ready_list(ci_netif* ni)
 #endif
 
 static inline void
-ci_netif_put_ready_list_one(ci_netif* ni, struct oo_p_dllink_state list,
+ci_netif_put_ready_list_one(ci_netif *ni, struct oo_p_dllink_state list,
                             int id)
 {
-  while( ! oo_p_dllink_is_empty(ni, list) ) {
+  while (!oo_p_dllink_is_empty(ni, list))
+  {
     struct oo_p_dllink_state lnk = oo_p_dllink_statep(ni, list.l->next);
-    ci_sb_epoll_state* epoll = CI_CONTAINER(ci_sb_epoll_state,
+    ci_sb_epoll_state *epoll = CI_CONTAINER(ci_sb_epoll_state,
                                             e[id].ready_link, lnk.l);
 
     oo_p_dllink_del(ni, lnk);
     oo_p_dllink_init(ni, lnk);
-    SP_TO_WAITABLE(ni, epoll->sock_id)->ready_lists_in_use &=~ (1 << id);
+    SP_TO_WAITABLE(ni, epoll->sock_id)->ready_lists_in_use &= ~(1 << id);
   }
 }
 
-static void ci_netif_put_ready_list_locked(ci_netif* ni, int id)
+static void ci_netif_put_ready_list_locked(ci_netif *ni, int id)
 {
-  ci_netif_put_ready_list_one(ni, oo_p_dllink_ptr(ni,
-                                        &ni->state->ready_lists[id]), id);
-  ci_netif_put_ready_list_one(ni, oo_p_dllink_ptr(ni,
-                                        &ni->state->unready_lists[id]), id);
+  ci_netif_put_ready_list_one(ni, oo_p_dllink_ptr(ni, &ni->state->ready_lists[id]), id);
+  ci_netif_put_ready_list_one(ni, oo_p_dllink_ptr(ni, &ni->state->unready_lists[id]), id);
   ni->state->ready_lists_in_use &= ~(1 << id);
   ni->state->ready_list_pid[id] = 0;
 }
 
-void ci_netif_free_ready_lists(ci_netif* ni)
+void ci_netif_free_ready_lists(ci_netif *ni)
 {
   int i;
-  for( i = 0; i < CI_CFG_N_READY_LISTS; i++ ) {
-    if( (ni->state->ready_list_flags[i] & CI_NI_READY_LIST_FLAG_PENDING_FREE) ) {
+  for (i = 0; i < CI_CFG_N_READY_LISTS; i++)
+  {
+    if ((ni->state->ready_list_flags[i] & CI_NI_READY_LIST_FLAG_PENDING_FREE))
+    {
       ci_atomic32_and(&ni->state->ready_list_flags[i],
                       ~CI_NI_READY_LIST_FLAG_PENDING_FREE);
       ci_netif_put_ready_list_locked(ni, i);
@@ -1390,19 +1431,20 @@ void ci_netif_free_ready_lists(ci_netif* ni)
   }
 }
 
-void ci_netif_put_ready_list(ci_netif* ni, int id)
+void ci_netif_put_ready_list(ci_netif *ni, int id)
 {
 
   ci_assert(ni->state->ready_lists_in_use & (1 << id));
 
 #ifdef __KERNEL__
   ci_assert(current);
-  if( current->flags & PF_EXITING ? ! ci_netif_trylock(ni) :
-                                    ci_netif_lock(ni) ) {
+  if (current->flags & PF_EXITING ? !ci_netif_trylock(ni) : ci_netif_lock(ni))
+  {
     ci_atomic32_or(&ni->state->ready_list_flags[id],
                    CI_NI_READY_LIST_FLAG_PENDING_FREE);
-    if(! ef_eplock_lock_or_set_flag(&ni->state->lock,
-                                    CI_EPLOCK_NETIF_FREE_READY_LIST) ) {
+    if (!ef_eplock_lock_or_set_flag(&ni->state->lock,
+                                    CI_EPLOCK_NETIF_FREE_READY_LIST))
+    {
       /* lock holder will release the ready list */
       return;
     }
@@ -1417,29 +1459,30 @@ void ci_netif_put_ready_list(ci_netif* ni, int id)
 }
 #endif
 
-
 #ifndef __KERNEL__
-int ci_netif_raw_send(ci_netif* ni, int intf_i,
+int ci_netif_raw_send(ci_netif *ni, int intf_i,
                       const ci_iovec *iov, int iovlen)
 {
-  ci_ip_pkt_fmt* pkt;
-  ci_uint8* p;
+  ci_ip_pkt_fmt *pkt;
+  ci_uint8 *p;
   int i;
 
   ci_netif_lock(ni);
   pkt = ci_netif_pkt_alloc(ni, 0);
-  if( pkt == NULL )
+  if (pkt == NULL)
     return -ENOBUFS;
 
   pkt->intf_i = intf_i;
-  if( intf_i < 0 || intf_i >= CI_CFG_MAX_INTERFACES )
+  if (intf_i < 0 || intf_i >= CI_CFG_MAX_INTERFACES)
     return -ENETDOWN;
 
   pkt->pkt_start_off = 0;
   pkt->buf_len = 0;
   p = pkt->dma_start;
-  for( i = 0; i < iovlen; i++ ) {
-    if( p + CI_IOVEC_LEN(iov) - (ci_uint8*) pkt > CI_CFG_PKT_BUF_SIZE ) {
+  for (i = 0; i < iovlen; i++)
+  {
+    if (p + CI_IOVEC_LEN(iov) - (ci_uint8 *)pkt > CI_CFG_PKT_BUF_SIZE)
+    {
       ci_netif_pkt_release(ni, pkt);
       ci_netif_unlock(ni);
       return -EMSGSIZE;
@@ -1451,13 +1494,13 @@ int ci_netif_raw_send(ci_netif* ni, int intf_i,
     iov++;
   }
 
-  if( oo_ether_hdr(pkt)->ether_type != CI_ETHERTYPE_8021Q )
+  if (oo_ether_hdr(pkt)->ether_type != CI_ETHERTYPE_8021Q)
     pkt->pkt_eth_payload_off = pkt->pkt_start_off + ETH_HLEN;
   else
     pkt->pkt_eth_payload_off = pkt->pkt_start_off + ETH_HLEN + ETH_VLAN_HLEN;
 #if CI_CFG_IPV6
-  if( oo_pkt_ether_type(pkt) == CI_ETHERTYPE_IP )
-    pkt->flags &=~ CI_PKT_FLAG_IS_IP6;
+  if (oo_pkt_ether_type(pkt) == CI_ETHERTYPE_IP)
+    pkt->flags &= ~CI_PKT_FLAG_IS_IP6;
   else
     pkt->flags |= CI_PKT_FLAG_IS_IP6;
 #endif
@@ -1473,7 +1516,6 @@ int ci_netif_raw_send(ci_netif* ni, int intf_i,
 #endif
 #endif
 
-
 #if CI_CFG_TCP_SHARED_LOCAL_PORTS
 static ci_uint32 __ci_netif_active_wild_hash(ci_netif *ni,
                                              ci_addr_t laddr, ci_uint16 lport,
@@ -1482,28 +1524,99 @@ static ci_uint32 __ci_netif_active_wild_hash(ci_netif *ni,
   /* FIXME lots of insights into efrm */
   /* FIXME this is copy of hash in efrm_vi_set.c */
   static const uint8_t rx_hash_key[40] = {
-    0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a,
-    0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a,
-    0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a,
-    0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a,
-    0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
+      0x6d,
+      0x5a,
   };
 
 #ifndef __KERNEL__
   /* We use a transformed key for our optimised Toeplitz hash. */
-  __attribute__((aligned(sizeof(ci_uint32))))
-  static const uint8_t rx_hash_key_sse[40] = {
-    0xb5, 0x6c, 0xb5, 0x6c, 0xb5, 0x6c, 0xb5, 0x6c,
-    0xb5, 0x6c, 0xb5, 0x6c, 0xb5, 0x6c, 0xb5, 0x6c,
-    0xb5, 0x6c, 0xb5, 0x6c, 0xb5, 0x6c, 0xb5, 0x6c,
-    0xb5, 0x6c, 0xb5, 0x6c, 0xb5, 0x6c, 0xb5, 0x6c,
-    0xb5, 0x6c, 0xb5, 0x6c, 0xb5, 0x6c, 0xb5, 0x6c,
+  __attribute__((aligned(sizeof(ci_uint32)))) static const uint8_t rx_hash_key_sse[40] = {
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
+      0xb5,
+      0x6c,
   };
 #endif
 
 #if CI_CFG_IPV6
-  if( CI_IS_ADDR_IP6(laddr) ) {
-    struct {
+  if (CI_IS_ADDR_IP6(laddr))
+  {
+    struct
+    {
       ci_ip6_addr_t raddr;
       ci_ip6_addr_t laddr;
       ci_uint16 rport_be16;
@@ -1516,32 +1629,32 @@ static ci_uint32 __ci_netif_active_wild_hash(ci_netif *ni,
     data.lport_be16 = lport;
 
 #ifndef __KERNEL__
-    return ci_toeplitz_hash_ul(rx_hash_key, rx_hash_key_sse, (ci_uint8*) &data,
+    return ci_toeplitz_hash_ul(rx_hash_key, rx_hash_key_sse, (ci_uint8 *)&data,
                                data_size);
 #endif
-    return ci_toeplitz_hash(rx_hash_key, (ci_uint8*) &data, data_size);
+    return ci_toeplitz_hash(rx_hash_key, (ci_uint8 *)&data, data_size);
   }
 #endif
   {
-    struct {
+    struct
+    {
       ci_uint32 raddr_be32;
       ci_uint32 laddr_be32;
       ci_uint16 rport_be16;
       ci_uint16 lport_be16;
     } __attribute__((packed)) data = {
-      raddr.ip4, laddr.ip4, rport, lport };
+        raddr.ip4, laddr.ip4, rport, lport};
     int data_size = sizeof(data);
 
 #ifndef __KERNEL__
     /* N.B.: Only the lower byte is guaranteed to be accurate here, but this is
      * good enough for our purposes. */
-    return ci_toeplitz_hash_ul(rx_hash_key, rx_hash_key_sse, (ci_uint8*) &data,
+    return ci_toeplitz_hash_ul(rx_hash_key, rx_hash_key_sse, (ci_uint8 *)&data,
                                data_size);
 #endif
-    return ci_toeplitz_hash(rx_hash_key, (ci_uint8*) &data, data_size);
+    return ci_toeplitz_hash(rx_hash_key, (ci_uint8 *)&data, data_size);
   }
 }
-
 
 /* Returns the index in the NIC's RSS indirection table to which the supplied
  * four-tuple would be hashed. */
@@ -1553,10 +1666,9 @@ int ci_netif_active_wild_nic_hash(ci_netif *ni,
          RSS_HASH_MASK;
 }
 
-
 /* Returns the hash table of active wilds for the specified pool. */
-ci_inline struct oo_p_dllink*
-ci_netif_active_wild_pool_table(ci_netif* ni, int aw_pool)
+ci_inline struct oo_p_dllink *
+ci_netif_active_wild_pool_table(ci_netif *ni, int aw_pool)
 {
   ci_assert(ci_netif_is_locked(ni));
   ci_assert_lt(aw_pool, ni->state->active_wild_pools_n);
@@ -1564,7 +1676,6 @@ ci_netif_active_wild_pool_table(ci_netif* ni, int aw_pool)
   return ni->active_wild_table +
          aw_pool * ni->state->active_wild_table_entries_n;
 }
-
 
 /* Returns the list of active wilds in a specified pool for the specified local
  * address.  If such a list does not exist, an empty list is returned, into
@@ -1575,9 +1686,9 @@ ci_netif_active_wild_pool_table(ci_netif* ni, int aw_pool)
  * list.
  * Returns link state with .p==OO_P_NULL in case of failure. */
 struct oo_p_dllink_state
-ci_netif_get_active_wild_list(ci_netif* ni, int aw_pool, ci_addr_t laddr)
+ci_netif_get_active_wild_list(ci_netif *ni, int aw_pool, ci_addr_t laddr)
 {
-  struct oo_p_dllink* table = ci_netif_active_wild_pool_table(ni, aw_pool);
+  struct oo_p_dllink *table = ci_netif_active_wild_pool_table(ni, aw_pool);
   struct oo_p_dllink_state list;
   ci_uint32 bucket, hash1, hash2;
 
@@ -1588,8 +1699,9 @@ ci_netif_get_active_wild_list(ci_netif* ni, int aw_pool, ci_addr_t laddr)
   bucket = hash1;
   list.p = OO_P_NULL;
 
-  do {
-    ci_active_wild* aw;
+  do
+  {
+    ci_active_wild *aw;
     struct oo_p_dllink_state link;
 
     list = oo_p_dllink_ptr(ni, &table[bucket]);
@@ -1598,31 +1710,29 @@ ci_netif_get_active_wild_list(ci_netif* ni, int aw_pool, ci_addr_t laddr)
      * the specified IP address.  This empty list is also at the correct
      * location for the insertion of a new list for that IP address, and so we
      * return it. */
-    if( oo_p_dllink_is_empty(ni, list) )
+    if (oo_p_dllink_is_empty(ni, list))
       return list;
 
     /* The list is non-empty, so look at one of the active wilds contained in
      * it in order to determine and check the local address. */
     link = oo_p_dllink_statep(ni, list.l->next);
     aw = CI_CONTAINER(ci_active_wild, pool_link, link.l);
-    if( CI_IPX_ADDR_EQ(sock_ipx_laddr(&aw->s), laddr) )
+    if (CI_IPX_ADDR_EQ(sock_ipx_laddr(&aw->s), laddr))
       return list;
 
     /* This list is for the wrong IP address, so advance to the next bucket. */
     bucket = (bucket + hash2) & (ni->state->active_wild_table_entries_n - 1);
-  } while( bucket != hash1 );
+  } while (bucket != hash1);
 
   NI_LOG_ONCE(ni, RESOURCE_WARNINGS,
-              "No space in active wild table %d for local address "
-              IPX_FMT, aw_pool, IPX_ARG(AF_IP_L3(laddr)));
+              "No space in active wild table %d for local address " IPX_FMT, aw_pool, IPX_ARG(AF_IP_L3(laddr)));
 
   return list;
 }
 
-
 #ifndef __KERNEL__
 #ifndef NDEBUG
-static int __ci_netif_active_wild_rss_ok(ci_netif* ni,
+static int __ci_netif_active_wild_rss_ok(ci_netif *ni,
                                          ci_addr_t laddr, ci_uint16 lport,
                                          ci_addr_t raddr, ci_uint16 rport)
 {
@@ -1637,27 +1747,25 @@ static int __ci_netif_active_wild_rss_ok(ci_netif* ni,
   ci_assert(!CI_IPX_ADDR_IS_ANY(raddr));
 
   /* It's always ok if we don't have a multi-instance cluster */
-  if( ni->state->cluster_size < 2 )
+  if (ni->state->cluster_size < 2)
     return 1;
 
-  if( ci_netif_active_wild_nic_hash(ni, laddr, lport, raddr, rport)
-      % ni->state->cluster_size == ni->state->rss_instance )
+  if (ci_netif_active_wild_nic_hash(ni, laddr, lport, raddr, rport) % ni->state->cluster_size == ni->state->rss_instance)
     return 1;
   else
     return 0;
-
 }
 #endif
 
-
-static int __ci_netif_active_wild_pool_select(ci_netif* ni, ci_addr_t laddr,
+static int __ci_netif_active_wild_pool_select(ci_netif *ni, ci_addr_t laddr,
                                               ci_addr_t raddr, ci_uint16 rport,
                                               int offset)
 {
   ci_uint32 pool_index = 0;
   ci_uint32 select_hash;
 
-  if( ni->state->active_wild_pools_n > 1 ) {
+  if (ni->state->active_wild_pools_n > 1)
+  {
     select_hash = ci_netif_active_wild_nic_hash(ni, laddr, 0, raddr, rport);
 
     ci_assert_equal(0, (offset & ~RSS_HASH_MASK));
@@ -1668,7 +1776,6 @@ static int __ci_netif_active_wild_pool_select(ci_netif* ni, ci_addr_t laddr,
 
   return pool_index;
 }
-
 
 /* By using ports from the active wild pool we can potentially be re-using
  * ports very quickly, including to the same remote addr/port.  In that case
@@ -1686,12 +1793,12 @@ static int __ci_netif_active_wild_pool_select(ci_netif* ni, ci_addr_t laddr,
  * If so we can give them a new active wild port as usual.  If not, we'll
  * keep looking (potentially increasing the pool).
  */
-static int __ci_netif_active_wild_allow_reuse(ci_netif* ni, ci_active_wild* aw,
+static int __ci_netif_active_wild_allow_reuse(ci_netif *ni, ci_active_wild *aw,
                                               ci_addr_t laddr, ci_addr_t raddr,
                                               unsigned rport)
 {
-  if( ci_ip_time_now(ni) > aw->expiry ||
-      NI_OPTS(ni).tcp_shared_local_ports_reuse_fast )
+  if (ci_ip_time_now(ni) > aw->expiry ||
+      NI_OPTS(ni).tcp_shared_local_ports_reuse_fast)
     return 1;
   else
     return !CI_IPX_ADDR_EQ(aw->last_laddr, laddr) ||
@@ -1699,17 +1806,16 @@ static int __ci_netif_active_wild_allow_reuse(ci_netif* ni, ci_active_wild* aw,
            (aw->last_rport != rport);
 }
 
-
-static oo_sp __ci_netif_active_wild_pool_get(ci_netif* ni, int aw_pool,
+static oo_sp __ci_netif_active_wild_pool_get(ci_netif *ni, int aw_pool,
                                              ci_addr_t laddr, ci_addr_t raddr,
                                              unsigned rport,
-                                             ci_uint16* port_out,
-                                             ci_uint32* prev_seq_out)
+                                             ci_uint16 *port_out,
+                                             ci_uint32 *prev_seq_out)
 {
-  ci_active_wild* aw;
+  ci_active_wild *aw;
   ci_uint16 lport;
   ci_addr_t laddr_aw =
-            NI_OPTS(ni).tcp_shared_local_ports_per_ip ? laddr : addr_any;
+      NI_OPTS(ni).tcp_shared_local_ports_per_ip ? laddr : addr_any;
   int af_space = AF_SPACE_FLAG_IP4;
   oo_sp sp;
   struct oo_p_dllink_state list;
@@ -1719,27 +1825,28 @@ static oo_sp __ci_netif_active_wild_pool_get(ci_netif* ni, int aw_pool,
   ci_assert(ci_netif_is_locked(ni));
 
 #if CI_CFG_IPV6
-  if( CI_IPX_ADDR_IS_ANY(laddr) )
+  if (CI_IPX_ADDR_IS_ANY(laddr))
     af_space = AF_SPACE_FLAG_IP6 | AF_SPACE_FLAG_IP4;
-  else if( CI_IS_ADDR_IP6(laddr) )
+  else if (CI_IS_ADDR_IP6(laddr))
     af_space = AF_SPACE_FLAG_IP6;
 #endif
 
   *prev_seq_out = 0;
 
   list = ci_netif_get_active_wild_list(ni, aw_pool, laddr_aw);
-  if( list.p == OO_P_NULL )
+  if (list.p == OO_P_NULL)
     return OO_SP_NULL;
 
   /* This can happen if active wilds are configured, but we failed to allocate
    * any at stack creation time, for example because there were no filters
    * available, or if none of them give a valid hash for this 4-tuple.
    */
-  if( oo_p_dllink_is_empty(ni, list) )
+  if (oo_p_dllink_is_empty(ni, list))
     return OO_SP_NULL;
 
   last = oo_p_dllink_statep(ni, list.l->prev);
-  oo_p_dllink_for_each_safe(ni, link, tmp, list) {
+  oo_p_dllink_for_each_safe(ni, link, tmp, list)
+  {
     oo_p_dllink_del(ni, link);
     oo_p_dllink_add_tail(ni, list, link);
 
@@ -1756,15 +1863,17 @@ static oo_sp __ci_netif_active_wild_pool_get(ci_netif* ni, int aw_pool,
     sp = ci_netif_filter_lookup(ni, af_space, laddr, lport, raddr, rport,
                                 sock_protocol(&aw->s));
 
-    if( OO_SP_NOT_NULL(sp) ) {
-      ci_sock_cmn* s = ID_TO_SOCK(ni, sp);
-      if( s->b.state == CI_TCP_TIME_WAIT ) {
+    if (OO_SP_NOT_NULL(sp))
+    {
+      ci_sock_cmn *s = ID_TO_SOCK(ni, sp);
+      if (s->b.state == CI_TCP_TIME_WAIT)
+      {
         ci_uint32 seq;
         /* This 4-tuple is in use as TIME_WAIT, but it is safe to re-use
          * TIME_WAIT for active open.  We ensure we use an initial sequence
          * number that is a long way from the one used by the old socket.
          */
-        ci_tcp_state* ts = SOCK_TO_TCP(s);
+        ci_tcp_state *ts = SOCK_TO_TCP(s);
         CITP_STATS_NETIF_INC(ni, tcp_shared_local_ports_reused_tw);
         /* Setting *prev_seq_out to zero indicates to the caller that it should
          * fall back to the clock-driven ISN.  However, sometimes we really do
@@ -1774,19 +1883,20 @@ static oo_sp __ci_netif_active_wild_pool_get(ci_netif* ni, int aw_pool,
          * next connection that is greater in sequence space than the old one.
          */
         seq = ts->snd_nxt + NI_OPTS(ni).tcp_isn_offset;
-        if( seq == 0 )
+        if (seq == 0)
           seq = 1;
 
         /* If this socket's final sequence number has already been stored in
          * the table (which only happens when we reached TIME_WAIT via
          * CLOSING), we need to do a lookup to ensure that the entry gets
          * removed. */
-        if( ts->tcpflags & CI_TCPT_FLAG_SEQNO_REMEMBERED ) {
+        if (ts->tcpflags & CI_TCPT_FLAG_SEQNO_REMEMBERED)
+        {
           ci_uint32 table_seq = ci_tcp_prev_seq_lookup(ni, ts);
           /* The entry might already have been purged, in which case
            * [table_seq] will be zero.  But otherwise, the table entry should
            * agree with the socket. */
-          if( table_seq != 0 )
+          if (table_seq != 0)
             ci_assert_equal(seq, table_seq);
         }
 
@@ -1798,8 +1908,9 @@ static oo_sp __ci_netif_active_wild_pool_get(ci_netif* ni, int aw_pool,
 
       CITP_STATS_NETIF_INC(ni, tcp_shared_local_ports_skipped_in_use);
     }
-    else if( __ci_netif_active_wild_allow_reuse(ni, aw, laddr,
-                                                raddr, rport) ) {
+    else if (__ci_netif_active_wild_allow_reuse(ni, aw, laddr,
+                                                raddr, rport))
+    {
       /* If no-one's using this 4-tuple we can let the caller share this
        * active wild.
        */
@@ -1811,18 +1922,17 @@ static oo_sp __ci_netif_active_wild_pool_get(ci_netif* ni, int aw_pool,
     /* We never remove any entry from the list, we push the entries to the
      * end only.  We should stop after meeting the entry which was the last
      * when we started. */
-    if( link.p == last.p )
+    if (link.p == last.p)
       break;
   }
 
   return OO_SP_NULL;
 }
 
-
-static oo_sp __ci_netif_active_wild_get(ci_netif* ni, ci_addr_t laddr,
+static oo_sp __ci_netif_active_wild_get(ci_netif *ni, ci_addr_t laddr,
                                         ci_addr_t raddr, unsigned rport,
-                                        ci_uint16* port_out,
-                                        ci_uint32* prev_seq_out)
+                                        ci_uint16 *port_out,
+                                        ci_uint32 *prev_seq_out)
 {
   int aw_pool;
   int offset;
@@ -1830,55 +1940,58 @@ static oo_sp __ci_netif_active_wild_get(ci_netif* ni, ci_addr_t laddr,
 
   ci_assert(ci_netif_is_locked(ni));
 
-  for( offset = ni->state->rss_instance;
+  for (offset = ni->state->rss_instance;
        offset < ni->state->active_wild_pools_n;
-       offset += ni->state->cluster_size ) {
+       offset += ni->state->cluster_size)
+  {
     aw_pool = __ci_netif_active_wild_pool_select(ni, laddr, raddr, rport,
                                                  offset);
     aw = __ci_netif_active_wild_pool_get(ni, aw_pool, laddr, raddr, rport,
                                          port_out, prev_seq_out);
-    if( aw != OO_SP_NULL )
+    if (aw != OO_SP_NULL)
       break;
   }
 
   return aw;
 }
 
-
-oo_sp ci_netif_active_wild_get(ci_netif* ni, ci_addr_t laddr,
+oo_sp ci_netif_active_wild_get(ci_netif *ni, ci_addr_t laddr,
                                ci_addr_t raddr, unsigned rport,
-                               ci_uint16* port_out, ci_uint32* prev_seq_out)
+                               ci_uint16 *port_out, ci_uint32 *prev_seq_out)
 {
   oo_sp active_wild;
 
   ci_assert(ci_netif_is_locked(ni));
 
-  if( ! ci_netif_should_allocate_tcp_shared_local_ports(ni) )
+  if (!ci_netif_should_allocate_tcp_shared_local_ports(ni))
     return OO_SP_NULL;
 
   active_wild = __ci_netif_active_wild_get(ni, laddr, raddr, rport,
                                            port_out, prev_seq_out);
 
   /* If we failed to get an active wild try and grow the pool */
-  while( active_wild == OO_SP_NULL &&
-         ni->state->active_wild_n < NI_OPTS(ni).tcp_shared_local_ports_max ) {
+  while (active_wild == OO_SP_NULL &&
+         ni->state->active_wild_n < NI_OPTS(ni).tcp_shared_local_ports_max)
+  {
     int rc;
     ci_addr_t laddr_aw =
-              NI_OPTS(ni).tcp_shared_local_ports_per_ip ? laddr : addr_any;
+        NI_OPTS(ni).tcp_shared_local_ports_per_ip ? laddr : addr_any;
     LOG_TC(ci_log(FN_FMT "Didn't get active wild, getting more",
                   FN_PRI_ARGS(ni)));
     rc = ci_tcp_helper_alloc_active_wild(ni, laddr_aw);
-    if( rc >= 0 ) {
+    if (rc >= 0)
+    {
       CITP_STATS_NETIF_INC(ni, tcp_shared_local_ports_grow);
       active_wild = __ci_netif_active_wild_get(ni, laddr, raddr, rport,
                                                port_out, prev_seq_out);
     }
-    else if( rc == -ENOBUFS ) {
+    else if (rc == -ENOBUFS)
+    {
       break;
     }
-    else {
-      LOG_TC(ci_log(FN_FMT "Alloc active wild for "IPX_FMT":0 "
-                    IPX_FMT":%u FAILED - rc %d",
+    else
+    {
+      LOG_TC(ci_log(FN_FMT "Alloc active wild for " IPX_FMT ":0 " IPX_FMT ":%u FAILED - rc %d",
                     FN_PRI_ARGS(ni), IPX_ARG(AF_IP(laddr)),
                     IPX_ARG(AF_IP(raddr)), htons(rport), rc));
       CITP_STATS_NETIF_INC(ni, tcp_shared_local_ports_grow_failed);
@@ -1886,20 +1999,20 @@ oo_sp ci_netif_active_wild_get(ci_netif* ni, ci_addr_t laddr,
     }
   }
 
-  if( active_wild != OO_SP_NULL ) {
+  if (active_wild != OO_SP_NULL)
+  {
     CITP_STATS_NETIF_INC(ni, tcp_shared_local_ports_used);
-    LOG_TC(ci_log(FN_FMT "Lookup active wild for "IPX_FMT":0 "
-                  IPX_FMT":%u FOUND - lport %u",
+    LOG_TC(ci_log(FN_FMT "Lookup active wild for " IPX_FMT ":0 " IPX_FMT ":%u FOUND - lport %u",
                   FN_PRI_ARGS(ni), IPX_ARG(AF_IP(laddr)),
                   IPX_ARG(AF_IP(raddr)),
                   htons(rport), htons(*port_out)));
   }
-  else {
+  else
+  {
     CITP_STATS_NETIF_INC(ni, tcp_shared_local_ports_exhausted);
-    LOG_TC(ci_log(FN_FMT "Lookup active wild for "IPX_FMT":0 "
-                  IPX_FMT":%u NOT AVAILABLE",
-                FN_PRI_ARGS(ni), IPX_ARG(AF_IP(laddr)),
-                IPX_ARG(AF_IP(raddr)), htons(rport)));
+    LOG_TC(ci_log(FN_FMT "Lookup active wild for " IPX_FMT ":0 " IPX_FMT ":%u NOT AVAILABLE",
+                  FN_PRI_ARGS(ni), IPX_ARG(AF_IP(laddr)),
+                  IPX_ARG(AF_IP(raddr)), htons(rport)));
   }
   return active_wild;
 }
@@ -1908,16 +2021,17 @@ oo_sp ci_netif_active_wild_get(ci_netif* ni, ci_addr_t laddr,
 /* See comment on __ci_netif_active_wild_allow_reuse() to explain the reason
  * we need this.
  */
-void ci_netif_active_wild_sharer_closed(ci_netif* ni, ci_sock_cmn* s)
+void ci_netif_active_wild_sharer_closed(ci_netif *ni, ci_sock_cmn *s)
 {
   oo_sp id;
-  ci_active_wild* aw;
+  ci_active_wild *aw;
 
   id = ci_netif_filter_lookup(ni, sock_af_space(s),
-                                sock_ipx_laddr(s), sock_lport_be16(s),
-                                addr_any, 0, sock_protocol(s));
+                              sock_ipx_laddr(s), sock_lport_be16(s),
+                              addr_any, 0, sock_protocol(s));
 
-  if( OO_SP_NOT_NULL(id) ) {
+  if (OO_SP_NOT_NULL(id))
+  {
     aw = SP_TO_ACTIVE_WILD(ni, id);
     ci_assert(aw->s.b.state == CI_TCP_STATE_ACTIVE_WILD);
     aw->expiry = ci_ip_time_now(ni) + NI_CONF(ni).tconst_2msl_time;
@@ -1928,9 +2042,8 @@ void ci_netif_active_wild_sharer_closed(ci_netif* ni, ci_sock_cmn* s)
 }
 #endif /* CI_CFG_TCP_SHARED_LOCAL_PORTS */
 
-
 #if OO_DO_STACK_POLL
-void oo_tcpdump_free_pkts(ci_netif* ni, ci_uint16 i)
+void oo_tcpdump_free_pkts(ci_netif *ni, ci_uint16 i)
 {
   ci_uint16 read_i = ni->state->dump_read_i;
 
@@ -1939,25 +2052,26 @@ void oo_tcpdump_free_pkts(ci_netif* ni, ci_uint16 i)
   /* Ensure reader has finished reading before we free packets. */
   ci_mb();
 
-  do {
+  do
+  {
     oo_pkt_p id = ni->state->dump_queue[i % CI_CFG_DUMPQUEUE_LEN];
-    if( id != OO_PP_NULL ) {
-      ci_ip_pkt_fmt* pkt = PKT_CHK(ni, id);
+    if (id != OO_PP_NULL)
+    {
+      ci_ip_pkt_fmt *pkt = PKT_CHK(ni, id);
       ni->state->dump_queue[i % CI_CFG_DUMPQUEUE_LEN] = OO_PP_NULL;
       ci_wmb();
       ci_netif_pkt_release(ni, pkt);
     }
-  } while( (++i - read_i) % CI_CFG_DUMPQUEUE_LEN );
+  } while ((++i - read_i) % CI_CFG_DUMPQUEUE_LEN);
 }
 #endif
 
+#if CI_CFG_UL_INTERRUPT_HELPER && !defined(__KERNEL__)
 
-#if CI_CFG_UL_INTERRUPT_HELPER && ! defined(__KERNEL__)
-
-static void sw_update_cb(void* arg, void* data)
+static void sw_update_cb(void *arg, void *data)
 {
-  ci_netif* ni = arg;
-  struct oo_sw_filter_op* op = data;
+  ci_netif *ni = arg;
+  struct oo_sw_filter_op *op = data;
 
   ci_assert(ci_netif_is_locked(ni));
 
@@ -1969,26 +2083,26 @@ static void sw_update_cb(void* arg, void* data)
  * must happen before the stack poll), others may go to stack lock
  * and deferred to unlock function.
  */
-void ci_netif_handle_actions(ci_netif* ni)
+void ci_netif_handle_actions(ci_netif *ni)
 {
   ci_int32 val = ci_atomic_xchg(&ni->state->action_flags, 0);
 
   ci_assert(ci_netif_is_locked(ni));
 
   /* Poll to process incoming FIN, and close endpoint from unlock hook. */
-  if( val & OO_ACTION_CLOSE_EP )
+  if (val & OO_ACTION_CLOSE_EP)
     ef_eplock_holder_set_flags(&ni->state->lock,
                                CI_EPLOCK_NETIF_CLOSE_ENDPOINT |
-                               CI_EPLOCK_NETIF_NEED_POLL);
+                                   CI_EPLOCK_NETIF_NEED_POLL);
 
-  if( val & OO_ACTION_SWF_UPDATE )
+  if (val & OO_ACTION_SWF_UPDATE)
     oo_ringbuffer_iterate(&ni->sw_filter_ops, sw_update_cb, ni);
 }
 
-static void close_cb(void* arg, void* data)
+static void close_cb(void *arg, void *data)
 {
-  ci_netif* ni = arg;
-  oo_sp* id_p = data;
+  ci_netif *ni = arg;
+  oo_sp *id_p = data;
 
   ci_assert(ci_netif_is_locked(ni));
   ci_assert(IS_VALID_SOCK_P(ni, *id_p));
@@ -1997,7 +2111,7 @@ static void close_cb(void* arg, void* data)
 }
 
 /* Ask kernel for any sockets to be closed and really close them */
-void ci_netif_close_pending(ci_netif* ni)
+void ci_netif_close_pending(ci_netif *ni)
 {
   oo_ringbuffer_iterate(&ni->closed_eps, close_cb, ni);
 }

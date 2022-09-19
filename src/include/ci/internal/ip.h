@@ -455,6 +455,7 @@ extern int ci_netif_ctor(ci_netif **, const ci_netif_config_opts *,
 extern int ci_netif_ctor(ci_netif *, ef_driver_handle, const char *name,
                          unsigned flags) CI_HF;
 extern int ci_dpdk_init(void) CI_HF;
+extern int ci_dpdk_shutdown(void) CI_HF;
 extern void ci_netif_cluster_prefault(ci_netif *ni) CI_HF;
 #endif
 extern int ci_netif_restore_id(ci_netif *, unsigned stack_id, bool is_service) CI_HF;
@@ -3042,7 +3043,9 @@ ci_inline ci_ip_pkt_fmt *ci_netif_pkt_alloc(ci_netif *ni, int flags)
 {
   ci_ip_pkt_fmt *pkt;
   int bufset_id;
+#if 0
   ci_assert(ci_netif_is_locked(ni));
+#endif
   bufset_id = NI_PKT_SET(ni);
   if (CI_LIKELY(ni->packets->set[bufset_id].n_free > 0))
     pkt = ci_netif_pkt_get(ni, bufset_id);
@@ -3653,7 +3656,9 @@ extern int ci_udp_timestamp_q_enqueue(ci_netif *ni, ci_udp_state *us,
 ci_inline void ci_udp_recv_q_put_pending(ci_netif *ni, ci_udp_recv_q *q,
                                          ci_ip_pkt_fmt *pkt)
 {
+#if 0
   ci_assert(ci_netif_is_locked(ni));
+#endif
 
   if (pkt->rx_flags & CI_PKT_RX_FLAG_RECV_Q_CONSUMED)
   {
@@ -3716,6 +3721,8 @@ ci_inline ci_ip_pkt_fmt *ci_udp_recv_q_get(ci_netif *ni,
 
   if (ci_udp_recv_q_is_empty(q))
     return NULL;
+
+  // ci_udp_recv_q_put
 
   /* Full barrier needed here: we need to prevent reordering of access to
    * q->extract before the above check, and also, since bumping q->extract
