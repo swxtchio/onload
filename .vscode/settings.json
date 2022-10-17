@@ -1,6 +1,9 @@
 {
     "files.associations": {
         "pkt_p.h": "c",
-        "*.tmpl": "c"
+        "*.tmpl": "c",
+        "internal.h": "c",
+        "if_xdp.h": "c",
+        "rte_common.h": "c"
     }
 }

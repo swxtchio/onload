@@ -45,8 +45,8 @@ static inline void calc_csum_if_needed(ci_netif *ni, ef_vi *vi,
                                        ci_ip_pkt_fmt *pkt)
 {
   /* Calculate packet checksum in case of AF_XDP */
-  if (CI_UNLIKELY(vi->nic_type.arch == EF_VI_ARCH_AF_XDP &&
-                  is_to_primary_vi(pkt)))
+  if (CI_LIKELY((vi->nic_type.arch == EF_VI_ARCH_AF_XDP || vi->nic_type.arch == EF_VI_ARCH_DPDK) &&
+                is_to_primary_vi(pkt)))
   {
     struct iovec my_iov[CI_IP_PKT_SEGMENTS_MAX];
     ci_uint8 protocol;
@@ -264,20 +264,10 @@ void __ci_netif_send(ci_netif *netif, ci_ip_pkt_fmt *pkt)
 
   ___ci_netif_dmaq_insert_prep_pkt(netif, pkt);
 
-  /*
-    LOG_NT(log("%s: [%d] id=%d nseg=%d 0:[" EF_ADDR_FMT ":%d] dhost=" CI_MAC_PRINTF_FORMAT, __FUNCTION__, NI_ID(netif),
-               OO_PKT_FMT(pkt), pkt->n_buffers,
-               pkt_dma_addr(netif, pkt, pkt->intf_i),
-               pkt->buf_len, CI_MAC_PRINTF_ARGS(oo_ether_dhost(pkt))));
-               */
-
-  intf_i = pkt->intf_i;
-  rc = dpdk_send(pkt);
-  if (rc < 0)
-  {
-    LOG_NT(log("FAILED TO DPDK SEND"));
-    goto done;
-  }
+  LOG_NV(log("%s: [%d] id=%d nseg=%d 0:[" EF_ADDR_FMT ":%d] dhost=" CI_MAC_PRINTF_FORMAT, __FUNCTION__, NI_ID(netif),
+             OO_PKT_FMT(pkt), pkt->n_buffers,
+             pkt_dma_addr(netif, pkt, pkt->intf_i),
+             pkt->buf_len, CI_MAC_PRINTF_ARGS(oo_ether_dhost(pkt))));
 
   /* Packets to non-primary VIs could be control messages to a plugin, so
    * there's no requirement that they be Ethernet (or any other recognisable
@@ -368,7 +358,8 @@ void __ci_netif_send(ci_netif *netif, ci_ip_pkt_fmt *pkt)
     }
     else
 #endif
-        if ((rc = ef_vi_transmitv(vi, iov, iov_len, OO_PKT_ID(pkt))) == 0)
+      ef_fill_tx_data(vi, (char *)oo_ether_hdr(pkt), pkt->buf_len);
+    if ((rc = ef_vi_transmitv(vi, iov, iov_len, OO_PKT_ID(pkt))) == 0)
     {
       /* After a DMA send, stop attempting CTPIO sends until the TXQ has
        * drained. */
@@ -467,6 +458,7 @@ bool ci_netif_send_immediate(ci_netif *netif, ci_ip_pkt_fmt *pkt,
   }
   else
   {
+    ef_fill_tx_data(vi, (char *)oo_ether_hdr(pkt), pkt->buf_len);
     if (ef_vi_transmitv(vi, iov, iov_len, OO_PKT_ID(pkt)) != 0)
       return false;
   }

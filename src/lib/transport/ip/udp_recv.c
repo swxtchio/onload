@@ -887,7 +887,7 @@ ci_udp_recvmsg_common(ci_udp_recv_info *rinf)
       CI_SET_ERROR(rc, -rc);
       return rc;
     }
-    dpdk_recv(ni, &us->s.b);
+    // dpdk_recv(ni, &us->s.b);
     rinf->sock_locked = 1;
   }
 

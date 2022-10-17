@@ -510,6 +510,7 @@ ci_inline void ci_netif_send(ci_netif *ni, ci_ip_pkt_fmt *pkt)
 extern bool ci_netif_send_immediate(ci_netif *netif, ci_ip_pkt_fmt *pkt,
                                     const struct ef_vi_tx_extra *extra) CI_HF;
 extern int ci_netif_rx_post(ci_netif *netif, int nic_index, ef_vi *vi) CI_HF;
+extern int ci_netif_rx_dpdk_init(ci_netif *netif) CI_HF;
 #ifdef __KERNEL__
 extern int ci_netif_set_rxq_limit(ci_netif *) CI_HF;
 extern int ci_netif_init_fill_rx_rings(ci_netif *) CI_HF;

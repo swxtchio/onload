@@ -1076,7 +1076,10 @@ no_error:
     sleep_seq = us->s.b.sleep_seq.all;
     ci_rmb();
     if (CI_UNLIKELY((rc = ci_get_so_error(&us->s)) != 0 || us->s.tx_errno))
+    {
+      LOG_U(ci_log("SEND ERROR: %d TX ERRNO %d", rc, us->s.tx_errno));
       goto so_error;
+    }
     if (ci_udp_sendmsg_may_send(us, bytes_to_send))
     {
       us->stats.n_tx_poll_avoids_full += first_time;

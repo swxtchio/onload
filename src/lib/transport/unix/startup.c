@@ -604,7 +604,6 @@ static int
 citp_transport_init(void)
 {
   const char *s;
-  int rc;
 
   citp_get_process_name();
   citp_setup_logging_prefix();
@@ -622,12 +621,6 @@ citp_transport_init(void)
     citp_dump_opts(&CITP_OPTS);
     citp_dump_config();
     /* ?? ci_netif_config_opts_dump(&citp.netif_opts); */
-  }
-
-  rc = citp_dpdk_init();
-  if (rc < 0)
-  {
-    return rc;
   }
 
   citp_oo_get_cpu_khz(&citp.cpu_khz);
@@ -654,6 +647,7 @@ static int citp_transport_register(void)
     citp_protocol_manager_add(&citp_udp_protocol_impl, 0);
 
   return 0;
+  // return ci_dpdk_init();
 }
 
 int _citp_do_init_inprogress = 0;

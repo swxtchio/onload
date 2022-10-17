@@ -35,7 +35,7 @@ int citp_netif_init_ctor(void)
 
   citp_cmn_netif_init_ctor(CITP_OPTS.netif_dtor);
 
-  return 0;
+  return ci_dpdk_init();
 }
 
 int citp_dpdk_init(void)

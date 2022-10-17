@@ -47,21 +47,29 @@
 #include "mp_commands.h"
 
 #define RTE_LOGTYPE_APP RTE_LOGTYPE_USER1
+#define DEBUG_TX 0
+#define DEBUG_RX 1
 
-static const char *_MSG_POOL = "MSG_POOL";
-static const char *_SEC_2_PRI = "SEC_2_PRI";
-static const char *_PRI_2_SEC = "PRI_2_SEC";
+static const char *_TX_RING = "TX_RING";
+static const char *_TX_PREP_RING = "TX_PREP_RING";
+static const char *_RX_PREP_RING = "RX_PREP_RING";
+static const char *_TX_COMP_RING = "TX_COMP_RING";
+static const char *_RX_RING = "RX_RING";
+static const char *_RX_FILL_RING = "RX_FILL_RING";
+static const char *_RX_MBUF_POOL = "RX_MBUF_POOL";
+
+struct rte_ring *tx_ring, *tx_completion_ring, *rx_ring, *rx_fill_ring;
+
 static const unsigned MAX_MESSAGE_SIZE = 2048;
 
 #define RX_RING_SIZE 1024
 #define TX_RING_SIZE 1024
 
-#define NUM_MBUFS 8191
-#define MBUF_CACHE_SIZE 250
+#define NUM_MBUFS 8192
+#define MBUF_CACHE_SIZE 0
 #define BURST_SIZE 32
 
-struct rte_ring *send_ring, *recv_ring;
-struct rte_mempool *message_pool;
+struct rte_mempool *mbuf_pool;
 volatile int quit = 0;
 
 static const struct rte_eth_conf port_conf_default = {
@@ -77,7 +85,7 @@ static const struct rte_eth_conf port_conf_default = {
  * coming from the mbuf_pool passed as a parameter.
  */
 static inline int
-port_init(uint16_t port, struct rte_mempool *mbuf_pool)
+port_init(uint16_t port)
 {
 	struct rte_eth_conf port_conf = port_conf_default;
 	const uint16_t rx_rings = 1, tx_rings = 1;
@@ -165,7 +173,7 @@ static inline int init_ports(void)
 	/* Initialize all ports. */
 	RTE_ETH_FOREACH_DEV(portid)
 	{
-		if (port_init(portid, message_pool) != 0)
+		if (port_init(portid) != 0)
 		{
 			printf("Cannot init port %d \n", portid);
 			return -1;
@@ -173,6 +181,99 @@ static inline int init_ports(void)
 	}
 
 	return 0;
+}
+
+static void print_mbufs(struct rte_mbuf **mbufs, int length)
+{
+	for (int i = 0; i < length; i++)
+	{
+		uint8_t *data = rte_pktmbuf_mtod(mbufs[i], uint8_t *);
+		int data_len = rte_pktmbuf_data_len(mbufs[i]);
+		printf("Data Len: %d\n", data_len);
+		for (int j = 0; j < data_len; j++)
+		{
+			printf("%02X ", data[j]);
+		}
+		printf("\n");
+	}
+}
+
+struct rte_mbuf *rx_bufs[BURST_SIZE];
+struct rte_mbuf *rx_drop_bufs[BURST_SIZE];
+
+static int receive(uint16_t port)
+{
+	int should_drop = 0;
+	int allowed = rte_ring_dequeue_burst(rx_fill_ring, (void **)&rx_bufs[0], BURST_SIZE, NULL);
+	if (allowed == 0)
+	{
+		allowed = BURST_SIZE;
+		should_drop = 1;
+		*rx_bufs = *rx_drop_bufs;
+	}
+
+	uint16_t recv = rte_eth_rx_burst(port, 0, &rx_bufs[0], allowed);
+
+	if (should_drop)
+	{
+		if (recv != 0)
+		{
+			printf("DROPPING RECV. No fill packets\n");
+		}
+		return 0;
+	}
+
+#if DEBUG_RX
+	print_mbufs(rx_bufs, recv);
+#endif
+
+	if (recv != allowed)
+	{
+		rte_ring_enqueue_bulk(rx_fill_ring, (void **)&rx_bufs[recv - 1], allowed - recv, NULL);
+	}
+
+	if (recv != 0)
+	{
+		if (rte_ring_enqueue_bulk(rx_ring, (void **)&rx_bufs[0], recv, NULL) == 0)
+		{
+			printf("FAILED TO HAND TO RX RING");
+		}
+	}
+
+	return recv;
+}
+
+struct rte_mbuf *tx_bufs[BURST_SIZE];
+
+static int transmit(uint16_t port)
+{
+	// might be better to manually move the consumer tail manually?
+	int allowed = rte_ring_dequeue_burst(tx_ring, (void **)&tx_bufs, BURST_SIZE, NULL);
+	if (allowed == 0)
+	{
+		return 0;
+	}
+
+#if DEBUG_TX
+	print_mbufs(tx_bufs, allowed);
+#endif
+
+	// printf("GOT PACKETS TO SEND %d\n", allowed);
+
+	uint16_t txed = rte_eth_tx_burst(port, 0, &tx_bufs[0], allowed);
+
+	// printf("TXED %d packets\n", txed);
+
+	rte_ring_enqueue_bulk(tx_completion_ring, (void **)tx_bufs, txed, NULL);
+
+	if (txed != allowed)
+	{
+		// PUT back unused bufs? This is almost certainly problematic
+		// rte_ring_enqueue_bulk(tx_ring, (void **)&tx_bufs[txed - 1], allowed - txed, NULL);
+		printf("DROPPING A PACKET\n");
+	}
+
+	return txed;
 }
 
 static int
@@ -194,8 +295,11 @@ lcore_run(__attribute__((unused)) void *arg)
 	int inited = init_ports();
 	if (inited < 0)
 	{
-		return -1;
+		rte_eal_cleanup();
+		rte_exit(-1, "Failed to init ports\n");
 	}
+
+	printf("Ports initialized\n");
 
 	/*
 	 * Check that the port is on the same NUMA node as the polling thread
@@ -213,93 +317,15 @@ lcore_run(__attribute__((unused)) void *arg)
 		portToUse = port;
 	}
 
-	printf("Using PORT: %d", portToUse);
+	printf("Using PORT: %d\n", portToUse);
 
-	int send, recv;
-	struct rte_mbuf *bufs[BURST_SIZE];
-	struct rte_mbuf **rx_bufs = bufs;
-	struct rte_mbuf *tx_bufs[1];
-
-	struct rte_ether_addr src_addr;
-	struct rte_ether_addr dst_addr;
-	rte_eth_macaddr_get(portToUse, &src_addr);
-	rte_ether_unformat_addr("00:0d:3a:8c:f7:63", &dst_addr);
-	// rte_ether_unformat_addr("00:0d:3a:8c:ff:ae", &src_addr);
 	while (!quit)
 	{
-		struct rte_mbuf *msg;
-		send = rte_ring_dequeue(recv_ring, (void **)&msg);
-		if (send == 0)
+		int recved = receive(portToUse);
+		int sent = transmit(portToUse);
+		if (recved == 0 && sent == 0)
 		{
-			uint8_t *data = rte_pktmbuf_mtod(msg, uint8_t *);
-			uint16_t dataLen = rte_pktmbuf_data_len(msg);
-			struct rte_ipv4_hdr *hdr = (struct rte_ipv4_hdr *)&data[14];
-			struct rte_ether_hdr *eth_hdr = (struct rte_ether_hdr *)(&data[0]);
-			hdr->src_addr = 94634506;  // my eth1 address 10.2.164.7
-			hdr->dst_addr = 128188938; // hardcoded destination address //10.2.164.5
-			hdr->hdr_checksum = 0;
-			hdr->hdr_checksum = rte_ipv4_cksum(hdr);
-			rte_ether_addr_copy(&src_addr, &eth_hdr->s_addr);
-			rte_ether_addr_copy(&dst_addr, &eth_hdr->d_addr);
-
-			tx_bufs[0] = msg;
-			/*
-			for (int i = 0; i < 40; i++)
-			{
-				printf("%02X ", data[i]);
-			}
-			printf("\n");
-			*/
-			int sent = rte_eth_tx_burst(portToUse, 0, tx_bufs, 1);
-			if (sent != 1)
-			{
-				printf("failed to burst tx: %d\n", sent);
-			}
-			rte_pktmbuf_free(msg);
-		}
-		recv = rte_eth_rx_burst(portToUse, 0, rx_bufs, BURST_SIZE);
-		if (recv != 0)
-		{
-			int index = 0;
-			struct rte_mbuf *pktsToSend[BURST_SIZE];
-			for (int i = 0; i < recv; i++)
-			{
-				uint8_t *data = rte_pktmbuf_mtod(rx_bufs[i], uint8_t *);
-				uint16_t dataLen = rte_pktmbuf_data_len(rx_bufs[i]);
-				struct rte_ether_hdr *hdr = rte_pktmbuf_mtod(rx_bufs[i], struct rte_ether_hdr *);
-				if (hdr->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV6) || rx_bufs[i]->packet_type & RTE_PTYPE_L4_TCP)
-				{
-					// printf("dropping iv6 packet\n");
-				}
-				else
-				{
-					uint8_t *data = rte_pktmbuf_mtod(rx_bufs[i], uint8_t *);
-					uint16_t dataLen = rte_pktmbuf_data_len(rx_bufs[i]);
-					struct rte_ipv4_hdr *hdr = (struct rte_ipv4_hdr *)&data[14];
-					//  swap back
-					hdr->dst_addr = 128057866; // 10.2.162.7
-					hdr->src_addr = 94503434;  // 10.2.162.5
-					hdr->hdr_checksum = 0;
-					hdr->hdr_checksum = rte_ipv4_cksum(hdr);
-					/*
-					printf("Received\n");
-					for (int i = 0; i < dataLen; i++)
-					{
-						printf("%02X ", data[i]);
-					}
-					printf("\n");
-					*/
-					pktsToSend[index++] = rx_bufs[i];
-				}
-			}
-			if (index > 0)
-			{
-				rte_ring_enqueue_bulk(send_ring, (void *const *)pktsToSend, index, NULL);
-			}
-		}
-		if (send == 0 && recv == 0)
-		{
-			usleep(5);
+			usleep(10);
 		}
 	}
 	return 0;
@@ -320,9 +346,10 @@ signal_handler(int signum)
 int main(int argc, char **argv)
 {
 	const unsigned flags = 0;
-	const unsigned ring_size = 64;
+	const unsigned ring_size = 512;
+	const unsigned fill_ring_size = 1024;
 	const unsigned pool_size = 1024;
-	const unsigned pool_cache = 32;
+	const unsigned pool_cache = 0;
 	const unsigned priv_data_sz = 0;
 
 	int ret;
@@ -335,25 +362,41 @@ int main(int argc, char **argv)
 	if (ret < 0)
 		rte_exit(EXIT_FAILURE, "Cannot init EAL\n");
 
-	if (rte_eal_process_type() == RTE_PROC_PRIMARY)
+	if (rte_eal_process_type() != RTE_PROC_PRIMARY)
 	{
-		send_ring = rte_ring_create(_PRI_2_SEC, ring_size, rte_socket_id(), flags);
-		recv_ring = rte_ring_create(_SEC_2_PRI, ring_size, rte_socket_id(), flags);
-		message_pool = rte_pktmbuf_pool_create(_MSG_POOL, NUM_MBUFS * 1,
-											   MBUF_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+		rte_exit(EXIT_FAILURE, "This program must be run as primary");
+	}
+
+	tx_ring = rte_ring_create(_TX_RING, ring_size, SOCKET_ID_ANY, flags);
+	rx_ring = rte_ring_create(_RX_RING, ring_size, SOCKET_ID_ANY, flags);
+	rx_fill_ring = rte_ring_create(_RX_FILL_RING, fill_ring_size, SOCKET_ID_ANY, flags);
+	tx_completion_ring = rte_ring_create(_TX_COMP_RING, ring_size, SOCKET_ID_ANY, flags);
+
+	mbuf_pool = rte_pktmbuf_pool_create(_RX_MBUF_POOL, NUM_MBUFS * 1,
+										MBUF_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, SOCKET_ID_ANY);
+	rte_ring_create(_TX_PREP_RING, ring_size, SOCKET_ID_ANY, 0);
+	rte_ring_create(_RX_PREP_RING, ring_size, SOCKET_ID_ANY, 0);
+
+	if (tx_ring == NULL)
+		rte_exit(EXIT_FAILURE, "Problem getting sending ring\n");
+	if (rx_ring == NULL)
+		rte_exit(EXIT_FAILURE, "Problem getting receiving ring\n");
+	if (rx_fill_ring == NULL)
+		rte_exit(EXIT_FAILURE, "Problem getting fill ring\n");
+	if (tx_completion_ring == NULL)
+		rte_exit(EXIT_FAILURE, "Problem getting comp ring\n");
+	if (mbuf_pool == NULL)
+		rte_exit(EXIT_FAILURE, "Problem getting message pool\n");
+
+	// reserve some rx bufs to keep things empty
+	if (rte_mempool_get_bulk(mbuf_pool, (void **)&rx_drop_bufs[0], BURST_SIZE) != 0)
+	{
+		RTE_LOG(ERR, APP, "Unable to get objects from mempool\n");
 	}
 	else
 	{
-		recv_ring = rte_ring_lookup(_PRI_2_SEC);
-		send_ring = rte_ring_lookup(_SEC_2_PRI);
-		message_pool = rte_mempool_lookup(_MSG_POOL);
+		RTE_LOG(INFO, APP, "GOT DATA SUCCESSFULLY %d \n", rte_mempool_avail_count(mbuf_pool));
 	}
-	if (send_ring == NULL)
-		rte_exit(EXIT_FAILURE, "Problem getting sending ring\n");
-	if (recv_ring == NULL)
-		rte_exit(EXIT_FAILURE, "Problem getting receiving ring\n");
-	if (message_pool == NULL)
-		rte_exit(EXIT_FAILURE, "Problem getting message pool\n");
 
 	RTE_LOG(INFO, APP, "Finished Process Init.\n");
 

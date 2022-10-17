@@ -1918,6 +1918,7 @@ static int netif_tcp_helper_mmap(ci_netif *ni)
    */
   if (ns->io_mmap_bytes != 0)
   {
+    LOG_E(ci_log("%s: oo_resource_mmap IO BYTES %d", __FUNCTION__, ns->io_mmap_bytes));
     rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                           OO_MMAP_TYPE_NETIF,
                           CI_NETIF_MMAP_ID_IO, ns->io_mmap_bytes,
@@ -2007,6 +2008,7 @@ static int netif_tcp_helper_mmap(ci_netif *ni)
    */
   if (ns->buf_mmap_bytes != 0)
   {
+    LOG_E(ci_log("%s: oo_resource_mmap IO BUFFER %d", __FUNCTION__, ns->buf_mmap_bytes));
     rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                           OO_MMAP_TYPE_NETIF,
                           CI_NETIF_MMAP_ID_IOBUFS, ns->buf_mmap_bytes,
@@ -2024,6 +2026,7 @@ static int netif_tcp_helper_mmap(ci_netif *ni)
    */
   if (ns->efct_shm_mmap_bytes != 0)
   {
+    LOG_E(ci_log("%s: oo_resource_mmap SHM RXQ %d", __FUNCTION__, ns->efct_shm_mmap_bytes));
     rc = oo_resource_mmap(ci_netif_get_driver_handle(ni),
                           OO_MMAP_TYPE_NETIF,
                           CI_NETIF_MMAP_ID_EFCT_SHM, ns->efct_shm_mmap_bytes,
@@ -2064,10 +2067,12 @@ static int init_ef_vi(ci_netif *ni, int nic_i, int vi_state_offset,
 {
   ef_vi_state *state = (void *)((char *)ni->state + vi_state_offset);
   ci_netif_state_nic_t *nsn = &(ni->state->nic[nic_i]);
+  int arch = ef_vi_arch_from_efhw_arch(nsn->vi_arch);
   uint32_t *ids = (void *)(state + 1);
   unsigned vi_bar_off = vi_instance * 8192;
+  ci_log("ERROR: I AM IN THE USER LEVEL INITING VI");
 
-  ef_vi_init(vi, ef_vi_arch_from_efhw_arch(nsn->vi_arch), nsn->vi_variant,
+  ef_vi_init(vi, arch, nsn->vi_variant,
              nsn->vi_revision, nsn->vi_flags, nsn->vi_nic_flags, state);
   ef_vi_init_out_flags(vi, nsn->vi_out_flags);
   vi_io_offset += vi_bar_off & (CI_PAGE_SIZE - 1);
@@ -2094,6 +2099,7 @@ static int init_ef_vi(ci_netif *ni, int nic_i, int vi_state_offset,
   ef_vi_init_tx_timestamping(vi, nsn->tx_ts_correction);
   ef_vi_add_queue(vi, vi);
   ef_vi_set_stats_buf(vi, vi_stats);
+
   return 0;
 }
 
@@ -2141,7 +2147,7 @@ unsigned ci_netif_build_future_intf_mask(ci_netif *ni)
         ~ef_vi_flags(vi) & EF_VI_RX_EVENT_MERGE &&
         vi->nic_type.arch != EF_VI_ARCH_EF100 &&
         /* TODO AF_XDP future detection is not currently supported */
-        vi->nic_type.arch != EF_VI_ARCH_AF_XDP)
+        !(vi->nic_type.arch == EF_VI_ARCH_AF_XDP || vi->nic_type.arch == EF_VI_ARCH_DPDK))
       mask |= 1u << nic_i;
   }
   return mask;
@@ -2226,6 +2232,7 @@ static int netif_tcp_helper_build(ci_netif *ni)
     CI_TEST(rc >= 0);
 
     vi_state_bytes = 0;
+    ci_log("There are %d vis", num_vis);
     for (i = 0; i < num_vis; ++i)
     {
       vi = &ni->nic_hw[nic_i].vis[i];
@@ -2379,6 +2386,13 @@ static int netif_tcp_helper_build(ci_netif *ni)
    * didn't need init_net's cplane.*/
   if (ni->cplane_init_net == NULL)
     ns->flags |= CI_NETIF_FLAG_NO_INIT_NET_CPLANE;
+
+  ci_log("RXQ LIMIT: %d", ni->state->rxq_limit);
+  rc = ci_netif_rx_dpdk_init(ni);
+  if (rc < 0)
+  {
+    goto fail3;
+  }
 
   return 0;
 
@@ -3268,6 +3282,7 @@ int ci_netif_dtor(ci_netif *ni)
   /* \TODO Check if we should be calling ci_ipid_dtor() here. */
   /* Free the TCP helper resource */
   netif_tcp_helper_free(ni);
+  ci_dpdk_shutdown();
 
   return 0;
 }

@@ -88,6 +88,8 @@ sfc_preload_linux() {
     preload=libonload.so
   fi
 
+  echo "Preload: $preload"
+
   # Enable the preload 
   rawecho "$LD_PRELOAD" | grep -q "$(basename "$preload")" || {
     if [ -z "$LD_PRELOAD" ]; then

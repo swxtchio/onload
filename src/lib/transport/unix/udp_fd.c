@@ -499,11 +499,11 @@ static int citp_udp_ioctl(citp_fdinfo *fdinfo, int request, void *arg)
   citp_sock_fdi *epi = fdi_to_sock_fdi(fdinfo);
   int rc;
 
-  Log_U(log("%s(" EF_FMT ", %d, 0x%lx)", __FUNCTION__,
-            EF_PRI_ARGS(epi, fdinfo->fd), request, (long)arg));
+  LOG_NV(log("%s(" EF_FMT ", %d, 0x%lx)", __FUNCTION__,
+             EF_PRI_ARGS(epi, fdinfo->fd), request, (long)arg));
 
   rc = ci_udp_ioctl(&epi->sock, fdinfo->fd, request, arg);
-  Log_U(log(LPF "ioctl()=%d", rc));
+  LOG_NV(log(LPF "ioctl()=%d", rc));
   if (rc < 0)
     CI_SET_ERROR(rc, -rc);
   return rc;

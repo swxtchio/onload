@@ -292,8 +292,8 @@ static void handle_rx_pkt(ci_netif *netif, struct ci_netif_poll_state *ps,
     pkt->flags &= ~CI_PKT_FLAG_IS_IP6;
 #endif
 
-    LOG_NR(log(LPF "RX id=%d ip_proto=0x%x", OO_PKT_FMT(pkt),
-               (unsigned)ip->ip_protocol));
+    LOG_E(log(LPF "RX id=%d ip_proto=0x%x", OO_PKT_FMT(pkt),
+              (unsigned)ip->ip_protocol));
     LOG_AR(ci_analyse_pkt(PKT_START(pkt), pkt->pay_len));
 
     CI_IPV4_STATS_INC_IN_RECVS(netif);
@@ -723,6 +723,7 @@ ci_inline int oo_xdp_check_pkt(ci_netif *ni, ci_ip_pkt_fmt **pkt)
   if (NI_OPTS(ni).xdp_mode != 0 &&
       ((*pkt)->flags & CI_PKT_FLAG_XDP_DROP))
   {
+    ci_log("DROPPING XDP PACKET");
     /* just drop */
     (*pkt)->flags &= ~CI_PKT_FLAG_XDP_DROP;
     ci_netif_pkt_release_rx_1ref(ni, *pkt);
@@ -1847,7 +1848,7 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
   ef_event *ev = ni->state->events;
   int i;
   oo_pkt_p pp;
-  int completed_tx = 0;
+  int completed_tx = 0, completed_rx = 0;
 #ifdef OO_HAS_POLL_IN_KERNEL
   int poll_in_kernel;
 #endif
@@ -1904,17 +1905,13 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
       /* Look for RX events first to minimise latency. */
       if (EF_EVENT_TYPE(ev[i]) == EF_EVENT_TYPE_RX)
       {
+        ci_log("RX EVENT");
         CITP_STATS_NETIF_INC(ni, rx_evs);
         OO_PP_INIT(ni, pp, EF_EVENT_RX_RQ_ID(ev[i]));
         pkt = PKT_CHK(ni, pp);
         /* AF_XDP has potentially variable offset and this is taken it into account here,
          * but we shouldn't touch pkt_start_off for ef10 case as it is used to calculate
          * pkt_eth_payload_off properly. */
-        if (evq->nic_type.arch == EF_VI_ARCH_AF_XDP)
-        {
-          pkt->pkt_start_off = ev[i].rx.ofs -
-                               CI_MEMBER_OFFSET(ci_ip_pkt_fmt, dma_start);
-        }
         ci_assert_equal(pkt->intf_i, intf_i);
         __handle_rx_pkt(ni, ps, &s.rx_pkt);
         if ((ev[i].rx.flags & (EF_EVENT_FLAG_SOP | EF_EVENT_FLAG_CONT)) == EF_EVENT_FLAG_SOP)
@@ -1923,6 +1920,12 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
           pkt->pay_len = EF_EVENT_RX_BYTES(ev[i]) - evq->rx_prefix_len;
           oo_offbuf_init(&pkt->buf, PKT_START(pkt), pkt->pay_len);
           s.rx_pkt = pkt;
+          if (evq->nic_type.arch == EF_VI_ARCH_DPDK)
+          {
+            completed_rx = 1;
+            // fill data
+            ef_fill_ev_data(evq, PKT_START(pkt), i);
+          }
         }
         else
         {
@@ -1936,6 +1939,7 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
       {
         int pay_len = ev[i].rx_ref.len;
         CITP_STATS_NETIF_INC(ni, rx_evs);
+        ci_log("TX_RX_REF");
         pkt = alloc_rx_efct_pkt(ni, intf_i, pay_len);
         if (pkt)
         {
@@ -1953,6 +1957,7 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
         int n_ids, j;
         ef_vi *vi = CI_NETIF_TX_VI(ni, intf_i, ev[i].tx.q_id);
         CITP_STATS_NETIF_INC(ni, tx_evs);
+        ci_log("TX_ TYPE");
         n_ids = ef_vi_transmit_unbundle(vi, &ev[i], ids);
         ci_assert_ge(n_ids, 0);
         ci_assert_le(n_ids, sizeof(ni->tx_events) / sizeof(ids[0]));
@@ -1972,6 +1977,7 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
         int n_ids, j;
         ef_vi *vi = CI_NETIF_RX_VI(ni, intf_i, ev[i].rx.q_id);
         CITP_STATS_NETIF_INC(ni, rx_evs);
+        ci_log("RX MULTI");
         n_ids = ef_vi_receive_unbundle(vi, &ev[i], ids);
         ci_assert_ge(n_ids, 0);
         ci_assert_le(n_ids, sizeof(ni->rx_events) / sizeof(ids[0]));
@@ -2114,6 +2120,15 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
   if (completed_tx &&
       ef_vi_transmit_fill_level(ci_netif_vi(ni, intf_i)) == 0)
     ci_netif_ctpio_resume(ni, intf_i);
+
+  if (completed_rx && ef_vi_receive_fill_level(ci_netif_vi(ni, intf_i)) == 0)
+  {
+    int pkt_count = ci_netif_rx_post(ni, intf_i, ci_netif_vi(ni, intf_i));
+    if (pkt_count == 0)
+    {
+      ci_log("Unable to refil rx pkts");
+    }
+  }
 
   if (s.frag_pkt != NULL)
   {
