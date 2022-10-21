@@ -47,7 +47,7 @@
 #include "mp_commands.h"
 
 #define RTE_LOGTYPE_APP RTE_LOGTYPE_USER1
-#define DEBUG_TX 1
+#define DEBUG_TX 0
 #define DEBUG_RX 1
 
 static const char *_TX_RING = "TX_RING";
@@ -204,6 +204,7 @@ static void print_mbufs(struct rte_mbuf **mbufs, int length, char *type)
 
 struct rte_mbuf *rx_bufs[BURST_SIZE];
 struct rte_mbuf *rx_drop_bufs[BURST_SIZE];
+struct rte_mbuf *rx_final_bufs[BURST_SIZE];
 
 static int receive(uint16_t port)
 {
@@ -227,18 +228,34 @@ static int receive(uint16_t port)
 		return 0;
 	}
 
+	int index = 0;
+	for (int i = 0; i < recv; i++)
+	{
+		struct rte_ether_hdr *eth_h = rte_pktmbuf_mtod(rx_bufs[i], struct rte_ether_hdr *);
+		if (ntohs(eth_h->ether_type) == RTE_ETHER_TYPE_IPV6)
+		{
+			recv--;
+			allowed--;
+			rte_ring_enqueue(rx_fill_ring, &rx_bufs[i]);
+		}
+		else
+		{
+			rx_final_bufs[index++] = rx_bufs[i];
+		}
+	}
+
 #if DEBUG_RX
-	print_mbufs(rx_bufs, recv, "RX");
+	print_mbufs(rx_final_bufs, recv, "RX");
 #endif
 
 	if (recv != allowed)
 	{
-		rte_ring_enqueue_bulk(rx_fill_ring, (void **)&rx_bufs[recv - 1], allowed - recv, NULL);
+		rte_ring_enqueue_bulk(rx_fill_ring, (void **)&rx_final_bufs[recv - 1], allowed - recv, NULL);
 	}
 
 	if (recv != 0)
 	{
-		if (rte_ring_enqueue_bulk(rx_ring, (void **)&rx_bufs[0], recv, NULL) == 0)
+		if (rte_ring_enqueue_bulk(rx_ring, (void **)&rx_final_bufs[0], recv, NULL) == 0)
 		{
 			printf("FAILED TO HAND TO RX RING");
 		}

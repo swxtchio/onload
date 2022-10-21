@@ -372,7 +372,6 @@ static void citp_tcp_close(citp_fdinfo *fdinfo)
 
   if (epi->sock.s->b.state == CI_TCP_LISTEN)
   {
-    ci_log("I was listening");
     ci_netif *ni = epi->sock.netif;
     ci_tcp_socket_listen *tls = SOCK_TO_TCP_LISTEN(epi->sock.s);
 
@@ -545,8 +544,8 @@ static int citp_tcp_listen(citp_fdinfo *fdinfo, int backlog)
   citp_sock_fdi *epi = fdi_to_sock_fdi(fdinfo);
   int rc;
 
-  Log_VSS(ci_log(LPF "listen(" EF_FMT ", %d)", EF_PRI_ARGS(epi, fdinfo->fd),
-                 backlog));
+  Log_U(ci_log(LPF "listen(" EF_FMT ", %d)", EF_PRI_ARGS(epi, fdinfo->fd),
+               backlog));
 
   if (epi->sock.s->s_flags & (CI_SOCK_FLAGS_SCALABLE & ~CI_SOCK_FLAG_SCALPASSIVE))
   {
@@ -576,6 +575,7 @@ static int citp_tcp_listen(citp_fdinfo *fdinfo, int backlog)
 
   if (tcp_rc_means_handover(rc))
   {
+    ci_log("handing over");
     /* We need to listen on the OS socket first (that's the very last thing
      * that ci_tcp_listen() does, so it won't have happened yet).
      */
@@ -921,7 +921,6 @@ static int citp_tcp_accept(citp_fdinfo *fdinfo,
   ci_tcp_socket_listen *listener;
   citp_sock_fdi *epi = fdi_to_sock_fdi(fdinfo);
   ci_netif *ni;
-  int have_polled = 0;
   ci_uint64 start_frc = 0 /* for effing stoopid compilers */;
   int rc = 0;
   ci_uint64 max_spin;
@@ -980,18 +979,14 @@ check_ul_accept_q:
 
   /* User-level accept queue is empty.  Are we up-to-date? */
 
-  if (!have_polled)
+  ci_frc64(&start_frc);
+  if (ci_netif_may_poll(ni) && ci_netif_need_poll_frc(ni, start_frc) &&
+      ci_netif_trylock(ni))
   {
-    have_polled = 1;
-    ci_frc64(&start_frc);
-    if (ci_netif_may_poll(ni) && ci_netif_need_poll_frc(ni, start_frc) &&
-        ci_netif_trylock(ni))
-    {
-      int any_evs = ci_netif_poll(ni);
-      ci_netif_unlock(ni);
-      if (any_evs)
-        goto check_ul_accept_q;
-    }
+    int any_evs = ci_netif_poll(ni);
+    ci_netif_unlock(ni);
+    if (any_evs)
+      goto check_ul_accept_q;
   }
 
   /* What about the O/S socket? */

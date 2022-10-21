@@ -874,7 +874,6 @@ ci_udp_recvmsg_common(ci_udp_recv_info *rinf)
   spin_state.do_spin = -1;
   spin_state.si = citp_signal_get_specific_inited();
 #endif
-  LOG_E(ci_log("Receiving with timeout: %d", us->s.so.rcvtimeo_msec));
   spin_state.timeout = us->s.so.rcvtimeo_msec;
 
   /* Grab the per-socket lock so we can access the receive queue. */
@@ -903,7 +902,6 @@ ci_udp_recvmsg_common(ci_udp_recv_info *rinf)
           (us->s.so_error));
   if (slow)
   {
-    ci_log("I am slow");
     goto slow_path;
   }
 

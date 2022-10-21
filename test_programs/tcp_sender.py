@@ -9,11 +9,11 @@ PORT = 31339
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.connect((HOST, PORT))
     print("connected")
-    for i in range(0, 10): 
+    for i in range(0, 5): 
         s.sendall(b"Hello, world")
         print(f"Sent")
         #data = s.recv(1024)
         time.sleep(1)
 
-    #s.shutdown(socket.SHUT_RDWR)
+    s.shutdown(socket.SHUT_RDWR)
 

@@ -191,10 +191,13 @@ int __ci_tcp_shutdown(ci_netif *netif, ci_tcp_state *ts, int how)
   /* if not tied to an fd, make sure we leave this state at some point */
 #if CI_CFG_FD_CACHING
   if (ts->s.b.sb_aflags & (CI_SB_AFLAG_ORPHAN | CI_SB_AFLAG_IN_CACHE))
+  {
 #else
   if (ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN)
+  {
 #endif
     ci_netif_fin_timeout_enter(netif, ts);
+  }
 
   if (how == SHUT_RDWR)
     ts->s.rx_errno = CI_SHUT_RD;
