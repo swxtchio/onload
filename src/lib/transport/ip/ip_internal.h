@@ -226,16 +226,21 @@ ci_tcp_ep_set_filters(ci_netif *ni,
                                        bindto_ifindex, from_tcp_id);
 
 #else
-  // if( ci_tcp_can_set_filter_in_ul(ni, SP_TO_SOCK(ni, sock_id)) ) {
-  rc = ci_tcp_sock_set_stack_filter(ni, SP_TO_SOCK(ni, sock_id));
-  //}
   /*
-  else {
-    LOG_E(ci_log("cannot set in ul"));
-    rc = ci_tcp_helper_ep_set_filters(ci_netif_get_driver_handle(ni), sock_id,
-                                      bindto_ifindex, from_tcp_id);
-  }
-  */
+    if (ci_tcp_can_set_filter_in_ul(ni, SP_TO_SOCK(ni, sock_id)))
+    {
+      */
+  rc = ci_tcp_sock_set_stack_filter(ni, SP_TO_SOCK(ni, sock_id));
+  /*
+}
+else
+{
+  LOG_E(ci_log("cannot set in ul"));
+  rc = ci_tcp_helper_ep_set_filters(ci_netif_get_driver_handle(ni), sock_id,
+                                    bindto_ifindex, from_tcp_id);
+}
+*/
+
 #endif
 
   LOG_E(if (rc < 0)

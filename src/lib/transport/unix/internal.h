@@ -38,6 +38,7 @@
 #include <netinet/tcp.h>
 #include <sys/uio.h>
 #include <pthread.h>
+#include <execinfo.h>
 
 #include <onload/extensions_zc.h>
 #include <ci/internal/efabcfg.h>
@@ -379,6 +380,32 @@ extern void __citp_fdinfo_ref_count_zero(citp_fdinfo *, int fdt_locked) CI_HF;
       (fdi)->thread_id = pthread_self();    \
   } while (0)
 
+ci_inline void do_backtrace(void)
+{
+  int nptrs;
+  void *buffer[10];
+  char **strings;
+
+  nptrs = backtrace(buffer, 10);
+  printf("backtrace() returned %d addresses\n", nptrs);
+
+  /* The call backtrace_symbols_fd(buffer, nptrs, STDOUT_FILENO)
+     would produce similar output to the following: */
+
+  strings = backtrace_symbols(buffer, nptrs);
+  if (strings == NULL)
+  {
+    perror("backtrace_symbols");
+  }
+  else
+  {
+    for (int j = 0; j < nptrs; j++)
+      printf("%s\n", strings[j]);
+  }
+
+  free(strings);
+}
+
 /*! Release one ref count. When the ref count hits zero will cause
  * release of resources, handles etc.
  * Call with [fdt_locked] = 0 if the fd table lock is NOT held (this
@@ -399,6 +426,8 @@ ci_inline void citp_fdinfo_release_ref(citp_fdinfo *fdinfo,
   /* We might call ref_count_zero, which locks fdtable.  Assert that
    * it is possible: */
   ci_assert(oo_per_thread_get()->sig.c.inside_lib);
+
+  // do_backtrace();
 
   if (oo_atomic_quick_dec_and_test(&fdinfo->ref_count))
     __citp_fdinfo_ref_count_zero(fdinfo, fdt_locked);

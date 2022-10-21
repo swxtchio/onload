@@ -769,7 +769,6 @@ int ci_netif_rx_post(ci_netif *netif, int intf_i, ef_vi *vi)
 
   rx_allowed = NI_OPTS(netif).max_rx_packets - netif->state->n_rx_pkts;
   max_n_to_post = ci_netif_rx_vi_space(netif, vi);
-  ci_log("RX FREE SPACE: %d", max_n_to_post);
   if (max_n_to_post > rx_allowed)
     goto rx_limited;
 not_rx_limited:

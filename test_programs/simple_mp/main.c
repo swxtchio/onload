@@ -47,7 +47,7 @@
 #include "mp_commands.h"
 
 #define RTE_LOGTYPE_APP RTE_LOGTYPE_USER1
-#define DEBUG_TX 0
+#define DEBUG_TX 1
 #define DEBUG_RX 1
 
 static const char *_TX_RING = "TX_RING";
@@ -183,8 +183,12 @@ static inline int init_ports(void)
 	return 0;
 }
 
-static void print_mbufs(struct rte_mbuf **mbufs, int length)
+static void print_mbufs(struct rte_mbuf **mbufs, int length, char *type)
 {
+	if (length != 0)
+	{
+		printf("TYPE: %s\n", type);
+	}
 	for (int i = 0; i < length; i++)
 	{
 		uint8_t *data = rte_pktmbuf_mtod(mbufs[i], uint8_t *);
@@ -224,7 +228,7 @@ static int receive(uint16_t port)
 	}
 
 #if DEBUG_RX
-	print_mbufs(rx_bufs, recv);
+	print_mbufs(rx_bufs, recv, "RX");
 #endif
 
 	if (recv != allowed)
@@ -255,7 +259,7 @@ static int transmit(uint16_t port)
 	}
 
 #if DEBUG_TX
-	print_mbufs(tx_bufs, allowed);
+	print_mbufs(tx_bufs, allowed, "TX");
 #endif
 
 	// printf("GOT PACKETS TO SEND %d\n", allowed);
@@ -264,7 +268,7 @@ static int transmit(uint16_t port)
 
 	// printf("TXED %d packets\n", txed);
 
-	rte_ring_enqueue_bulk(tx_completion_ring, (void **)tx_bufs, txed, NULL);
+	rte_ring_enqueue_bulk(tx_completion_ring, (void **)&tx_bufs[0], txed, NULL);
 
 	if (txed != allowed)
 	{

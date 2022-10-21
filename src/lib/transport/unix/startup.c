@@ -99,7 +99,9 @@ static void __oo_per_thread_init_thread(struct oo_per_thread *pt)
   if (CITP_OPTS.tcp_accept_spin)
     pt->spinstate |= (1 << ONLOAD_SPIN_TCP_ACCEPT);
   if (CITP_OPTS.tcp_connect_spin)
+  {
     pt->spinstate |= (1 << ONLOAD_SPIN_TCP_CONNECT);
+  }
   if (CITP_OPTS.pkt_wait_spin)
     pt->spinstate |= (1 << ONLOAD_SPIN_PKT_WAIT);
   if (CITP_OPTS.pipe_recv_spin)

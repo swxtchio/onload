@@ -137,6 +137,8 @@ __ci_tcp_bind(ci_netif *ni, ci_sock_cmn *s, ci_fd_t fd,
                         * See bug 4015 for details */
   union ci_sockaddr_u sa_u;
 
+  ci_log("BINDING SOCKET");
+
   ci_assert(s->domain == AF_INET || s->domain == AF_INET6);
   ci_assert(port_be16);
   ci_assert(s->b.state & CI_TCP_STATE_TCP ||
@@ -384,6 +386,8 @@ static int ci_tcp_connect_check_dest(citp_socket *ep, ci_addr_t dst,
   ci_ip_cache_invalidate(ipcache);
   cicp_user_retrieve(ep->netif, ipcache, &ep->s->cp);
 
+  ci_log("tcp check dest status: %d", ipcache->status);
+
   /* Control plane has selected a source address for us -- remember it. */
   if (ipcache->status != retrrc_noroute &&
       ipcache->status != retrrc_alienroute &&
@@ -486,6 +490,7 @@ int ci_tcp_use_mac_filter_listen(ci_netif *ni, ci_sock_cmn *s, ci_ifid_t ifindex
 #if !defined(__KERNEL__) || CI_CFG_ENDPOINT_MOVE
 int ci_tcp_can_set_filter_in_ul(ci_netif *ni, ci_sock_cmn *s)
 {
+  return 0;
   LOG_E(log("FLAGS %x", s->s_flags));
   if ((s->s_flags & CI_SOCK_FLAGS_SCALABLE) == 0)
   {
@@ -530,8 +535,8 @@ int ci_tcp_sock_set_stack_filter(ci_netif *ni, ci_sock_cmn *s)
   int rc;
   oo_sp sock;
 
-  LOG_TC(log(NSS_FMT " %s", NSS_PRI_ARGS(ni, s), __FUNCTION__));
-  ci_assert((s->s_flags & CI_SOCK_FLAG_STACK_FILTER) == 0);
+  LOG_U(log(NSS_FMT " %s", NSS_PRI_ARGS(ni, s), __FUNCTION__));
+  // ci_assert((s->s_flags & CI_SOCK_FLAG_STACK_FILTER) == 0);
 
   sock = ci_netif_filter_lookup(ni, sock_af_space(s),
                                 sock_ipx_laddr(s), sock_lport_be16(s),
@@ -1026,9 +1031,9 @@ static int ci_tcp_connect_ul_start(ci_netif *ni, ci_tcp_state *ts, ci_fd_t fd,
      * might be overwritten by following attempt */
     TS_IPX_TCP(ts)->tcp_source_be16 = source_be16;
     ts->s.cp.lport_be16 = source_be16;
-    LOG_TC(log(LNT_FMT "connect: our bind returned " IPX_PORT_FMT,
-               LNT_PRI_ARGS(ni, ts), IPX_ARG(AF_IP(saddr)),
-               (unsigned)CI_BSWAP_BE16(TS_IPX_TCP(ts)->tcp_source_be16)));
+    LOG_U(log(LNT_FMT "connect: our bind returned " IPX_PORT_FMT,
+              LNT_PRI_ARGS(ni, ts), IPX_ARG(AF_IP(saddr)),
+              (unsigned)CI_BSWAP_BE16(TS_IPX_TCP(ts)->tcp_source_be16)));
   }
 
   /* Commit peer now - these are OK to be overwritten by following attempt */
@@ -1107,12 +1112,12 @@ static int ci_tcp_connect_ul_start(ci_netif *ni, ci_tcp_state *ts, ci_fd_t fd,
                        CI_SOCK_FLAG_CONNECT_MUST_BIND);
   }
 
-  LOG_TC(log(LNT_FMT "CONNECT " IPX_PORT_FMT "->" IPX_PORT_FMT,
-             LNT_PRI_ARGS(ni, ts),
-             IPX_ARG(AF_IP(ipcache_laddr(&ts->s.pkt))),
-             (unsigned)CI_BSWAP_BE16(TS_IPX_TCP(ts)->tcp_source_be16),
-             IPX_ARG(AF_IP(ipcache_raddr(&ts->s.pkt))),
-             (unsigned)CI_BSWAP_BE16(TS_IPX_TCP(ts)->tcp_dest_be16)));
+  LOG_U(log(LNT_FMT "CONNECT " IPX_PORT_FMT "->" IPX_PORT_FMT,
+            LNT_PRI_ARGS(ni, ts),
+            IPX_ARG(AF_IP(ipcache_laddr(&ts->s.pkt))),
+            (unsigned)CI_BSWAP_BE16(TS_IPX_TCP(ts)->tcp_source_be16),
+            IPX_ARG(AF_IP(ipcache_raddr(&ts->s.pkt))),
+            (unsigned)CI_BSWAP_BE16(TS_IPX_TCP(ts)->tcp_dest_be16)));
 
   /* We are going to send the SYN - set states appropriately */
 
@@ -1216,8 +1221,8 @@ static int ci_tcp_connect_ul_start(ci_netif *ni, ci_tcp_state *ts, ci_fd_t fd,
   if (ts->s.b.sb_aflags & (CI_SB_AFLAG_O_NONBLOCK | CI_SB_AFLAG_O_NDELAY))
   {
     ts->tcpflags |= CI_TCPT_FLAG_NONBLOCK_CONNECT;
-    LOG_TC(log(LNT_FMT "Non-blocking connect - return EINPROGRESS",
-               LNT_PRI_ARGS(ni, ts)));
+    LOG_U(log(LNT_FMT "Non-blocking connect - return EINPROGRESS",
+              LNT_PRI_ARGS(ni, ts)));
     CI_SET_ERROR(*fail_rc, EINPROGRESS);
     /* We don't jump to the "fail" label here, as this is a failure only from
      * the point of view of the connect() API, and we don't want to tear down
@@ -1243,11 +1248,13 @@ ci_inline int ci_tcp_connect_handle_so_error(ci_sock_cmn *s)
 
 static int ci_tcp_connect_ul_syn_sent(ci_netif *ni, ci_tcp_state *ts)
 {
-  int rc = 0;
+  int rc = 0, spins = 0;
 
+  ci_log("Current state: %x", ts->s.b.state);
   if (ts->s.b.state == CI_TCP_SYN_SENT)
   {
     ci_uint32 timeout = ts->s.so.sndtimeo_msec;
+    ci_log("syn sent: timeout %d", timeout);
 
     ci_netif_poll(ni);
     if (OO_SP_NOT_NULL(ts->local_peer))
@@ -1273,7 +1280,9 @@ static int ci_tcp_connect_ul_syn_sent(ci_netif *ni, ci_tcp_state *ts)
         ci_uint64 max_so_spin = (ci_uint64)ts->s.so.sndtimeo_msec *
                                 IPTIMER_STATE(ni)->khz;
         if (max_so_spin <= max_spin)
+        {
           max_spin = max_so_spin;
+        }
       }
 
       ci_frc64(&start_frc);
@@ -1346,6 +1355,7 @@ static int ci_tcp_connect_ul_syn_sent(ci_netif *ni, ci_tcp_state *ts)
     }
 #endif
 
+    ci_log("sleeping for syn ack: spun %d times", spins);
     CI_TCP_SLEEP_WHILE(ni, ts, CI_SB_FLAG_WAKE_RX,
                        timeout,
                        ts->s.b.state == CI_TCP_SYN_SENT, &rc);
@@ -1356,8 +1366,8 @@ out:
 #endif
   if (rc == -EAGAIN)
   {
-    LOG_TC(log(LNT_FMT "timeout on sleep: %d",
-               LNT_PRI_ARGS(ni, ts), -rc));
+    LOG_U(log(LNT_FMT "timeout on sleep: %d",
+              LNT_PRI_ARGS(ni, ts), -rc));
     if (!(ts->tcpflags & CI_TCPT_FLAG_NONBLOCK_CONNECT))
     {
       ts->tcpflags |= CI_TCPT_FLAG_NONBLOCK_CONNECT;
@@ -1369,8 +1379,8 @@ out:
   }
   else if (rc == -EINTR)
   {
-    LOG_TC(log(LNT_FMT "connect() was interrupted by a signal",
-               LNT_PRI_ARGS(ni, ts)));
+    LOG_U(log(LNT_FMT "connect() was interrupted by a signal",
+              LNT_PRI_ARGS(ni, ts)));
     ts->tcpflags |= CI_TCPT_FLAG_NONBLOCK_CONNECT;
     CI_SET_ERROR(rc, EINTR);
     return rc;
@@ -1601,7 +1611,10 @@ start_again:
   /* is this a socket that we can handle? */
   rc = ci_tcp_connect_check_dest(ep, dst_addr, dst_port);
   if (rc)
+  {
+    ci_log("unablbe to handle this tcp socket");
     goto unlock_out;
+  }
 
 #if CI_CFG_ENDPOINT_MOVE
   if ((ts->s.pkt.flags & CI_IP_CACHE_IS_LOCALROUTE) &&
@@ -1636,6 +1649,7 @@ start_again:
 
   crc = ci_tcp_connect_ul_start(ep->netif, ts, fd, dst_addr, dst_port,
                                 &rc);
+  ci_log("TCP CONNECT UL START %d", crc);
   if (crc != CI_CONNECT_UL_OK)
   {
     switch (crc)
@@ -1660,6 +1674,7 @@ start_again:
 
 syn_sent:
   rc = ci_tcp_connect_ul_syn_sent(ep->netif, ts);
+  ci_log("TCP SYN SENT: %d", rc);
 
 unlock_out:
   ci_netif_unlock(ep->netif);
@@ -2366,7 +2381,7 @@ static int ci_tcp_shutdown_listen(citp_socket *ep, int how, ci_fd_t fd)
 
   ci_sock_lock(ep->netif, &tls->s.b);
   ci_netif_lock(ep->netif);
-  LOG_TC(ci_log(SK_FMT " shutdown(SHUT_RD)", SK_PRI_ARGS(ep)));
+  LOG_U(ci_log(SK_FMT " shutdown(SHUT_RD)", SK_PRI_ARGS(ep)));
   __ci_tcp_listen_shutdown(ep->netif, tls);
   __ci_tcp_listen_to_normal(ep->netif, tls);
   {
@@ -2388,6 +2403,7 @@ int ci_tcp_shutdown(citp_socket *ep, int how, ci_fd_t fd)
   ci_sock_cmn *s = ep->s;
   int rc;
 
+  ci_log("tcp shutting down: %X", s->b.state);
   if (s->b.state == CI_TCP_LISTEN)
     return ci_tcp_shutdown_listen(ep, how, fd);
 

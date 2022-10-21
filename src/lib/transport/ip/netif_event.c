@@ -292,7 +292,7 @@ static void handle_rx_pkt(ci_netif *netif, struct ci_netif_poll_state *ps,
     pkt->flags &= ~CI_PKT_FLAG_IS_IP6;
 #endif
 
-    LOG_E(log(LPF "RX id=%d ip_proto=0x%x", OO_PKT_FMT(pkt),
+    LOG_U(log(LPF "RX id=%d ip_proto=0x%x", OO_PKT_FMT(pkt),
               (unsigned)ip->ip_protocol));
     LOG_AR(ci_analyse_pkt(PKT_START(pkt), pkt->pay_len));
 
@@ -1848,7 +1848,7 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
   ef_event *ev = ni->state->events;
   int i;
   oo_pkt_p pp;
-  int completed_tx = 0, completed_rx = 0;
+  int completed_tx = 0; //, completed_rx = 0;
 #ifdef OO_HAS_POLL_IN_KERNEL
   int poll_in_kernel;
 #endif
@@ -1905,7 +1905,6 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
       /* Look for RX events first to minimise latency. */
       if (EF_EVENT_TYPE(ev[i]) == EF_EVENT_TYPE_RX)
       {
-        ci_log("RX EVENT");
         CITP_STATS_NETIF_INC(ni, rx_evs);
         OO_PP_INIT(ni, pp, EF_EVENT_RX_RQ_ID(ev[i]));
         pkt = PKT_CHK(ni, pp);
@@ -1920,12 +1919,9 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
           pkt->pay_len = EF_EVENT_RX_BYTES(ev[i]) - evq->rx_prefix_len;
           oo_offbuf_init(&pkt->buf, PKT_START(pkt), pkt->pay_len);
           s.rx_pkt = pkt;
-          if (evq->nic_type.arch == EF_VI_ARCH_DPDK)
-          {
-            completed_rx = 1;
-            // fill data
-            ef_fill_ev_data(evq, PKT_START(pkt), i);
-          }
+#ifndef __KERNEL__
+          ef_fill_ev_data(evq, PKT_START(pkt), i);
+#endif
         }
         else
         {
@@ -1939,7 +1935,6 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
       {
         int pay_len = ev[i].rx_ref.len;
         CITP_STATS_NETIF_INC(ni, rx_evs);
-        ci_log("TX_RX_REF");
         pkt = alloc_rx_efct_pkt(ni, intf_i, pay_len);
         if (pkt)
         {
@@ -1957,7 +1952,6 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
         int n_ids, j;
         ef_vi *vi = CI_NETIF_TX_VI(ni, intf_i, ev[i].tx.q_id);
         CITP_STATS_NETIF_INC(ni, tx_evs);
-        ci_log("TX_ TYPE");
         n_ids = ef_vi_transmit_unbundle(vi, &ev[i], ids);
         ci_assert_ge(n_ids, 0);
         ci_assert_le(n_ids, sizeof(ni->tx_events) / sizeof(ids[0]));
@@ -1977,7 +1971,6 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
         int n_ids, j;
         ef_vi *vi = CI_NETIF_RX_VI(ni, intf_i, ev[i].rx.q_id);
         CITP_STATS_NETIF_INC(ni, rx_evs);
-        ci_log("RX MULTI");
         n_ids = ef_vi_receive_unbundle(vi, &ev[i], ids);
         ci_assert_ge(n_ids, 0);
         ci_assert_le(n_ids, sizeof(ni->rx_events) / sizeof(ids[0]));
@@ -2121,14 +2114,16 @@ static int ci_netif_poll_evq(ci_netif *ni, struct ci_netif_poll_state *ps,
       ef_vi_transmit_fill_level(ci_netif_vi(ni, intf_i)) == 0)
     ci_netif_ctpio_resume(ni, intf_i);
 
-  if (completed_rx && ef_vi_receive_fill_level(ci_netif_vi(ni, intf_i)) == 0)
-  {
-    int pkt_count = ci_netif_rx_post(ni, intf_i, ci_netif_vi(ni, intf_i));
-    if (pkt_count == 0)
+  /*
+    if (completed_rx && ef_vi_receive_fill_level(ci_netif_vi(ni, intf_i)) == 0)
     {
-      ci_log("Unable to refil rx pkts");
+      int pkt_count = ci_netif_rx_post(ni, intf_i, ci_netif_vi(ni, intf_i));
+      if (pkt_count == 0)
+      {
+        ci_log("Unable to refil rx pkts");
+      }
     }
-  }
+    */
 
   if (s.frag_pkt != NULL)
   {

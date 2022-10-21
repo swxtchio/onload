@@ -3721,7 +3721,9 @@ ci_inline ci_ip_pkt_fmt *ci_udp_recv_q_get(ci_netif *ni,
   ci_ip_pkt_fmt *pkt;
 
   if (ci_udp_recv_q_is_empty(q))
+  {
     return NULL;
+  }
 
   // ci_udp_recv_q_put
 

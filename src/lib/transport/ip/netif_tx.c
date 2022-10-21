@@ -179,6 +179,9 @@ static void __ci_netif_dmaq_shove(ci_netif *ni, oo_pktq *dmaq, ef_vi *vi,
         else
 #endif
         {
+#ifndef __KERNEL__
+          ef_fill_tx_data(vi, (char *)oo_ether_hdr(pkt), pkt->buf_len);
+#endif
           rc = ef_vi_transmitv_init(vi, iov, iov_len, OO_PKT_ID(pkt));
 #if CI_CFG_CTPIO
           if (rc >= 0)
@@ -358,7 +361,9 @@ void __ci_netif_send(ci_netif *netif, ci_ip_pkt_fmt *pkt)
     }
     else
 #endif
+#ifndef __KERNEL__
       ef_fill_tx_data(vi, (char *)oo_ether_hdr(pkt), pkt->buf_len);
+#endif
     if ((rc = ef_vi_transmitv(vi, iov, iov_len, OO_PKT_ID(pkt))) == 0)
     {
       /* After a DMA send, stop attempting CTPIO sends until the TXQ has
@@ -458,7 +463,9 @@ bool ci_netif_send_immediate(ci_netif *netif, ci_ip_pkt_fmt *pkt,
   }
   else
   {
+#ifndef __KERNEL__
     ef_fill_tx_data(vi, (char *)oo_ether_hdr(pkt), pkt->buf_len);
+#endif
     if (ef_vi_transmitv(vi, iov, iov_len, OO_PKT_ID(pkt)) != 0)
       return false;
   }

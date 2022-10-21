@@ -647,7 +647,6 @@ ci_inline void oo_tx_pkt_layout_update(ci_ip_pkt_fmt *pkt, int ether_offset)
    * outer l3 header.  The only change we can make in this function is to
    * add or remove a VLAN.
    */
-  ci_log("offset %d", ether_offset);
   ci_assert(ether_offset == 0 || ether_offset == ETH_VLAN_HLEN);
   ci_assert_equal(pkt->pkt_eth_payload_off, ETH_HLEN);
   ci_assert(pkt->pkt_start_off == pkt->pkt_outer_l3_off - ETH_HLEN ||

@@ -1,22 +1,24 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2004-2020 Xilinx, Inc. */
 /**************************************************************************\
-*//*! \file
-** <L5_PRIVATE L5_SOURCE>
-** \author  djr/ctk
-**  \brief  TCP connection routines:
-**          accept, bind, close, connect, shutdown, getpeername
-**   \date  2003/06/03
-**    \cop  (c) Level 5 Networks Limited.
-** </L5_PRIVATE>
-*//*
+ */
+/*! \file
+ ** <L5_PRIVATE L5_SOURCE>
+ ** \author  djr/ctk
+ **  \brief  TCP connection routines:
+ **          accept, bind, close, connect, shutdown, getpeername
+ **   \date  2003/06/03
+ **    \cop  (c) Level 5 Networks Limited.
+ ** </L5_PRIVATE>
+ */
+/*
 \**************************************************************************/
 
 /*! \cidoxg_lib_transport_ip */
 
 #include "ip_internal.h"
 #ifdef __KERNEL__
-# include <onload/linux_onload.h>
+#include <onload/linux_onload.h>
 #endif
 #include <onload/sleep.h>
 #include <onload/tmpl.h>
@@ -25,12 +27,11 @@
 
 #if OO_DO_STACK_POLL
 
-
 /* Transform a listening socket back to a normal socket. */
-void __ci_tcp_listen_to_normal(ci_netif* netif, ci_tcp_socket_listen* tls)
+void __ci_tcp_listen_to_normal(ci_netif *netif, ci_tcp_socket_listen *tls)
 {
-  citp_waitable_obj* wo = SOCK_TO_WAITABLE_OBJ(&tls->s);
-  ci_tcp_state* ts = &wo->tcp;
+  citp_waitable_obj *wo = SOCK_TO_WAITABLE_OBJ(&tls->s);
+  ci_tcp_state *ts = &wo->tcp;
 #if CI_CFG_IPV6
   int af = ipcache_af(&ts->s.pkt);
 #endif
@@ -56,8 +57,9 @@ void __ci_tcp_listen_to_normal(ci_netif* netif, ci_tcp_socket_listen* tls)
   ci_tcp_state_reinit(netif, ts);
 
 #if CI_CFG_IPV6
-  if( (ts->s.cp.sock_cp_flags & OO_SCP_BOUND_ADDR) ) {
-    if( IS_AF_INET6(af) )
+  if ((ts->s.cp.sock_cp_flags & OO_SCP_BOUND_ADDR))
+  {
+    if (IS_AF_INET6(af))
       ci_tcp_ipcache_convert(AF_INET6, ts);
     /* Restore local address */
     ts->s.cp.laddr = ts->s.laddr;
@@ -66,11 +68,10 @@ void __ci_tcp_listen_to_normal(ci_netif* netif, ci_tcp_socket_listen* tls)
 #endif
 }
 
-
-int ci_tcp_add_fin(ci_tcp_state* ts, ci_netif* netif)
+int ci_tcp_add_fin(ci_tcp_state *ts, ci_netif *netif)
 {
-  ci_ip_pkt_queue* sendq = &ts->send;
-  ci_ip_pkt_fmt* pkt;
+  ci_ip_pkt_queue *sendq = &ts->send;
+  ci_ip_pkt_fmt *pkt;
   ci_tcp_hdr *tcp_hdr;
 
   ci_assert(ci_netif_is_locked(netif));
@@ -78,14 +79,15 @@ int ci_tcp_add_fin(ci_tcp_state* ts, ci_netif* netif)
   LOG_TC(log(FNTS_FMT "sendq_num=%d cork=%d", FNTS_PRI_ARGS(netif, ts),
              sendq->num, !!(ts->s.s_aflags & CI_SOCK_AFLAG_CORK)));
 
-  if( sendq->num ) {
+  if (sendq->num)
+  {
     /* Bang the fin on the end of the send queue. */
     pkt = PKT_CHK(netif, sendq->tail);
     tcp_hdr = TX_PKT_IPX_TCP(ipcache_af(&ts->s.pkt), pkt);
     tcp_hdr->tcp_flags |= CI_TCP_FLAG_FIN | CI_TCP_FLAG_PSH;
     tcp_enq_nxt(ts) += 1;
     pkt->pf.tcp_tx.end_seq = tcp_enq_nxt(ts);
-    pkt->flags &=~ CI_PKT_FLAG_TX_MORE;
+    pkt->flags &= ~CI_PKT_FLAG_TX_MORE;
     ci_tcp_tx_advance(ts, netif);
     return 0;
   }
@@ -96,10 +98,12 @@ int ci_tcp_add_fin(ci_tcp_state* ts, ci_netif* netif)
    * state results in weirdness. */
   pkt = ci_netif_pkt_alloc(netif, CI_PKT_ALLOC_USE_NONB);
 
-  if( pkt ) {
+  if (pkt)
+  {
     ci_tcp_enqueue_no_data(ts, netif, pkt);
   }
-  else {
+  else
+  {
     LOG_U(log(LNTS_FMT "%s: out of pkt bufs",
               LNTS_PRI_ARGS(netif, ts), __FUNCTION__));
     CITP_STATS_NETIF_INC(netif, tcp_cant_fin);
@@ -108,8 +112,7 @@ int ci_tcp_add_fin(ci_tcp_state* ts, ci_netif* netif)
   return 0;
 }
 
-
-int __ci_tcp_shutdown(ci_netif* netif, ci_tcp_state* ts, int how)
+int __ci_tcp_shutdown(ci_netif *netif, ci_tcp_state *ts, int how)
 {
   int rc;
 
@@ -126,15 +129,17 @@ int __ci_tcp_shutdown(ci_netif* netif, ci_tcp_state* ts, int how)
 
 #if CI_CFG_PIO
   /* Free up any associated templated sends */
-  if( how == SHUT_WR || how == SHUT_RDWR )
+  if (how == SHUT_WR || how == SHUT_RDWR)
     ci_tcp_tmpl_free_all(netif, ts);
 #endif
 
   /* "Not connected" here means a FIN has gone both ways.  ie. TIME-WAIT,
   ** CLOSED, CLOSING, LAST-ACK.  Also LISTEN and SYN-SENT of course.
   */
-  if( ts->s.b.state & CI_TCP_STATE_NOT_CONNECTED ) {
-    switch( ts->s.b.state ) {
+  if (ts->s.b.state & CI_TCP_STATE_NOT_CONNECTED)
+  {
+    switch (ts->s.b.state)
+    {
     case CI_TCP_SYN_SENT:
       ci_tcp_drop(netif, ts, ECONNRESET);
       ts->s.rx_errno = ENOTCONN;
@@ -151,16 +156,18 @@ int __ci_tcp_shutdown(ci_netif* netif, ci_tcp_state* ts, int how)
   }
 
   /* SHUT_RD case */
-  if( how == SHUT_RD ) {
+  if (how == SHUT_RD)
+  {
     ts->s.rx_errno = CI_SHUT_RD;
     ci_tcp_wake_not_in_poll(netif, ts, CI_SB_FLAG_WAKE_RX);
     return 0;
   }
 
-
   /* Now we should do SHUT_WR; set CI_SHUT_RD  also if necessary */
-  if( ts->s.tx_errno != 0 ) {
-    if( how == SHUT_RDWR ) {
+  if (ts->s.tx_errno != 0)
+  {
+    if (how == SHUT_RDWR)
+    {
       ts->s.rx_errno = CI_SHUT_RD;
       ci_tcp_wake_not_in_poll(netif, ts, CI_SB_FLAG_WAKE_RX);
     }
@@ -170,24 +177,26 @@ int __ci_tcp_shutdown(ci_netif* netif, ci_tcp_state* ts, int how)
   /* Minimise race condtion with spinning poll/select/epoll:
    * ci_tcp_set_slow_state() sets write event, so we set read event just
    * after this.  See bug 22390. */
-  if( ts->s.b.state == CI_TCP_CLOSE_WAIT ) {
+  if (ts->s.b.state == CI_TCP_CLOSE_WAIT)
+  {
     ci_tcp_set_slow_state(netif, ts, CI_TCP_LAST_ACK);
     /* peer is going to TIME_WAIT and
      * ISN for next connection needs to be recorded */
     ci_tcp_prev_seq_remember(netif, ts);
   }
-  else {
+  else
+  {
     ci_tcp_set_slow_state(netif, ts, CI_TCP_FIN_WAIT1);
   }
   /* if not tied to an fd, make sure we leave this state at some point */
 #if CI_CFG_FD_CACHING
-  if( ts->s.b.sb_aflags & (CI_SB_AFLAG_ORPHAN | CI_SB_AFLAG_IN_CACHE) )
+  if (ts->s.b.sb_aflags & (CI_SB_AFLAG_ORPHAN | CI_SB_AFLAG_IN_CACHE))
 #else
-  if( ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN )
+  if (ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN)
 #endif
     ci_netif_fin_timeout_enter(netif, ts);
 
-  if( how == SHUT_RDWR )
+  if (how == SHUT_RDWR)
     ts->s.rx_errno = CI_SHUT_RD;
   ts->s.tx_errno = EPIPE;
 
@@ -196,37 +205,37 @@ int __ci_tcp_shutdown(ci_netif* netif, ci_tcp_state* ts, int how)
   ci_tcp_set_flags(ts, CI_TCP_FLAG_FIN | CI_TCP_FLAG_ACK);
 
   /* Add the FIN now. */
-  if( (rc = ci_tcp_add_fin(ts, netif)) != 0 ) {
+  if ((rc = ci_tcp_add_fin(ts, netif)) != 0)
+  {
     ts->tcpflags |= CI_TCPT_FLAG_FIN_PENDING;
     tcp_enq_nxt(ts) += 1;
-    if( ci_ip_queue_is_empty(&ts->retrans) )
+    if (ci_ip_queue_is_empty(&ts->retrans))
       ci_tcp_rto_set(netif, ts);
   }
 
   ci_tcp_wake_not_in_poll(netif, ts,
                           CI_SB_FLAG_WAKE_TX |
-                          (how == SHUT_RDWR ? CI_SB_FLAG_WAKE_RX : 0));
+                              (how == SHUT_RDWR ? CI_SB_FLAG_WAKE_RX : 0));
   return 0;
 }
-
 
 #if CI_CFG_FD_CACHING
 #ifdef __KERNEL__
 #include <onload/linux_onload_internal.h>
 
-
 /* Closes a cached fd. In the typical case, this boils down to sys_close. */
-static void uncache_fd(ci_netif* ni, ci_tcp_state* ts)
+static void uncache_fd(ci_netif *ni, ci_tcp_state *ts)
 {
-  int fd  = ts->cached_on_fd;
+  int fd = ts->cached_on_fd;
   int pid = ts->cached_on_pid;
   int cur_tgid = task_tgid_vnr(current);
   LOG_EP(ci_log("Uncaching fd %d on pid %d running pid %d:%s", fd,
                 pid, cur_tgid, current->comm));
   /* No tasklets or other bottom-halves - we always have "current" */
   ci_assert(current);
-  if( !(ts->s.b.sb_aflags & CI_SB_AFLAG_IN_CACHE_NO_FD) &&
-       (~current->flags & PF_EXITING) ) {
+  if (!(ts->s.b.sb_aflags & CI_SB_AFLAG_IN_CACHE_NO_FD) &&
+      (~current->flags & PF_EXITING))
+  {
     /* If the process is exiting, there is nothing to do.
      * Otherwise, we try to close fd. */
     /* There is peril here.  We don't currently have the NO_FD flag set, so
@@ -239,36 +248,42 @@ static void uncache_fd(ci_netif* ni, ci_tcp_state* ts)
     /* Fixme: we re-enter timewait and restart the timer.  It is wrong.
      * We should reuse already-calculated values which were in use before
      * we've called ci_netif_timeout_remove() above. */
-    struct file* filp;
+    struct file *filp;
 
 #ifdef EFRM_DO_NAMESPACES
-    if( ci_netif_check_namespace(ni) < 0 )
+    if (ci_netif_check_namespace(ni) < 0)
       return;
 #endif
 
-    if( current->files != NULL ) {
-      if( pid != cur_tgid ) {
+    if (current->files != NULL)
+    {
+      if (pid != cur_tgid)
+      {
         NI_LOG(ni, RESOURCE_WARNINGS,
                "%s: pid mismatch: cached_on_pid=%d current=%d:%s", __func__,
                pid, cur_tgid, current->comm);
       }
-      else if( (filp = fget(fd)) == NULL ) {
+      else if ((filp = fget(fd)) == NULL)
+      {
         NI_LOG(ni, RESOURCE_WARNINGS,
                "%s: pid %d does not has cached file under fd=%d",
                __func__, fd, pid);
       }
-      else if( filp->f_op != &linux_tcp_helper_fops_tcp ) {
+      else if (filp->f_op != &linux_tcp_helper_fops_tcp)
+      {
         NI_LOG(ni, RESOURCE_WARNINGS,
                "%s: pid %d has unexpected file under fd=%d",
                __func__, fd, pid);
         fput(filp);
       }
-      else {
+      else
+      {
         fput(filp);
         efab_linux_sys_close(fd);
       }
     }
-    else {
+    else
+    {
       /* This should not happen, as uncache_fd() must not be deferred. */
       ci_log("%s: called from workqueue - cannot close file descriptor %d.",
              __func__, fd);
@@ -280,11 +295,10 @@ static void uncache_fd(ci_netif* ni, ci_tcp_state* ts)
 ci_inline void clear_cached_state(ci_tcp_state *ts)
 {
   ci_atomic32_and(&ts->s.b.sb_aflags,
-                  ~(CI_SB_AFLAG_IN_CACHE|CI_SB_AFLAG_IN_PASSIVE_CACHE));
+                  ~(CI_SB_AFLAG_IN_CACHE | CI_SB_AFLAG_IN_PASSIVE_CACHE));
   ts->cached_on_fd = -1;
   ts->cached_on_pid = -1;
 }
-
 
 /* Uncache an EP.
  * This unsets the cache related state:
@@ -301,11 +315,11 @@ ci_inline void clear_cached_state(ci_tcp_state *ts)
  * sockets on the listening socket.  Else removes the cached sockets
  * on the stack a.k.a. active caching.
  */
-static void uncache_ep(ci_netif *netif, ci_tcp_socket_listen* tls,
+static void uncache_ep(ci_netif *netif, ci_tcp_socket_listen *tls,
                        ci_tcp_state *ts)
 {
   LOG_EP(ci_log("Uncaching ep %d", S_FMT(ts)));
-  ci_assert( ci_tcp_is_cached(ts) );
+  ci_assert(ci_tcp_is_cached(ts));
 
   oo_p_dllink_del_init(netif, oo_p_dllink_sb(netif, &ts->s.b,
                                              &ts->epcache_link));
@@ -324,7 +338,7 @@ static void uncache_ep(ci_netif *netif, ci_tcp_socket_listen* tls,
   /* After we clear CI_SB_AFLAG_IN_CACHE flag, we are not
    * ci_tcp_is_timeout_orphan() any more.  Do not confuse other
    * parts of code: get out from timewait list. */
-  if ( ci_tcp_is_timeout_orphan(ts) )
+  if (ci_tcp_is_timeout_orphan(ts))
     ci_netif_timeout_remove(netif, ts);
 
   clear_cached_state(ts);
@@ -338,53 +352,55 @@ static void uncache_ep(ci_netif *netif, ci_tcp_socket_listen* tls,
    * last (given that each will run precisely once) do the cleanup, and we
    * control this using [CI_SB_AFLAG_IN_CACHE_NO_FD_BIT]. */
   /* Fixme: what about timewait? */
-  if( ci_bit_test_and_set(&ts->s.b.sb_aflags, CI_SB_AFLAG_IN_CACHE_NO_FD_BIT) )
+  if (ci_bit_test_and_set(&ts->s.b.sb_aflags, CI_SB_AFLAG_IN_CACHE_NO_FD_BIT))
     efab_tcp_helper_close_endpoint(netif2tcp_helper_resource(netif), S_SP(ts), 0);
 
-  if( tls ) {
+  if (tls)
+  {
     /* increase per socket counter even if passive cache is shared */
-    ci_atomic32_inc((volatile ci_uint32*)
-                    CI_NETIF_PTR(netif, tls->epcache.avail_stack));
+    ci_atomic32_inc((volatile ci_uint32 *)
+                        CI_NETIF_PTR(netif, tls->epcache.avail_stack));
     ci_atomic32_inc(&tls->cache_avail_sock);
 
     ci_assert_le(netif->state->passive_cache_avail_stack,
                  netif->state->opts.sock_cache_max);
-    if( ~NI_OPTS(netif).scalable_filter_mode & CITP_SCALABLE_MODE_PASSIVE )
+    if (~NI_OPTS(netif).scalable_filter_mode & CITP_SCALABLE_MODE_PASSIVE)
       ci_assert_le(tls->cache_avail_sock,
                    netif->state->opts.per_sock_cache_max);
   }
-  else if( ts->s.s_flags & CI_SOCK_FLAG_SCALPASSIVE ) {
+  else if (ts->s.s_flags & CI_SOCK_FLAG_SCALPASSIVE)
+  {
     ci_atomic32_inc(&netif->state->passive_cache_avail_stack);
     /* we do not know tls, so per-socket statistic cannot be updated */
     ci_assert_le(netif->state->passive_cache_avail_stack,
                  netif->state->opts.sock_cache_max);
   }
-  else {
-    ci_netif_state* ns = netif->state;
+  else
+  {
+    ci_netif_state *ns = netif->state;
     ci_atomic32_inc(&ns->active_cache_avail_stack);
     ci_assert_le(ns->active_cache_avail_stack, ns->opts.sock_cache_max);
   }
 }
-
 
 /* If called with non-NULL tls, then this will remove the cached
  * sockets on the listening socket.  Else removes the cached sockets
  * on the stack a.k.a. active caching.
  */
 static void
-uncache_ep_list(ci_netif *netif, ci_tcp_socket_listen* tls,
+uncache_ep_list(ci_netif *netif, ci_tcp_socket_listen *tls,
                 struct oo_p_dllink_state thelist)
 {
   struct oo_p_dllink_state l, tmp;
   ci_assert(ci_netif_is_locked(netif));
-  oo_p_dllink_for_each_safe(netif, l, tmp, thelist) {
-    ci_tcp_state* cached_state = CI_CONTAINER(ci_tcp_state, epcache_link, l.l);
+  oo_p_dllink_for_each_safe(netif, l, tmp, thelist)
+  {
+    ci_tcp_state *cached_state = CI_CONTAINER(ci_tcp_state, epcache_link, l.l);
     ci_assert(cached_state);
     ci_assert(ci_tcp_is_cached(cached_state));
     uncache_ep(netif, tls, cached_state);
   }
 }
-
 
 /* This function closes any cached fds associated with this listening socket.
  * Compare ci_tcp_listen_shutdown_queues(), which, amongst its other duties,
@@ -393,7 +409,7 @@ uncache_ep_list(ci_netif *netif, ci_tcp_socket_listen* tls,
  * cannot be guaranteed to run in the context of the caching process, while
  * this function does not require the lock, and so can always be run in the
  * correct context. */
-void ci_tcp_listen_uncache_fds(ci_netif* netif, ci_tcp_socket_listen* tls)
+void ci_tcp_listen_uncache_fds(ci_netif *netif, ci_tcp_socket_listen *tls)
 {
   /* For scalable passive there will be nothing to do here */
   struct oo_p_dllink_state fd_states = oo_p_dllink_sb(netif, &tls->s.b,
@@ -402,10 +418,11 @@ void ci_tcp_listen_uncache_fds(ci_netif* netif, ci_tcp_socket_listen* tls)
 
   l = oo_p_dllink_statep(netif, ci_xchg32(&fd_states.l->next, OO_P_NULL));
 
-  if( tls->s.s_flags & CI_SOCK_FLAG_SCALPASSIVE )
+  if (tls->s.s_flags & CI_SOCK_FLAG_SCALPASSIVE)
     return;
-  while( l.p != fd_states.p ) {
-    ci_tcp_state* cached_state = CI_CONTAINER(ci_tcp_state,
+  while (l.p != fd_states.p)
+  {
+    ci_tcp_state *cached_state = CI_CONTAINER(ci_tcp_state,
                                               epcache_fd_link, l.l);
     l = oo_p_dllink_statep(netif, l.l->next);
 
@@ -422,18 +439,19 @@ void ci_tcp_listen_uncache_fds(ci_netif* netif, ci_tcp_socket_listen* tls)
   }
 }
 
-
 /* Drop the socket cache by freeing up epcache_pending and epcache_cache */
-void ci_tcp_epcache_drop_cache(ci_netif* ni)
+void ci_tcp_epcache_drop_cache(ci_netif *ni)
 {
   unsigned id;
   ci_assert(ci_netif_is_locked(ni));
-  for( id = 0; id < ni->state->n_ep_bufs; ++id ) {
-    citp_waitable_obj* wo = ID_TO_WAITABLE_OBJ(ni, id);
-    if( wo->waitable.state == CI_TCP_LISTEN ) {
-      citp_waitable* w = &wo->waitable;
-      ci_sock_cmn* s = CI_CONTAINER(ci_sock_cmn, b, w);
-      ci_tcp_socket_listen* tls = SOCK_TO_TCP_LISTEN(s);
+  for (id = 0; id < ni->state->n_ep_bufs; ++id)
+  {
+    citp_waitable_obj *wo = ID_TO_WAITABLE_OBJ(ni, id);
+    if (wo->waitable.state == CI_TCP_LISTEN)
+    {
+      citp_waitable *w = &wo->waitable;
+      ci_sock_cmn *s = CI_CONTAINER(ci_sock_cmn, b, w);
+      ci_tcp_socket_listen *tls = SOCK_TO_TCP_LISTEN(s);
       ci_tcp_listen_uncache_fds(ni, tls);
       uncache_ep_list(ni, tls,
                       oo_p_dllink_sb(ni, &tls->s.b, &tls->epcache.pending));
@@ -443,10 +461,9 @@ void ci_tcp_epcache_drop_cache(ci_netif* ni)
   }
 }
 
-
-void ci_tcp_active_cache_drop_cache(ci_netif* ni)
+void ci_tcp_active_cache_drop_cache(ci_netif *ni)
 {
-  ci_netif_state* ns = ni->state;
+  ci_netif_state *ns = ni->state;
   ci_assert(ci_netif_is_locked(ni));
   uncache_ep_list(ni, NULL,
                   oo_p_dllink_ptr(ni, &ns->active_cache.pending));
@@ -454,10 +471,9 @@ void ci_tcp_active_cache_drop_cache(ci_netif* ni)
                   oo_p_dllink_ptr(ni, &ns->active_cache.cache));
 }
 
-
-void ci_tcp_passive_scalable_cache_drop_cache(ci_netif* ni)
+void ci_tcp_passive_scalable_cache_drop_cache(ci_netif *ni)
 {
-  ci_netif_state* ns = ni->state;
+  ci_netif_state *ns = ni->state;
   ci_assert(ci_netif_is_locked(ni));
   uncache_ep_list(ni, NULL,
                   oo_p_dllink_ptr(ni, &ns->passive_scalable_cache.pending));
@@ -468,15 +484,15 @@ void ci_tcp_passive_scalable_cache_drop_cache(ci_netif* ni)
 #endif
 #endif
 
-
 #if OO_DO_STACK_POLL
 
 #ifndef __KERNEL__
 static
 #endif
-/* Wait for SO_LINGER timeout (or ACKed send queue).
- * Starts with the stack locked, exits with the stack unlocked. */
-void ci_tcp_linger(ci_netif* ni, ci_tcp_state* ts)
+    /* Wait for SO_LINGER timeout (or ACKed send queue).
+     * Starts with the stack locked, exits with the stack unlocked. */
+    void
+    ci_tcp_linger(ci_netif *ni, ci_tcp_state *ts)
 {
   /* This is called at user-level when a socket is closed if linger is
   ** enabled and has a timeout, and there is TX data outstanding.
@@ -489,7 +505,7 @@ void ci_tcp_linger(ci_netif* ni, ci_tcp_state* ts)
   ci_uint32 timeout = ts->s.so.linger * 1000;
   int flags = CI_SLEEP_NETIF_LOCKED;
 
-  LOG_TC(log("%s: "NTS_FMT, __FUNCTION__, NTS_PRI_ARGS(ni, ts)));
+  LOG_TC(log("%s: " NTS_FMT, __FUNCTION__, NTS_PRI_ARGS(ni, ts)));
 
   ci_assert(ci_netif_is_locked(ni));
 #ifndef __KERNEL__
@@ -498,19 +514,21 @@ void ci_tcp_linger(ci_netif* ni, ci_tcp_state* ts)
   ci_assert(ts->s.s_flags & CI_SOCK_FLAG_LINGER);
   ci_assert(ts->s.b.state != CI_TCP_LISTEN);
 
-  while( 1 ) {
+  while (1)
+  {
     sleep_seq = ts->s.b.sleep_seq.all;
     ci_rmb();
-    if( SEQ_EQ(tcp_enq_nxt(ts), tcp_snd_una(ts)) ) {
+    if (SEQ_EQ(tcp_enq_nxt(ts), tcp_snd_una(ts)))
+    {
       break;
     }
     rc = ci_sock_sleep(ni, &ts->s.b, CI_SB_FLAG_WAKE_TX, flags,
                        sleep_seq, &timeout);
     flags = 0;
-    if( rc )
+    if (rc)
       break;
   }
-  if( flags )
+  if (flags)
     ci_netif_unlock(ni);
 }
 #endif
@@ -519,23 +537,25 @@ void ci_tcp_linger(ci_netif* ni, ci_tcp_state* ts)
 #if defined(__KERNEL__)
 static
 #endif
-int ci_tcp_close(ci_netif* netif, ci_tcp_state* ts)
+    int
+    ci_tcp_close(ci_netif *netif, ci_tcp_state *ts)
 {
   ci_assert(netif);
   ci_assert(ts);
   ci_assert(ci_netif_is_locked(netif));
   ci_assert(ts->s.b.state != CI_TCP_LISTEN);
 
-  if( ts->s.b.state == CI_TCP_CLOSED ) {
+  if (ts->s.b.state == CI_TCP_CLOSED)
+  {
     LOG_TV(ci_log(LPF "%d CLOSE already closed", S_FMT(ts)));
     /* Still must clear filters in case socket is clustered. */
     ci_tcp_ep_clear_filters(netif, S_SP(ts), 0);
-    if( ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN )
+    if (ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN)
       ci_tcp_state_free(netif, ts);
     return 0;
   }
 
-  if( (ts->s.b.sb_flags & CI_SB_FLAG_MOVED) )
+  if ((ts->s.b.sb_flags & CI_SB_FLAG_MOVED))
     goto drop;
 
 #if CI_CFG_TCP_OFFLOAD_RECYCLER
@@ -543,27 +563,32 @@ int ci_tcp_close(ci_netif* netif, ci_tcp_state* ts)
                                              &ts->recycle_link));
 #endif
 
-  if( tcp_rcv_usr(ts) != 0 ) {
+  if (tcp_rcv_usr(ts) != 0)
+  {
     /* Linux specific behaviour: send reset and ditch
      * connection if all rx data not read.
      */
     CI_TCP_EXT_STATS_INC_TCP_ABORT_ON_CLOSE(netif);
     LOG_TV(log(LPF "%d CLOSE sent RST, as rx data present added %u "
-               "delivered %u tcp_rcv_usr=%u", S_FMT(ts), ts->rcv_added,
+                   "delivered %u tcp_rcv_usr=%u",
+               S_FMT(ts), ts->rcv_added,
                ts->rcv_delivered, tcp_rcv_usr(ts)));
     ci_tcp_send_rst(netif, ts);
     goto drop;
   }
-  if( ts->snd_delegated != 0 ) {
+  if (ts->snd_delegated != 0)
+  {
     CI_TCP_EXT_STATS_INC_TCP_ABORT_ON_DELEGATED_SEND(netif);
     ci_tcp_send_rst(netif, ts);
     goto drop;
   }
-  if( (ts->s.s_flags & CI_SOCK_FLAG_LINGER) && ts->s.so.linger == 0 ) {
+  if ((ts->s.s_flags & CI_SOCK_FLAG_LINGER) && ts->s.so.linger == 0)
+  {
     /* Linux calls sk_prot->disconnect() in this case.  And increments
      * LINUX_MIB_TCPABORTONDATA. */
     CI_TCP_EXT_STATS_INC_TCP_ABORT_ON_DATA(netif);
-    if( ! (ts->s.b.state & CI_TCP_STATE_NOT_CONNECTED) ) {
+    if (!(ts->s.b.state & CI_TCP_STATE_NOT_CONNECTED))
+    {
       /* TCP abort, drop connection, send reset only if connected,
       ** rfc793 p62.
       */
@@ -572,22 +597,24 @@ int ci_tcp_close(ci_netif* netif, ci_tcp_state* ts)
     }
 
     /* Do not drop a connection which is already in TIME_WAIT */
-    if( ts->s.b.state != CI_TCP_TIME_WAIT )
+    if (ts->s.b.state != CI_TCP_TIME_WAIT)
       goto drop;
   }
 
-  if( CI_UNLIKELY( ts->tcpflags & CI_TCPT_FLAG_FIN_PENDING ) )
+  if (CI_UNLIKELY(ts->tcpflags & CI_TCPT_FLAG_FIN_PENDING))
     ci_tcp_resend_fin(ts, netif);
 
-  if( (ts->s.b.state == CI_TCP_TIME_WAIT) ||
-      (ts->s.b.state == CI_TCP_CLOSING)   ||
-      (ts->s.b.state == CI_TCP_LAST_ACK) )
+  if ((ts->s.b.state == CI_TCP_TIME_WAIT) ||
+      (ts->s.b.state == CI_TCP_CLOSING) ||
+      (ts->s.b.state == CI_TCP_LAST_ACK))
     return 0;
 
-  if( ! (ts->s.b.state & CI_TCP_STATE_NOT_CONNECTED) ) {
+  if (!(ts->s.b.state & CI_TCP_STATE_NOT_CONNECTED))
+  {
     int rc;
 
-    if( ts->s.b.sb_aflags & CI_SB_AFLAG_TCP_IN_ACCEPTQ ) {
+    if (ts->s.b.sb_aflags & CI_SB_AFLAG_TCP_IN_ACCEPTQ)
+    {
       ci_tcp_send_rst(netif, ts);
       /* set error state to placate ci_tcp_set_slow_state's debug checks */
       ts->s.so_error = ECONNRESET;
@@ -603,35 +630,37 @@ int ci_tcp_close(ci_netif* netif, ci_tcp_state* ts)
 
     rc = __ci_tcp_shutdown(netif, ts, SHUT_RDWR);
 
-    if( (ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN) &&
-        ts->s.b.state == CI_TCP_CLOSED ) {
+    if ((ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN) &&
+        ts->s.b.state == CI_TCP_CLOSED)
+    {
       ci_tcp_state_free(netif, ts);
     }
 #ifndef __KERNEL__
     /* Socket caching + SO_LINGER.  In-kernel case is handled in
      * efab_tcp_helper_close_endpoint() */
-    else if(
-             (ts->s.s_flags & CI_SOCK_FLAG_LINGER) &&
-             ! SEQ_EQ(tcp_enq_nxt(ts), tcp_snd_una(ts))
-#if ! CI_CFG_UL_INTERRUPT_HELPER
-            && (ts->s.b.sb_aflags & CI_SB_AFLAG_IN_CACHE)
+    else if (
+        (ts->s.s_flags & CI_SOCK_FLAG_LINGER) &&
+        !SEQ_EQ(tcp_enq_nxt(ts), tcp_snd_una(ts))
+#if !CI_CFG_UL_INTERRUPT_HELPER
+        && (ts->s.b.sb_aflags & CI_SB_AFLAG_IN_CACHE)
 #else
-            /* Fixme: we should guarantee that this is running the right
-             * process.
-             */
+    /* Fixme: we should guarantee that this is running the right
+     * process.
+     */
 #endif
-           ) {
-        ci_assert(ts->s.so.linger != 0);
-        ci_tcp_linger(netif, ts);
-        ci_netif_lock(netif);
+    )
+    {
+      ci_assert(ts->s.so.linger != 0);
+      ci_tcp_linger(netif, ts);
+      ci_netif_lock(netif);
     }
 #endif
     return rc;
   }
 
- drop:
-  LOG_TC(log(LPF "%d drop connection in %s state", S_FMT(ts), 
-              ci_tcp_state_str(ts->s.b.state)));
+drop:
+  LOG_TC(log(LPF "%d drop connection in %s state", S_FMT(ts),
+             ci_tcp_state_str(ts->s.b.state)));
   /* ci_tcp_drop should really drop connection instead of leaking it,
    * because we can get here only when asyncronyously closing alien
    * non-accepted connection from listen socket closure. */
@@ -641,9 +670,8 @@ int ci_tcp_close(ci_netif* netif, ci_tcp_state* ts)
 }
 #endif /* OO_DO_STACK_POLL */
 
-
-#if (defined(__KERNEL__) && ! CI_CFG_UL_INTERRUPT_HELPER) || (! defined(__KERNEL__) && CI_CFG_UL_INTERRUPT_HELPER) 
-void ci_tcp_listen_shutdown_queues(ci_netif* netif, ci_tcp_socket_listen* tls)
+#if (defined(__KERNEL__) && !CI_CFG_UL_INTERRUPT_HELPER) || (!defined(__KERNEL__) && CI_CFG_UL_INTERRUPT_HELPER)
+void ci_tcp_listen_shutdown_queues(ci_netif *netif, ci_tcp_socket_listen *tls)
 {
   int synrecvs;
 
@@ -653,8 +681,8 @@ void ci_tcp_listen_shutdown_queues(ci_netif* netif, ci_tcp_socket_listen* tls)
 
   /* clear up synrecv queue */
   LOG_TV(ci_log("%s: %d clear out synrecv queue", __FUNCTION__,
-		S_FMT(tls)));
-  if( tls->n_listenq != 0 )
+                S_FMT(tls)));
+  if (tls->n_listenq != 0)
     ci_ip_timer_clear(netif, &tls->listenq_tid);
   synrecvs = ci_tcp_listenq_drop_all(netif, tls);
   ci_assert_equal(tls->n_listenq, synrecvs);
@@ -669,21 +697,24 @@ void ci_tcp_listen_shutdown_queues(ci_netif* netif, ci_tcp_socket_listen* tls)
   LOG_TV(log("%s: %d clear out accept queue (%d entries)", __FUNCTION__,
              S_FMT(tls), ci_tcp_acceptq_n(tls)));
 
-  while( ci_tcp_acceptq_not_empty(tls) ) {
-    citp_waitable* w;
-    ci_tcp_state* ats;    /* accepted ts */
+  while (ci_tcp_acceptq_not_empty(tls))
+  {
+    citp_waitable *w;
+    ci_tcp_state *ats; /* accepted ts */
 
     w = ci_tcp_acceptq_get(netif, tls);
 
 #if defined(__KERNEL__) && CI_CFG_ENDPOINT_MOVE
-    if( w->sb_aflags & CI_SB_AFLAG_MOVED_AWAY ) {
+    if (w->sb_aflags & CI_SB_AFLAG_MOVED_AWAY)
+    {
       tcp_helper_resource_t *thr = NULL;
       oo_sp sp;
       ci_uint32 stack_id;
-      ci_netif *ani;        /* netif of the accepted socket */
+      ci_netif *ani; /* netif of the accepted socket */
 
 #ifdef NDEBUG
-      if( in_interrupt() ) {
+      if (in_interrupt())
+      {
         LOG_U(log("%s: invalid acceptq member", __FUNCTION__));
         citp_waitable_obj_free(netif, w);
         continue;
@@ -700,20 +731,24 @@ void ci_tcp_listen_shutdown_queues(ci_netif* netif, ci_tcp_socket_listen* tls)
       LOG_TV(log("%s: alien socket %d:%d in accept queue %d:%d", __FUNCTION__,
                  stack_id, OO_SP_FMT(sp), NI_ID(netif), S_FMT(tls)));
 
-      if( efab_thr_table_lookup(NULL, NULL, stack_id,
+      if (efab_thr_table_lookup(NULL, NULL, stack_id,
                                 EFAB_THR_TABLE_LOOKUP_CHECK_USER,
-                                OO_THR_REF_BASE, &thr) != 0 ) {
+                                OO_THR_REF_BASE, &thr) != 0)
+      {
         LOG_U(log("%s: listening socket %d:%d can't find "
-                  "acceptq memeber %d:%d", __FUNCTION__,
+                  "acceptq memeber %d:%d",
+                  __FUNCTION__,
                   netif->state->stack_id, tls->s.b.bufid, stack_id, sp));
         continue;
       }
       ani = &thr->netif;
 
-      if( !(SP_TO_WAITABLE(ani, sp)->state & CI_TCP_STATE_TCP) ||
-          SP_TO_WAITABLE(ani, sp)->state == CI_TCP_LISTEN ) {
+      if (!(SP_TO_WAITABLE(ani, sp)->state & CI_TCP_STATE_TCP) ||
+          SP_TO_WAITABLE(ani, sp)->state == CI_TCP_LISTEN)
+      {
         LOG_U(log("%s: listening socket %d:%d has non-TCP "
-                  "acceptq memeber %d:%d", __FUNCTION__,
+                  "acceptq memeber %d:%d",
+                  __FUNCTION__,
                   netif->state->stack_id, tls->s.b.bufid, stack_id, sp));
         oo_thr_ref_drop(thr->ref, OO_THR_REF_BASE);
         continue;
@@ -739,13 +774,14 @@ void ci_tcp_listen_shutdown_queues(ci_netif* netif, ci_tcp_socket_listen* tls)
     /* We leave the acceptq flag for cached eps - the state free will be
      * triggered from the close once we've closed the fd.
      */
-    if( !ci_tcp_is_cached(ats) )
+    if (!ci_tcp_is_cached(ats))
 #endif
       /* Remove acceptq flag to allow state free on drop */
-        ci_bit_clear(&ats->s.b.sb_aflags, CI_SB_AFLAG_TCP_IN_ACCEPTQ_BIT);
+      ci_bit_clear(&ats->s.b.sb_aflags, CI_SB_AFLAG_TCP_IN_ACCEPTQ_BIT);
 
-    if( ats->s.b.state != CI_TCP_CLOSED &&
-        ats->s.b.state != CI_TCP_TIME_WAIT ) {
+    if (ats->s.b.state != CI_TCP_CLOSED &&
+        ats->s.b.state != CI_TCP_TIME_WAIT)
+    {
       LOG_TV(log("%s: send reset to accepted connection", __FUNCTION__));
       ci_tcp_send_rst(netif, ats);
     }
@@ -753,8 +789,9 @@ void ci_tcp_listen_shutdown_queues(ci_netif* netif, ci_tcp_socket_listen* tls)
     ci_tcp_drop(netif, ats, ECONNRESET);
 
 #if CI_CFG_FD_CACHING
-    if( ci_tcp_is_cached(ats) ) {
-      LOG_EP(ci_log ("listen_shutdown - uncache from acceptq"));
+    if (ci_tcp_is_cached(ats))
+    {
+      LOG_EP(ci_log("listen_shutdown - uncache from acceptq"));
       uncache_ep(netif, tls, ats);
 
       /* Remove acceptq flag to allow state free on drop */
@@ -783,9 +820,9 @@ void ci_tcp_listen_shutdown_queues(ci_netif* netif, ci_tcp_socket_listen* tls)
 #endif
 
 #if defined(__KERNEL__) && CI_CFG_FD_CACHING
-void ci_tcp_listen_update_cached(ci_netif* netif, ci_tcp_socket_listen* tls)
+void ci_tcp_listen_update_cached(ci_netif *netif, ci_tcp_socket_listen *tls)
 {
-  tcp_helper_endpoint_t * cached_ep;
+  tcp_helper_endpoint_t *cached_ep;
   struct oo_p_dllink_state list, link, tmp;
   ci_tcp_state *cached_state;
 
@@ -798,25 +835,27 @@ void ci_tcp_listen_update_cached(ci_netif* netif, ci_tcp_socket_listen* tls)
    */
 
   list = oo_p_dllink_sb(netif, &tls->s.b, &tls->epcache_connected);
-  oo_p_dllink_for_each_safe(netif, link, tmp, list) {
+  oo_p_dllink_for_each_safe(netif, link, tmp, list)
+  {
     cached_state = CI_CONTAINER(ci_tcp_state, epcache_link, link.l);
     oo_p_dllink_del_init(netif, link);
 
-    if( tls->s.s_flags & CI_SOCK_FLAG_SCALPASSIVE )
+    if (tls->s.s_flags & CI_SOCK_FLAG_SCALPASSIVE)
       continue;
     cached_ep = ci_netif_ep_get(netif, cached_state->s.b.bufid);
     tcp_helper_endpoint_update_filter_details(cached_ep);
   }
   OO_P_DLLINK_ASSERT_EMPTY(netif, list);
 
-  if( tls->s.s_flags & CI_SOCK_FLAG_SCALPASSIVE )
+  if (tls->s.s_flags & CI_SOCK_FLAG_SCALPASSIVE)
     return;
 
   /* We also need to update the filters for the pending list, so they can be
    * shutdown cleanly.
    */
   list = oo_p_dllink_sb(netif, &tls->s.b, &tls->epcache.pending);
-  oo_p_dllink_for_each(netif, link, list) {
+  oo_p_dllink_for_each(netif, link, list)
+  {
     cached_state = CI_CONTAINER(ci_tcp_state, epcache_link, link.l);
     cached_ep = ci_netif_ep_get(netif, cached_state->s.b.bufid);
 
@@ -827,7 +866,7 @@ void ci_tcp_listen_update_cached(ci_netif* netif, ci_tcp_socket_listen* tls)
 #endif
 
 #if OO_DO_STACK_POLL
-void __ci_tcp_listen_shutdown(ci_netif* netif, ci_tcp_socket_listen* tls)
+void __ci_tcp_listen_shutdown(ci_netif *netif, ci_tcp_socket_listen *tls)
 {
   int rc;
 #if CI_CFG_UL_INTERRUPT_HELPER
@@ -845,37 +884,37 @@ void __ci_tcp_listen_shutdown(ci_netif* netif, ci_tcp_socket_listen* tls)
 
   /* We should re-bind socket on the next use if the port was determined by
    * OS. */
-  if( ! (tls->s.s_flags & CI_SOCK_FLAG_PORT_BOUND) )
+  if (!(tls->s.s_flags & CI_SOCK_FLAG_PORT_BOUND))
     tls->s.s_flags &= ~CI_SOCK_FLAG_BOUND;
-  /* Shutdown the OS socket and clear out the filters. */
-# ifdef __KERNEL__
+    /* Shutdown the OS socket and clear out the filters. */
+#ifdef __KERNEL__
   rc = tcp_helper_endpoint_shutdown(netif2tcp_helper_resource(netif),
                                     S_SP(tls), SHUT_RDWR, CI_TCP_LISTEN);
-  if( rc == -EINVAL )
+  if (rc == -EINVAL)
     /* This means there is no O/S socket.  This is expected when socket has
      * been closed, as the O/S socket has already been shutdown and
      * released.
      */
     rc = 0;
-# else
+#else
   rc = ci_tcp_helper_endpoint_shutdown(netif, S_SP(tls),
                                        SHUT_RDWR, CI_TCP_LISTEN);
-# endif
+#endif
 #if CI_CFG_UL_INTERRUPT_HELPER
-  if( rc == -1 && errno == EINVAL ) {
+  if (rc == -1 && errno == EINVAL)
+  {
     /* See the comment above - the socket is already closed */
     rc = 0;
     errno = saved_errno;
   }
   ci_tcp_listen_shutdown_queues(netif, tls);
 #endif
-  if( rc < 0 )
+  if (rc < 0)
     LOG_E(ci_log("%s: [%d:%d] shutdown(os_sock) failed %d",
                  __FUNCTION__, NI_ID(netif), S_FMT(tls), rc));
 }
 
-
-void ci_tcp_all_fds_gone_common(ci_netif* ni, ci_tcp_state* ts)
+void ci_tcp_all_fds_gone_common(ci_netif *ni, ci_tcp_state *ts)
 {
   /* All process references to this socket have gone.  So we should
    * shutdown() if necessary, and arrange for all resources to eventually
@@ -888,19 +927,20 @@ void ci_tcp_all_fds_gone_common(ci_netif* ni, ci_tcp_state* ts)
   ci_assert(ts->s.b.state & CI_TCP_STATE_TCP);
 
   /* If we are in a state where we time out orphaned connections: */
-  if( (ts->s.b.state & CI_TCP_STATE_TIMEOUT_ORPHAN) &&
-      !(ts->s.b.sb_flags & CI_SB_FLAG_MOVED) )
+  if ((ts->s.b.state & CI_TCP_STATE_TIMEOUT_ORPHAN) &&
+      !(ts->s.b.sb_flags & CI_SB_FLAG_MOVED))
     ci_netif_fin_timeout_enter(ni, ts);
 
   /* Orphaned sockets do not need keepalive */
-  if( ts->s.s_flags & CI_SOCK_FLAG_KALIVE ) {
-    ts->s.s_flags &=~ CI_SOCK_FLAG_KALIVE;
+  if (ts->s.s_flags & CI_SOCK_FLAG_KALIVE)
+  {
+    ts->s.s_flags &= ~CI_SOCK_FLAG_KALIVE;
     ci_tcp_kalive_check_and_clear(ni, ts);
     ts->ka_probes = 0;
   }
 }
 
-void ci_tcp_listen_all_fds_gone(ci_netif* ni, ci_tcp_socket_listen* tls,
+void ci_tcp_listen_all_fds_gone(ci_netif *ni, ci_tcp_socket_listen *tls,
                                 int do_free)
 {
   /* All process references to this socket have gone.  So we should
@@ -915,21 +955,19 @@ void ci_tcp_listen_all_fds_gone(ci_netif* ni, ci_tcp_socket_listen* tls,
 
   __ci_tcp_listen_shutdown(ni, tls);
   __ci_tcp_listen_to_normal(ni, tls);
-  if( do_free )
+  if (do_free)
     citp_waitable_obj_free(ni, &tls->s.b);
 }
 
-
-void ci_tcp_all_fds_gone(ci_netif* ni, ci_tcp_state* ts, int do_free)
+void ci_tcp_all_fds_gone(ci_netif *ni, ci_tcp_state *ts, int do_free)
 {
   ci_tcp_all_fds_gone_common(ni, ts);
 
   /* This frees [ts] if appropriate. */
-  if( do_free )
+  if (do_free)
     ci_tcp_close(ni, ts);
 }
 #endif
-
 
 #endif
 /*! \cidoxg_end */

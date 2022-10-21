@@ -22,16 +22,18 @@ int dpdk_init(void)
     char *argv[] = {
         "-l",
         "1",
+        /*
         "-w",
         "06e6:00:02.0", // change this for your machine
         "--vdev",
         "net_vdev_netvsc1,iface=eth1",
+        */
         "--proc-type=secondary",
     };
 
     int ret;
     ci_log("INITING DPDK");
-    ret = rte_eal_init(7, argv);
+    ret = rte_eal_init(3, argv);
     ci_log("INITIED DPDK");
     if (ret < 0)
     {

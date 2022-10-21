@@ -1,1 +1,5 @@
-onload_set EF_UDP_CONNECT_HANDOVER=0
+onload_set EF_SPIN_USEC 1000000000
+#onload_set EF_POLL_USEC 100000
+onload_set EF_TCP_CONNECT_SPIN 1
+onload_set EF_TCP_ACCEPT_SPIN 1
+onload_set EF_UDP_RECV_SPIN 1

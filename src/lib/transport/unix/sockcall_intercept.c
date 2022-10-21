@@ -273,6 +273,8 @@ OO_INTERCEPT(int, socket,
   int rc;
   citp_lib_context_t lib_context;
 
+  // do_backtrace();
+
   if (CI_UNLIKELY(citp.init_level < CITP_INIT_ALL))
   {
     citp_do_init(CITP_INIT_SYSCALLS);
@@ -280,8 +282,8 @@ OO_INTERCEPT(int, socket,
   }
 
   citp_enter_lib(&lib_context);
-  Log_CALL(ci_log("%s(%s, " CI_SOCK_TYPE_FMT ", %d)", __FUNCTION__,
-                  domain_str(domain), CI_SOCK_TYPE_ARGS(type), protocol));
+  Log_U(ci_log("%s(%s, " CI_SOCK_TYPE_FMT ", %d)", __FUNCTION__,
+               domain_str(domain), CI_SOCK_TYPE_ARGS(type), protocol));
 
   if (lib_context.thread->avoid_fds)
     rc = CITP_NOT_HANDLED;
@@ -300,6 +302,7 @@ OO_INTERCEPT(int, socket,
   FDTABLE_ASSERT_VALID();
   citp_exit_lib(&lib_context, rc >= 0);
   Log_CALL_RESULT(rc);
+  LOG_U(ci_log("INTERCEPTED SOCKET RETURNS RESPONSE CODE %d", rc));
   return rc;
 }
 

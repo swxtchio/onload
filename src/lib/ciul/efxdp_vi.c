@@ -282,6 +282,7 @@ static int efxdp_ef_eventq_poll(ef_vi *vi, ef_event *evs, int evs_len)
   int n = 0;
 
   return 0;
+
   /* rx_buffer_len is power of two */
   EF_VI_ASSERT(((vi->rx_buffer_len - 1) & vi->rx_buffer_len) == 0);
 

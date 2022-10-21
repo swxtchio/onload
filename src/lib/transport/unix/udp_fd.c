@@ -148,6 +148,7 @@ static int citp_udp_socket(int domain, int type, int protocol)
   return fd;
 
 fail3:
+  LOG_U(ci_log("FAIL 3 in SOCKET construction"));
   if ((CITP_OPTS.no_fail || orderly_handover) && errno != ELIBACC)
     CITP_STATS_NETIF(++ni->state->stats.udp_handover_socket);
   citp_netif_release_ref(ni, 0);
@@ -168,6 +169,7 @@ fail1:
 
 static void citp_udp_dtor(citp_fdinfo *fdinfo, int fdt_locked)
 {
+  LOG_U(log(LPF "udp dtor"));
   citp_netif_release_ref(fdi_to_socket(fdinfo)->netif, fdt_locked);
 }
 
@@ -293,11 +295,13 @@ static int citp_udp_connect(citp_fdinfo *fdinfo,
 
   if (rc == CI_SOCKET_HANDOVER)
   {
+    LOG_U(log(LPF "handing over"));
     CITP_STATS_NETIF(++epi->sock.netif->state->stats.udp_handover_connect);
     citp_fdinfo_handover(fdinfo, -1);
     return 0;
   }
 
+  LOG_U(log(LPF "connect releasing ref"));
   citp_fdinfo_release_ref(fdinfo, 0);
   return rc;
 }
@@ -684,6 +688,7 @@ static int citp_udp_recvmsg_kernel(citp_fdinfo *fdi, struct msghdr *msg,
                                    int flags)
 {
   citp_sock_fdi *epi = fdi_to_sock_fdi(fdi);
+  ci_log("kernel recv msg");
 
   return ci_udp_recvmsg_kernel(fdi->fd, epi->sock.netif,
                                SOCK_TO_UDP(epi->sock.s),

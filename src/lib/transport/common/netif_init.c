@@ -354,6 +354,7 @@ int citp_netif_alloc_and_init(ef_driver_handle *fd, ci_netif **out_ni)
   rc = citp_netif_get_process_stack(&ni, stackname);
   if (rc == -ENOENT)
   {
+    ci_log("ALLOCATING NEW NETIF");
     /* Allocate a new netif */
     int flags = citp_netif_use_scalable_clustered_stack(stackname) ? CI_NETIF_FLAG_DO_ALLOCATE_SCALABLE_FILTERS_RSS : 0;
     rc = __citp_netif_alloc(fd, stackname, flags, &ni);
@@ -641,7 +642,7 @@ void __citp_netif_ref_count_zero(ci_netif *ni, int locked)
   CI_MAGIC_CHECK(ni, NETIF_MAGIC);
   ci_assert(oo_atomic_read(&ni->ref_count) == 0);
 
-  Log_V(ci_log("%s: Last ref removed from NI %d (fd:%d ni:%p driver)",
+  Log_U(ci_log("%s: Last ref removed from NI %d (fd:%d ni:%p driver)",
                __FUNCTION__, NI_ID(ni), ci_netif_get_driver_handle(ni), ni));
 
   if (!locked)

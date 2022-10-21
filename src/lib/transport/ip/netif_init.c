@@ -2094,6 +2094,10 @@ static int init_ef_vi(ci_netif *ni, int nic_i, int vi_state_offset,
       efct_vi_attach_rxq_internal(vi, i, nic_i,
                                   oo_efct_superbuf_config_refresh);
   }
+  if (vi->nic_type.arch == EF_VI_ARCH_DPDK)
+  {
+    ni->nic_hw[nic_i].poll_in_kernel = 0;
+  }
   ef_vi_set_ts_format(vi, nsn->ts_format);
   ef_vi_init_rx_timestamping(vi, nsn->rx_ts_correction);
   ef_vi_init_tx_timestamping(vi, nsn->tx_ts_correction);

@@ -345,7 +345,6 @@ static int ci_udp_recvmsg_get(ci_udp_recv_info *rinf, ci_iovec_ptr *piov)
   int rc;
 
   /* NB. [msg] can be NULL for async recv. */
-  LOG_E(ci_log("Kyle: CI UDP RECVMSG GET"));
 
   if ((pkt = ci_udp_recv_q_get(ni, &us->recv_q)) == NULL)
     goto recv_q_is_empty;
@@ -534,6 +533,7 @@ static int ci_udp_recvmsg_socklocked_slowpath(ci_udp_recv_info *rinf,
   int rc = 0;
   ci_netif *ni = rinf->a->ni;
   ci_udp_state *us = rinf->a->us;
+  ci_log("slow path");
 
   if (CI_UNLIKELY(ni->state->rxq_low))
     ci_netif_rxq_low_on_recv(ni, &us->s,
@@ -788,8 +788,8 @@ ci_udp_recvmsg_socklocked_spin(ci_netif *ni, ci_udp_state *us,
                                struct recvmsg_spinstate *spin_state)
 {
   ci_uint64 now_frc;
-
   ci_frc64(&now_frc);
+
   if (now_frc - spin_state->start_frc < spin_state->max_spin)
   {
 #if CI_CFG_SPIN_STATS
@@ -865,7 +865,7 @@ ci_udp_recvmsg_common(ci_udp_recv_info *rinf)
 {
   ci_netif *ni = rinf->a->ni;
   ci_udp_state *us = rinf->a->us;
-  int have_polled = 0;
+  // int have_polled = 0;
   ci_iovec_ptr piov = {NULL, 0, {NULL, 0}};
   int rc = 0, slow;
   struct recvmsg_spinstate spin_state = {0};
@@ -880,14 +880,12 @@ ci_udp_recvmsg_common(ci_udp_recv_info *rinf)
   /* Grab the per-socket lock so we can access the receive queue. */
   if (!rinf->sock_locked)
   {
-    LOG_E(ci_log("Kyle: LOCKING SOCKET"));
     rc = ci_sock_lock(ni, &us->s.b);
     if (CI_UNLIKELY(rc != 0))
     {
       CI_SET_ERROR(rc, -rc);
       return rc;
     }
-    // dpdk_recv(ni, &us->s.b);
     rinf->sock_locked = 1;
   }
 
@@ -905,7 +903,7 @@ ci_udp_recvmsg_common(ci_udp_recv_info *rinf)
           (us->s.so_error));
   if (slow)
   {
-    LOG_E(ci_log("Kyle: I am slow"));
+    ci_log("I am slow");
     goto slow_path;
   }
 
@@ -919,26 +917,24 @@ piov_inited:
 check_ul_recv_q:
   rc = ci_udp_recvmsg_get(rinf, &piov);
   if (rc >= 0)
+  {
     goto out;
+  }
 
   /* User-level receive queue is empty. */
 
-  if (!have_polled)
-  {
-    have_polled = 1;
-    ci_frc64(&spin_state.start_frc);
+  ci_frc64(&spin_state.start_frc);
 
-    if (ci_netif_may_poll(ni) &&
-        ci_netif_need_poll_spinning(ni, spin_state.start_frc) &&
-        ci_netif_trylock(ni))
-    {
-      int any_evs = ci_netif_poll(ni);
-      if (ci_udp_recv_q_is_empty(&us->recv_q) && any_evs)
-        ci_netif_poll(ni);
-      ci_netif_unlock(ni);
-      if (ci_udp_recv_q_not_empty(&us->recv_q))
-        goto check_ul_recv_q;
-    }
+  if (ci_netif_may_poll(ni) &&
+      ci_netif_need_poll_spinning(ni, spin_state.start_frc) &&
+      ci_netif_trylock(ni))
+  {
+    int any_evs = ci_netif_poll(ni);
+    if (ci_udp_recv_q_is_empty(&us->recv_q) && any_evs)
+      ci_netif_poll(ni);
+    ci_netif_unlock(ni);
+    if (ci_udp_recv_q_not_empty(&us->recv_q))
+      goto check_ul_recv_q;
   }
 
   if (CI_UNLIKELY((rc = UDP_RX_ERRNO(us))))
@@ -1018,6 +1014,7 @@ check_ul_recv_q:
 
   ci_sock_unlock(ni, &us->s.b);
   rinf->sock_locked = 0;
+  ci_log("blocking %d", spin_state.timeout);
   rc = ci_udp_recvmsg_block(rinf->a, ni, us, spin_state.timeout);
   if (rc == 0)
   {
@@ -1036,6 +1033,7 @@ out:
   return rc;
 
 slow_path:
+  ci_log("slow path");
   rc = ci_udp_recvmsg_socklocked_slowpath(rinf, &piov);
   if (rc == 0)
     goto back_to_fast_path;
@@ -1067,8 +1065,6 @@ int ci_udp_recvmsg(ci_udp_iomsg_args *a, ci_msghdr *msg, int flags)
   rinf.msg = msg;
   rinf.sock_locked = 0;
   rinf.flags = flags;
-
-  LOG_E(ci_log("Kyle CI UDP RECVMSG"));
 
   rc = ci_udp_recvmsg_common(&rinf);
   if (rinf.sock_locked)

@@ -295,7 +295,6 @@ citp_tcp_socket(int domain, int type, int protocol)
   fdi->can_cache = 1;
 #endif
 
-  Log_U(ci_log(LPF "kyle was here tcp stocket"));
   rc = citp_netif_alloc_and_init(&fd, &ni);
   if (rc != 0)
   {
@@ -369,9 +368,11 @@ ci_inline ci_uint64 linger_hash(ci_sock_cmn *s)
 static void citp_tcp_close(citp_fdinfo *fdinfo)
 {
   citp_sock_fdi *epi = fdi_to_sock_fdi(fdinfo);
+  ci_log("closing tcp");
 
   if (epi->sock.s->b.state == CI_TCP_LISTEN)
   {
+    ci_log("I was listening");
     ci_netif *ni = epi->sock.netif;
     ci_tcp_socket_listen *tls = SOCK_TO_TCP_LISTEN(epi->sock.s);
 
@@ -1621,7 +1622,8 @@ static int citp_tcp_shutdown(citp_fdinfo *fdinfo, int how)
   citp_sock_fdi *epi = fdi_to_sock_fdi(fdinfo);
   int rc;
 
-  Log_VSS(ci_log(LPF "shutdown(" EF_FMT ", %d)", EF_PRI_ARGS(epi, fdinfo->fd), how));
+  do_backtrace();
+  Log_U(ci_log(LPF "shutdown(" EF_FMT ", %d)", EF_PRI_ARGS(epi, fdinfo->fd), how));
   rc = ci_tcp_shutdown(&(epi->sock), how, fdinfo->fd);
   return rc;
 }

@@ -624,6 +624,7 @@ citp_fdtable_probe_restore(int fd, ci_ep_info_t *info, int print_banner,
   /* Must be holding the FD table writer lock */
   CITP_FDTABLE_ASSERT_LOCKED(1);
   ci_assert_nequal(info->resource_id, CI_ID_POOL_ID_NONE);
+  ci_log("FD TABLE RESTORE");
 
   /* Will need to review this function if the following assert fires */
   switch (info->fd_flags & OO_FDFLAG_EP_MASK)
@@ -1463,7 +1464,7 @@ void __citp_fdinfo_ref_count_zero(citp_fdinfo *fdi, int fdt_locked)
 #if CI_CFG_FD_CACHING
   int cached;
 #endif
-  Log_V(log("%s: fd=%d on_rcz=%d", __FUNCTION__, fdi->fd,
+  Log_U(log("%s: fd=%d on_rcz=%d", __FUNCTION__, fdi->fd,
             fdi->on_ref_count_zero));
 
   citp_fdinfo_assert_valid(fdi);
@@ -1715,7 +1716,7 @@ void __citp_fdtable_busy_clear_slow(unsigned fd, citp_fdinfo_p new_fdip,
 
   ci_assert(fd < citp_fdtable.inited_count);
 
-  Log_V(ci_log("%s: fd=%u", __FUNCTION__, fd));
+  Log_U(ci_log("%s: fd=%u", __FUNCTION__, fd));
 
   /* We need to write-lock citp_ul_lock to avoid races between
    * this oo_rwlock_cond_broadcast() and oo_rwlock_cond_wait() below. */

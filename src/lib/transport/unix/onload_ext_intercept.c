@@ -372,7 +372,7 @@ onload_delegated_send_prepare(int fd, int size, unsigned flags,
   citp_fdinfo *fdi;
   enum onload_delegated_send_rc rc = ONLOAD_DELEGATED_SEND_RC_BAD_SOCKET;
 
-  Log_CALL(ci_log("%s(%d, %d, %p)", __FUNCTION__, fd, size, out));
+  Log_U(ci_log("%s(%d, %d, %p)", __FUNCTION__, fd, size, out));
 
   citp_enter_lib(&lib_context);
   fdi = citp_fdtable_lookup(fd);
@@ -453,7 +453,7 @@ int oo_raw_send(int fd, int hwport, const struct iovec *iov, int iovcnt)
   int rc = -1;
   int intf_i = -1;
 
-  Log_CALL(ci_log("%s(%d, %p, %d)", __FUNCTION__, fd, iov, iovcnt));
+  Log_U(ci_log("%s(%d, %p, %d)", __FUNCTION__, fd, iov, iovcnt));
 
   citp_enter_lib(&lib_context);
   fdi = citp_fdtable_lookup(fd);

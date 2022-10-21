@@ -37,8 +37,6 @@ void efdpdk_drain_ring(struct rte_ring *ring)
   int burst_size = 32;
   struct rte_mbuf *bufs[burst_size];
 
-  ef_log("size of ring: %s %d", ring->name, rte_ring_get_capacity(ring));
-
   do
   {
     count = rte_ring_dequeue_burst(ring, (void **)&bufs[0], burst_size, &available);
@@ -103,8 +101,6 @@ int efdpdk_init_rings(void)
 
   efdpdk_drain_rings();
 
-  ef_log("Availcount: %d", rte_mempool_avail_count(m_rings.mempool));
-
   return 0;
 }
 
@@ -116,6 +112,10 @@ static void efdpdk_ef_vi_tx_fill_pkt(ef_vi *vi, const char *pkt, const unsigned 
     memcpy(rte_pktmbuf_mtod(mbufs[0], char *), pkt, len);
     mbufs[0]->data_len = len;
     rte_ring_enqueue_bulk(m_rings.tx_prep_ring, (void *)mbufs, 1, NULL);
+  }
+  else
+  {
+    ef_log("failed to fill tx packet. Out of buffers");
   }
 }
 
@@ -320,7 +320,6 @@ static void efdpdk_ef_vi_receive_push(ef_vi *vi)
     ef_log("failed to get rx prep ring buffs");
     return;
   }
-  ef_log("attempting to fill %d rx pkts", dequeued);
   if (rte_ring_enqueue_bulk(m_rings.rx_fill_ring, (void **)&mbufs[0], dequeued, NULL) == 0)
   {
     ef_log("failed to enqueue on the fill ring");
