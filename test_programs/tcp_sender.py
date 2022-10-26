@@ -15,5 +15,5 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         #data = s.recv(1024)
         time.sleep(1)
 
-    s.shutdown(socket.SHUT_RDWR)
+    #s.shutdown(socket.SHUT_RDWR)
 

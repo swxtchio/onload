@@ -1920,8 +1920,6 @@ int oo_cp_arp_resolve_rsop(ci_private_t *priv, void *arg)
   int rc;
   cp_fwd_table_id fwd_table_id;
 
-  ci_log("resolving ARP");
-
   if (cp == NULL)
     return -ENOMEM;
 

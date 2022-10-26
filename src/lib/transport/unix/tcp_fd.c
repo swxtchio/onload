@@ -396,6 +396,18 @@ static void citp_tcp_close(citp_fdinfo *fdinfo)
       ci_netif_unlock(ni);
     }
   }
+  else if (epi->sock.s->b.state != CI_TCP_CLOSED)
+  {
+    int rc;
+    ci_netif *ni = epi->sock.netif;
+    ci_netif_lock(ni);
+    rc = ci_tcp_close(ni, SOCK_TO_TCP(epi->sock.s));
+    if (rc != 0)
+    {
+      ci_log("Unable to close the tcp socket");
+    }
+    ci_netif_unlock(ni);
+  }
 }
 #endif
 
@@ -426,6 +438,7 @@ static void tcp_handover(citp_sock_fdi *sock_fdi)
   */
   ci_sock_cmn *s = sock_fdi->sock.s;
   int nonb_switch = -1;
+  ci_log("tcp handing over");
 
   ci_assert_flags(s->b.sb_aflags, CI_SB_AFLAG_OS_BACKED);
 
@@ -1424,7 +1437,8 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
   ci_netif *netif = epi->sock.netif;
   ci_tcp_socket_listen *tls;
 
-  Log_VSS(ci_log(LPF "cache(" EF_FMT ")", EF_PRI_ARGS(epi, fdinfo->fd)));
+  do_backtrace();
+  Log_U(ci_log(LPF "cache(" EF_FMT ")", EF_PRI_ARGS(epi, fdinfo->fd)));
 
   /* We don't cache OS-backed sockets as managing the backing socket would
    * require going into the kernel.  This stops us from caching listening
@@ -1432,7 +1446,7 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
    */
   if (s->b.sb_aflags & CI_SB_AFLAG_OS_BACKED)
   {
-    Log_EP(ci_log("FD %d not cached - has backing socket", fdinfo->fd));
+    Log_U(ci_log("FD %d not cached - has backing socket", fdinfo->fd));
     return 0;
   }
 
@@ -1443,7 +1457,7 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
   /* SO_LINGER handled in the kernel. */
   if (s->s_flags & CI_SOCK_FLAG_LINGER)
   {
-    Log_EP(ci_log("FD %d not cached - SO_LINGER set", fdinfo->fd));
+    Log_U(ci_log("FD %d not cached - SO_LINGER set", fdinfo->fd));
     return 0;
   }
 
@@ -1451,7 +1465,7 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
   if (OO_SP_NOT_NULL(ts->local_peer) &&
       ts->tcpflags & CI_TCPT_FLAG_PASSIVE_OPENED)
   {
-    Log_EP(ci_log("FD %d not cached - accelerated loopback", fdinfo->fd));
+    Log_U(ci_log("FD %d not cached - accelerated loopback", fdinfo->fd));
     return 0;
   }
 
@@ -1461,16 +1475,16 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
    */
   if (s->b.sb_aflags & (CI_SB_AFLAG_O_ASYNC | CI_SB_AFLAG_O_APPEND))
   {
-    Log_EP(ci_log("FD %d not cached - invalid flags set 0x%x", fdinfo->fd,
-                  s->b.sb_aflags & (CI_SB_AFLAG_O_ASYNC | CI_SB_AFLAG_O_APPEND)));
+    Log_U(ci_log("FD %d not cached - invalid flags set 0x%x", fdinfo->fd,
+                 s->b.sb_aflags & (CI_SB_AFLAG_O_ASYNC | CI_SB_AFLAG_O_APPEND)));
     return 0;
   }
 
   /* We'd need to go into the kernel to reset sigown - shouldn't cache */
   if (s->b.sigown != 0)
   {
-    Log_EP(ci_log("FD %d not cached - owner's PID is set to %d", fdinfo->fd,
-                  s->b.sigown));
+    Log_U(ci_log("FD %d not cached - owner's PID is set to %d", fdinfo->fd,
+                 s->b.sigown));
     return 0;
   }
 
@@ -1479,7 +1493,7 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
    */
   if (!fdinfo->can_cache)
   {
-    Log_EP(ci_log("FD %d not cached - fdinfo not cacheable", fdinfo->fd));
+    Log_U(ci_log("FD %d not cached - fdinfo not cacheable", fdinfo->fd));
     return 0;
   }
 
@@ -1503,7 +1517,7 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
    */
   if (!ci_netif_trylock(netif))
   {
-    Log_EP(ci_log("FD %d not cached - couldn't lock stack", fdinfo->fd));
+    Log_U(ci_log("FD %d not cached - couldn't lock stack", fdinfo->fd));
     CITP_STATS_NETIF(++netif->state->stats.sockcache_contention);
     return 0;
   }
@@ -1529,8 +1543,8 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
     /* We limit the maximum number of sockets cached in a stack. */
     if (netif->state->passive_cache_avail_stack == 0)
     {
-      Log_EP(ci_log("FD %d not cached - passive stack limit reached",
-                    fdinfo->fd));
+      Log_U(ci_log("FD %d not cached - passive stack limit reached",
+                   fdinfo->fd));
       CITP_STATS_NETIF(++netif->state->stats.passive_sockcache_stacklim);
       goto unlock_out;
     }
@@ -1563,7 +1577,7 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
 
     /* Woohoo!  Cache this sucker! */
     citp_tcp_close_passive_cached(netif, fdinfo, tls);
-    Log_EP(ci_log("FD %d cached on passive-open cache", fdinfo->fd));
+    Log_U(ci_log("FD %d cached on passive-open cache", fdinfo->fd));
   }
   else
   {
@@ -1575,7 +1589,7 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
         !(s->b.state == CI_TCP_CLOSED &&
           (s->s_flags & CI_SOCK_FLAG_BOUND) == 0))
     {
-      Log_EP(ci_log("FD %d not cached - active nonscalable socket", fdinfo->fd));
+      Log_U(ci_log("FD %d not cached - active nonscalable socket", fdinfo->fd));
       goto unlock_out;
     }
 
@@ -1593,14 +1607,14 @@ static int citp_tcp_cache(citp_fdinfo *fdinfo)
     /* We limit the maximum number of sockets cached in a stack. */
     if (netif->state->active_cache_avail_stack == 0)
     {
-      Log_EP(ci_log("FD %d not cached - active stack limit reached",
-                    fdinfo->fd));
+      Log_U(ci_log("FD %d not cached - active stack limit reached",
+                   fdinfo->fd));
       CITP_STATS_NETIF(++netif->state->stats.active_sockcache_stacklim);
       goto unlock_out;
     }
 
     citp_tcp_close_active_cached(netif, fdinfo);
-    Log_EP(ci_log("FD %d cached on active-open cache", fdinfo->fd));
+    Log_U(ci_log("FD %d cached on active-open cache", fdinfo->fd));
   }
 
   rc = 1;

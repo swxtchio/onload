@@ -23,6 +23,8 @@
 #include <termios.h>
 #include <sys/queue.h>
 #include <signal.h>
+#include <stdlib.h>
+#include <arpa/inet.h>
 
 #include <rte_common.h>
 #include <rte_memory.h>
@@ -47,8 +49,8 @@
 #include "mp_commands.h"
 
 #define RTE_LOGTYPE_APP RTE_LOGTYPE_USER1
-#define DEBUG_TX 1
-#define DEBUG_RX 0
+#define DEBUG_TX 0
+#define DEBUG_RX 1
 
 static const char *_TX_RING = "TX_RING";
 static const char *_TX_PREP_RING = "TX_PREP_RING";
@@ -232,9 +234,30 @@ static int receive(uint16_t port)
 	for (int i = 0; i < recv; i++)
 	{
 		struct rte_ether_hdr *eth_h = rte_pktmbuf_mtod(rx_bufs[i], struct rte_ether_hdr *);
+		// drop this because it's breaking everything for now
 		if (ntohs(eth_h->ether_type) == RTE_ETHER_TYPE_IPV6)
 		{
 			rte_ring_enqueue(rx_fill_ring, &rx_bufs[i]);
+		}
+		else if (ntohs(eth_h->ether_type) == RTE_ETHER_TYPE_ARP)
+		{
+			struct rte_arp_hdr *arp = (struct rte_arp_hdr *)(eth_h + 1);
+			if (ntohs(arp->arp_opcode) == RTE_ARP_OP_REPLY)
+			{
+				char ethStr[50];
+				struct in_addr add;
+				add.s_addr = arp->arp_data.arp_sip;
+				rte_ether_format_addr(ethStr, 50, &arp->arp_data.arp_sha);
+				char *ipAddr = inet_ntoa(add);
+				char str[100];
+				sprintf(str, "ip neigh replace %s dev eth1 lladdr %s nud reachable", ipAddr, ethStr);
+				printf("running system command: %s\n", str);
+				if (system(str) != 0)
+				{
+					printf("Failed to add neighbor\n");
+				}
+			}
+			rx_final_bufs[enqueueCount++] = rx_bufs[i];
 		}
 		else
 		{

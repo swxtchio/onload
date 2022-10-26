@@ -257,7 +257,6 @@ void cicp_user_retrieve(ci_netif *ni,
   if (oo_cp_ipcache_is_valid(ni, ipcache))
   {
     ci_assert_equal(ipcache->status, retrrc_nomac);
-    ci_log("resolving arp");
     oo_cp_arp_resolve(ni->cplane, &ipcache->fwd_ver, ci_ni_fwd_table_id(ni));
 
     /* Re-check the version of the fwd entry after ARP resolution.

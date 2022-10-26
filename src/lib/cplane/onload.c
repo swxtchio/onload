@@ -202,6 +202,8 @@ int __oo_cp_route_resolve(struct oo_cplane_handle *cp,
   int first_pass = 1;
   ci_uint32 weight = CP_FWD_MULTIPATH_WEIGHT_NONE;
 
+  ci_log("unlicky route resolve");
+
 find_again:
   id = cp_fwd_find_match(fwd_table, key, weight);
   if (id == CICP_MAC_ROWID_BAD ||

@@ -259,7 +259,6 @@ static void ci_ip_send_tcp_list(ci_netif *ni, ci_tcp_state *ts,
 
   ci_assert(ci_netif_is_locked(ni));
   ci_assert(~ts->s.pkt.flags & CI_IP_CACHE_IS_LOCALROUTE);
-  ci_log("SEND TCP LIST");
 
   if (CI_LIKELY(ts->s.pkt.status == retrrc_success &&
                 oo_cp_ipcache_is_valid(ni, &ts->s.pkt)))

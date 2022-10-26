@@ -17,4 +17,4 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     break
                 print(f"Received {data}")
                 #conn.sendall(data)
-            conn.shutdown(socket.SHUT_RDWR)
+            #conn.shutdown(socket.SHUT_RDWR)

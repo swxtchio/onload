@@ -4974,6 +4974,7 @@ citp_waitable_remove_from_epoll(ci_netif *ni, citp_waitable *w, int do_free)
 ci_inline void ci_netif_put_on_post_poll(ci_netif *ni, citp_waitable *sb)
 {
   struct oo_p_dllink_state link = oo_p_dllink_sb(ni, sb, &sb->post_poll_link);
+  ci_log("netif put on post poll");
 
   oo_p_dllink_del(ni, link);
   oo_p_dllink_add_tail(ni, oo_p_dllink_ptr(ni, &ni->state->post_poll_list),

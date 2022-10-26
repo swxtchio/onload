@@ -68,6 +68,80 @@ void __ci_tcp_listen_to_normal(ci_netif *netif, ci_tcp_socket_listen *tls)
 #endif
 }
 
+// Poll until we aren't fin wait 1 anymore
+int ci_tcp_fin_added(ci_tcp_state *ts, ci_netif *netif)
+{
+  ci_assert(ci_netif_is_locked(netif));
+
+  if (ts->s.b.state == CI_TCP_FIN_WAIT1)
+  {
+    ci_log("spinning for tcp fin wait 1");
+    ci_uint64 start_frc,
+        now_frc, schedule_frc;
+    ci_uint32 timeout = ts->s.so.sndtimeo_msec;
+    ci_uint64 max_spin = ts->s.b.spin_cycles;
+    int rc = 0;
+    citp_signal_info *si = citp_signal_get_specific_inited();
+
+    if (ts->s.so.sndtimeo_msec)
+    {
+      ci_uint64 max_so_spin = (ci_uint64)ts->s.so.sndtimeo_msec *
+                              IPTIMER_STATE(netif)->khz;
+      if (max_so_spin <= max_spin)
+      {
+        max_spin = max_so_spin;
+      }
+    }
+
+    ci_frc64(&start_frc);
+    schedule_frc = start_frc;
+    now_frc = start_frc;
+    do
+    {
+      if (ci_netif_may_poll(netif))
+      {
+        if (ci_netif_need_poll_spinning(netif, now_frc))
+        {
+          ci_log("polling for acks");
+          ci_netif_poll(netif);
+        }
+        else if (!netif->state->is_spinner)
+          netif->state->is_spinner = 1;
+      }
+
+      if (ts->s.b.state != CI_TCP_FIN_WAIT1)
+      {
+        netif->state->is_spinner = 0;
+        return 0;
+      }
+
+      ci_frc64(&now_frc);
+      rc = OO_SPINLOOP_PAUSE_CHECK_SIGNALS(netif, now_frc, &schedule_frc,
+                                           ts->s.so.sndtimeo_msec, NULL, si);
+      if (rc != 0)
+      {
+        netif->state->is_spinner = 0;
+      }
+    } while (now_frc - start_frc < max_spin);
+
+    netif->state->is_spinner = 0;
+
+    if (timeout)
+    {
+      ci_uint32 spin_ms = (now_frc - start_frc) / IPTIMER_STATE(netif)->khz;
+      if (spin_ms < timeout)
+        timeout -= spin_ms;
+      else
+      {
+        if (ts->s.b.state == CI_TCP_FIN_WAIT1)
+          return -EAGAIN;
+      }
+    }
+  }
+
+  return 0;
+}
+
 int ci_tcp_add_fin(ci_tcp_state *ts, ci_netif *netif)
 {
   ci_ip_pkt_queue *sendq = &ts->send;
@@ -76,8 +150,8 @@ int ci_tcp_add_fin(ci_tcp_state *ts, ci_netif *netif)
 
   ci_assert(ci_netif_is_locked(netif));
 
-  LOG_TC(log(FNTS_FMT "sendq_num=%d cork=%d", FNTS_PRI_ARGS(netif, ts),
-             sendq->num, !!(ts->s.s_aflags & CI_SOCK_AFLAG_CORK)));
+  LOG_U(log(FNTS_FMT "sendq_num=%d cork=%d", FNTS_PRI_ARGS(netif, ts),
+            sendq->num, !!(ts->s.s_aflags & CI_SOCK_AFLAG_CORK)));
 
   if (sendq->num)
   {
@@ -168,6 +242,7 @@ int __ci_tcp_shutdown(ci_netif *netif, ci_tcp_state *ts, int how)
   {
     if (how == SHUT_RDWR)
     {
+      ci_log("doing something random here");
       ts->s.rx_errno = CI_SHUT_RD;
       ci_tcp_wake_not_in_poll(netif, ts, CI_SB_FLAG_WAKE_RX);
     }
@@ -216,9 +291,20 @@ int __ci_tcp_shutdown(ci_netif *netif, ci_tcp_state *ts, int how)
       ci_tcp_rto_set(netif, ts);
   }
 
-  ci_tcp_wake_not_in_poll(netif, ts,
-                          CI_SB_FLAG_WAKE_TX |
-                              (how == SHUT_RDWR ? CI_SB_FLAG_WAKE_RX : 0));
+  if (rc == 0)
+  {
+    rc = ci_tcp_fin_added(ts, netif);
+    if (rc != 0)
+    {
+      ci_log("failed to add the fin");
+    }
+  }
+
+  /*
+    ci_tcp_wake_not_in_poll(netif, ts,
+                            CI_SB_FLAG_WAKE_TX |
+                                (how == SHUT_RDWR ? CI_SB_FLAG_WAKE_RX : 0));
+                                */
   return 0;
 }
 
@@ -550,7 +636,7 @@ static
 
   if (ts->s.b.state == CI_TCP_CLOSED)
   {
-    LOG_TV(ci_log(LPF "%d CLOSE already closed", S_FMT(ts)));
+    LOG_U(ci_log(LPF "%d CLOSE already closed", S_FMT(ts)));
     /* Still must clear filters in case socket is clustered. */
     ci_tcp_ep_clear_filters(netif, S_SP(ts), 0);
     if (ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN)
@@ -572,10 +658,10 @@ static
      * connection if all rx data not read.
      */
     CI_TCP_EXT_STATS_INC_TCP_ABORT_ON_CLOSE(netif);
-    LOG_TV(log(LPF "%d CLOSE sent RST, as rx data present added %u "
-                   "delivered %u tcp_rcv_usr=%u",
-               S_FMT(ts), ts->rcv_added,
-               ts->rcv_delivered, tcp_rcv_usr(ts)));
+    LOG_U(log(LPF "%d CLOSE sent RST, as rx data present added %u "
+                  "delivered %u tcp_rcv_usr=%u",
+              S_FMT(ts), ts->rcv_added,
+              ts->rcv_delivered, tcp_rcv_usr(ts)));
     ci_tcp_send_rst(netif, ts);
     goto drop;
   }
@@ -610,7 +696,10 @@ static
   if ((ts->s.b.state == CI_TCP_TIME_WAIT) ||
       (ts->s.b.state == CI_TCP_CLOSING) ||
       (ts->s.b.state == CI_TCP_LAST_ACK))
+  {
+    ci_log("in a closing state");
     return 0;
+  }
 
   if (!(ts->s.b.state & CI_TCP_STATE_NOT_CONNECTED))
   {
@@ -662,8 +751,8 @@ static
   }
 
 drop:
-  LOG_TC(log(LPF "%d drop connection in %s state", S_FMT(ts),
-             ci_tcp_state_str(ts->s.b.state)));
+  LOG_U(log(LPF "%d drop connection in %s state", S_FMT(ts),
+            ci_tcp_state_str(ts->s.b.state)));
   /* ci_tcp_drop should really drop connection instead of leaking it,
    * because we can get here only when asyncronyously closing alien
    * non-accepted connection from listen socket closure. */

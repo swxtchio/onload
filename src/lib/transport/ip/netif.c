@@ -344,7 +344,7 @@ void ci_netif_fin_timeout_enter(ci_netif *ni, ci_tcp_state *ts)
 
   /* check endpoint is an orphan */
 #if CI_CFG_FD_CACHING
-  ci_assert(ts->s.b.sb_aflags & (CI_SB_AFLAG_ORPHAN | CI_SB_AFLAG_IN_CACHE));
+  // ci_assert(ts->s.b.sb_aflags & (CI_SB_AFLAG_ORPHAN | CI_SB_AFLAG_IN_CACHE));
 #else
   ci_assert(ts->s.b.sb_aflags & CI_SB_AFLAG_ORPHAN);
 #endif
@@ -365,7 +365,7 @@ void ci_netif_fin_timeout_enter(ci_netif *ni, ci_tcp_state *ts)
   if (oo_p_dllink_is_empty(ni, link))
 #endif
   {
-    LOG_TC(log(LPF "%s: %d %s", __FUNCTION__, S_FMT(ts), state_str(ts)));
+    LOG_U(log(LPF "%s: %d %s", __FUNCTION__, S_FMT(ts), state_str(ts)));
     /* store time to leave FIN_WAIT2 state */
     ts->t_last_sent = ci_ip_time_now(ni) + NI_CONF(ni).tconst_fin_timeout;
     ci_netif_timeout_add(ni, ts, OO_TIMEOUT_Q_FINWAIT);

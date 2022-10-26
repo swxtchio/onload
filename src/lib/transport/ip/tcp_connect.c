@@ -1609,10 +1609,11 @@ start_again:
 #endif
 
   /* is this a socket that we can handle? */
+  ci_log("checking dest");
   rc = ci_tcp_connect_check_dest(ep, dst_addr, dst_port);
   if (rc)
   {
-    ci_log("unablbe to handle this tcp socket");
+    ci_log("unable to handle this tcp socket");
     goto unlock_out;
   }
 
