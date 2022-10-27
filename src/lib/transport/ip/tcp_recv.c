@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2003-2020 Xilinx, Inc. */
 /**************************************************************************\
-*//*! \file
+ *//*! \file
 ** <L5_PRIVATE L5_SOURCE>
 ** \author  djr
 **  \brief  TCP recvmsg() etc.
@@ -29,24 +29,24 @@
 
 struct tcp_recv_info;
 typedef int (*pkt_copy_t)(ci_netif* netif, struct tcp_recv_info* rinf,
-                          ci_ip_pkt_fmt* pkt, int peek_off, int* rc);
+    ci_ip_pkt_fmt* pkt, int peek_off, int* rc);
 
 struct tcp_recv_info {
-  int rc;
-  int stack_locked;
-  ci_iovec_ptr piov;
-  const ci_tcp_recvmsg_args* a;
-  pkt_copy_t copier;
-  int msg_flags;
+  int                         rc;
+  int                         stack_locked;
+  ci_iovec_ptr                piov;
+  const ci_tcp_recvmsg_args*  a;
+  pkt_copy_t                  copier;
+  int                         msg_flags;
   struct onload_zc_recv_args* zc_args;
-  size_t controllen;
+  size_t                      controllen;
 };
 
 #ifndef __KERNEL__
-static int ci_tcp_recvmsg_urg(struct tcp_recv_info *rinf);
+static int ci_tcp_recvmsg_urg(struct tcp_recv_info* rinf);
 #endif
 
-static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf);
+static int  ci_tcp_recvmsg_recv2(struct tcp_recv_info* rinf);
 
 
 static bool iovec_roll_over(ci_iovec_ptr* piov)
@@ -64,9 +64,8 @@ static bool iovec_roll_over(ci_iovec_ptr* piov)
 /*
  * \todo It looks like it's common with getpeername().
  */
-ci_inline void
-ci_tcp_recv_fill_msgname(ci_tcp_state* ts, struct sockaddr *name,
-                         socklen_t *namelen)
+ci_inline void ci_tcp_recv_fill_msgname(
+    ci_tcp_state* ts, struct sockaddr* name, socklen_t* namelen)
 {
 #if CI_CFG_TCP_RECVMSG_MSGNAME
   if( name ) {
@@ -77,21 +76,20 @@ ci_tcp_recv_fill_msgname(ci_tcp_state* ts, struct sockaddr *name,
     ci_assert(namelen);
 
     if( CI_LIKELY(*namelen >= sizeof(struct sockaddr_in)) ) {
-      sinp = (struct sockaddr_in *)name;
-      sinp->sin_family = AF_INET;
-      sinp->sin_port = TS_IPX_TCP(ts)->tcp_dest_be16;
+      sinp                  = (struct sockaddr_in*) name;
+      sinp->sin_family      = AF_INET;
+      sinp->sin_port        = TS_IPX_TCP(ts)->tcp_dest_be16;
       sinp->sin_addr.s_addr = ts->s.pkt.ip.ip_daddr_be32;
-      *namelen = sizeof(struct sockaddr_in);
-    }
-    else {
-      sin_buf.sin_family = AF_INET;
-      sin_buf.sin_port = TS_IPX_TCP(ts)->tcp_dest_be16;
+      *namelen              = sizeof(struct sockaddr_in);
+    } else {
+      sin_buf.sin_family      = AF_INET;
+      sin_buf.sin_port        = TS_IPX_TCP(ts)->tcp_dest_be16;
       sin_buf.sin_addr.s_addr = ts->s.pkt.ip.ip_daddr_be32;
       memcpy(name, &sin_buf, *namelen);
     }
   }
 #else
-  *namelen = 0;
+  *namelen               = 0;
 #endif
 }
 
@@ -110,14 +108,15 @@ static void ci_tcp_recvmsg_send_wnd_update(ci_netif* ni, ci_tcp_state* ts)
 
   CHECK_TS(ni, ts);
 
-  LOG_TR(log(LNTS_FMT "ack_trigger=%x c/w rcv_delivered=%x "
-             "rcv_added=%u buff=%u wnd_rhs=%x current=%u",
-             LNTS_PRI_ARGS(ni, ts), ts->ack_trigger, ts->rcv_delivered,
-             ts->rcv_added, ts->rcv_window_max,
-             tcp_rcv_wnd_right_edge_sent(ts),
-             tcp_rcv_wnd_current(ts)));
+  LOG_TR(
+      log(LNTS_FMT "ack_trigger=%x c/w rcv_delivered=%x "
+                   "rcv_added=%u buff=%u wnd_rhs=%x current=%u",
+          LNTS_PRI_ARGS(ni, ts), ts->ack_trigger, ts->rcv_delivered,
+          ts->rcv_added, ts->rcv_window_max, tcp_rcv_wnd_right_edge_sent(ts),
+          tcp_rcv_wnd_current(ts)));
 
-  if( ts->s.b.state & CI_TCP_STATE_NOT_CONNECTED )  goto out;
+  if( ts->s.b.state & CI_TCP_STATE_NOT_CONNECTED )
+    goto out;
 
   /* Free-up some receive buffers now we have the netif lock. */
   ci_tcp_rx_reap_rxq_bufs(ni, ts);
@@ -136,12 +135,11 @@ static void ci_tcp_recvmsg_send_wnd_update(ci_netif* ni, ci_tcp_state* ts)
     /* Reset [ack_trigger] so it'll fire when we would advertise a window
     ** which is at least tcp_rcv_wnd_advertised() + delta.
     */
-    ts->ack_trigger = ts->rcv_delivered
-      + ci_tcp_ack_trigger_delta(ts)
-      - SEQ_SUB(ts->rcv_delivered + ts->rcv_window_max,
-                tcp_rcv_wnd_right_edge_sent(ts));
+    ts->ack_trigger = ts->rcv_delivered + ci_tcp_ack_trigger_delta(ts) -
+                      SEQ_SUB(ts->rcv_delivered + ts->rcv_window_max,
+                          tcp_rcv_wnd_right_edge_sent(ts));
 
- out:
+out:
   CHECK_TS(ni, ts);
 
   ci_netif_unlock(ni);
@@ -154,20 +152,20 @@ static void ci_tcp_recvmsg_send_wnd_update(ci_netif* ni, ci_tcp_state* ts)
 void ci_tcp_rcvbuf_drs(ci_netif* netif, ci_tcp_state* ts)
 {
   ci_iptime_t time;
-  ci_uint32 rcv_bytes;
+  ci_uint32   rcv_bytes;
 
   /* Set an upper ceiling on rcvbuf for a single socket.
    * In general, DRS will pick a smaller size than this, based on how much
    * data the socket is transfering each RTT.
-   * Useful to make this fairly big so that a stack with a single socket can 
+   * Useful to make this fairly big so that a stack with a single socket can
    * achieve good throughput. If we find that resource contention with many
    * sockets is a problem can adjust via EF_TCP_SOCKBUF_MAX_FRACTION.
    * If neceesary, could implement a fairness algorithm to control access to
    * the buffers (similar to flow WFQ). But general advice would be to make
    * sufficient packet buffers available (e.g. at least sum of Bandwidth Delay
    * Products * 4) */
-  ci_uint64 max_rcvbuf_packets =
-    NI_OPTS(netif).max_rx_packets >> NI_OPTS(netif).tcp_sockbuf_max_fraction;
+  ci_uint64   max_rcvbuf_packets =
+      NI_OPTS(netif).max_rx_packets >> NI_OPTS(netif).tcp_sockbuf_max_fraction;
 
   time = ci_tcp_time_now(netif) - ts->rcvbuf_drs.time;
   if( time < (ts->sa >> 3) || ts->sa == 0 )
@@ -192,15 +190,15 @@ void ci_tcp_rcvbuf_drs(ci_netif* netif, ci_tcp_state* ts)
 
     if( rcv_bytes >= ts->rcvbuf_drs.bytes + (ts->rcvbuf_drs.bytes >> 2) ) {
       /* traffic grew, but by how much ? */
-      if (rcv_bytes >= ts->rcvbuf_drs.bytes + (ts->rcvbuf_drs.bytes >> 1))
-	/* looks like 2x growth per RTT so we need rcv_win > 4 * rcv_bytes */
-	rcv_wnd <<= 1;
+      if( rcv_bytes >= ts->rcvbuf_drs.bytes + (ts->rcvbuf_drs.bytes >> 1) )
+        /* looks like 2x growth per RTT so we need rcv_win > 4 * rcv_bytes */
+        rcv_wnd <<= 1;
       else
-	/* looks like slow start, so want rcv_win > 3 * rcv_bytes */
-	rcv_wnd += (rcv_wnd >> 1);
+        /* looks like slow start, so want rcv_win > 3 * rcv_bytes */
+        rcv_wnd += (rcv_wnd >> 1);
     }
 
-    rcvbuf = CI_MIN((ci_uint64)rcv_wnd, max_rcvbuf_packets * ts->amss);
+    rcvbuf = CI_MIN((ci_uint64) rcv_wnd, max_rcvbuf_packets * ts->amss);
 
     if( rcvbuf > ts->s.so.rcvbuf ) {
       ts->s.so.rcvbuf = rcvbuf;
@@ -210,15 +208,15 @@ void ci_tcp_rcvbuf_drs(ci_netif* netif, ci_tcp_state* ts)
   }
   ts->rcvbuf_drs.bytes = rcv_bytes;
 
- new_period:
-  ts->rcvbuf_drs.seq = ts->rcv_delivered;
+new_period:
+  ts->rcvbuf_drs.seq  = ts->rcv_delivered;
   ts->rcvbuf_drs.time = ci_tcp_time_now(netif);
 }
 
 
 static inline int /* bool */
-ci_tcp_recvmsg_get_nopeek(int peek_off, ci_tcp_state *ts, ci_netif *netif,
-                          ci_ip_pkt_fmt **pkt, int total, int n, int max_bytes)
+ci_tcp_recvmsg_get_nopeek(int peek_off, ci_tcp_state* ts, ci_netif* netif,
+    ci_ip_pkt_fmt** pkt, int total, int n, int max_bytes)
 {
   ci_assert(peek_off == 0);
   ts->rcv_delivered += n;
@@ -236,7 +234,7 @@ ci_tcp_recvmsg_get_nopeek(int peek_off, ci_tcp_state *ts, ci_netif *netif,
     ci_wmb();
     ci_assert(OO_PP_EQ(ts->recv1_extract, OO_PKT_P(*pkt)));
     ts->recv1_extract = (*pkt)->next;
-    *pkt = PKT_CHK_NNL(netif, ts->recv1_extract);
+    *pkt              = PKT_CHK_NNL(netif, ts->recv1_extract);
     ci_assert(oo_offbuf_not_empty(&(*pkt)->buf));
   }
   return 0;
@@ -250,35 +248,35 @@ ci_tcp_recvmsg_get_nopeek(int peek_off, ci_tcp_state *ts, ci_netif *netif,
  */
 
 /* Turn timestamps into the requested cmsg structure(s). */
-ci_inline void
-ci_tcp_fill_recv_timestamp(struct tcp_recv_info* rinf, ci_ip_pkt_fmt* pkt)
+ci_inline void ci_tcp_fill_recv_timestamp(
+    struct tcp_recv_info* rinf, ci_ip_pkt_fmt* pkt)
 {
-  ci_netif* ni = rinf->a->ni;
-  ci_tcp_state* ts = rinf->a->ts;
-  ci_msghdr* msg = rinf->a->msg;
+  ci_netif*     ni  = rinf->a->ni;
+  ci_tcp_state* ts  = rinf->a->ts;
+  ci_msghdr*    msg = rinf->a->msg;
 
   if( msg != NULL ) {
     struct cmsg_state cmsg_state;
-    if( CI_UNLIKELY( ts->s.cmsg_flags & CI_IP_CMSG_TIMESTAMP_ANY ) ) {
-      msg->msg_controllen = rinf->controllen;
-      cmsg_state.msg = msg;
+    if( CI_UNLIKELY(ts->s.cmsg_flags & CI_IP_CMSG_TIMESTAMP_ANY) ) {
+      msg->msg_controllen        = rinf->controllen;
+      cmsg_state.msg             = msg;
       cmsg_state.cmsg_bytes_used = 0;
-      cmsg_state.cm = CMSG_FIRSTHDR(msg);
-      cmsg_state.p_msg_flags = &rinf->msg_flags;
+      cmsg_state.cm              = CMSG_FIRSTHDR(msg);
+      cmsg_state.p_msg_flags     = &rinf->msg_flags;
 
-      if ( ts->s.cmsg_flags & CI_IP_CMSG_TIMESTAMPNS )
+      if( ts->s.cmsg_flags & CI_IP_CMSG_TIMESTAMPNS )
         ip_cmsg_recv_timestampns(ni, pkt->tstamp_frc, &cmsg_state);
-      else /* CI_IP_CMSG_TIMESTAMP flag gets ignored if NS counterpart is set */
+      else /* CI_IP_CMSG_TIMESTAMP flag gets ignored if NS counterpart is set
+            */
         if( ts->s.cmsg_flags & CI_IP_CMSG_TIMESTAMP )
           ip_cmsg_recv_timestamp(ni, pkt->tstamp_frc, &cmsg_state);
 
       if( ts->s.cmsg_flags & CI_IP_CMSG_TIMESTAMPING )
-        ip_cmsg_recv_timestamping(ni, pkt, ts->s.timestamping_flags,
-                                  &cmsg_state);
+        ip_cmsg_recv_timestamping(
+            ni, pkt, ts->s.timestamping_flags, &cmsg_state);
 
       msg->msg_controllen = cmsg_state.cmsg_bytes_used;
-    }
-    else
+    } else
       msg->msg_controllen = 0;
   }
 }
@@ -287,11 +285,11 @@ ci_tcp_fill_recv_timestamp(struct tcp_recv_info* rinf, ci_ip_pkt_fmt* pkt)
 
 
 #if CI_CFG_TCP_OFFLOAD_RECYCLER && CI_CFG_TCP_PLUGIN_RECV_NONZC
-static int offloaded_copy_block(ci_iovec* iov, const void* src, size_t max,
-                                int flags, int* rc)
+static int offloaded_copy_block(
+    ci_iovec* iov, const void* src, size_t max, int flags, int* rc)
 {
   int n = CI_MIN(max, CI_IOVEC_LEN(iov));
-  if(CI_LIKELY( ! (flags & MSG_TRUNC) )) {
+  if( CI_LIKELY(! (flags & MSG_TRUNC)) ) {
 #ifdef __KERNEL__
     if( copy_to_user(CI_IOVEC_BASE(iov), src, n) )
       return -EFAULT;
@@ -299,22 +297,22 @@ static int offloaded_copy_block(ci_iovec* iov, const void* src, size_t max,
     memcpy(CI_IOVEC_BASE(iov), src, n);
 #endif
   }
-  CI_IOVEC_BASE(iov) = (char*)CI_IOVEC_BASE(iov) + n;
+  CI_IOVEC_BASE(iov) = (char*) CI_IOVEC_BASE(iov) + n;
   CI_IOVEC_LEN(iov) -= n;
   *rc += n;
   return n;
 }
 
 static int copy_ceph_pkt(ci_netif* netif, struct tcp_recv_info* rinf,
-                            ci_ip_pkt_fmt* pkt, int peek_off, int* ndata)
+    ci_ip_pkt_fmt* pkt, int peek_off, int* ndata)
 {
   /* This function is essentially entirely bogus, most prominently in the fact
    * that it'll emit zeros for all 'remote' data. It exists primarily so that
    * test tools (e.g. packetdrill) can work on pluginized streams. */
-  int total = oo_offbuf_left(&pkt->buf);
-  int ofs = 0;
-  char* p = oo_offbuf_ptr(&pkt->buf);
-  int out_rc = 0;
+  int               total  = oo_offbuf_left(&pkt->buf);
+  int               ofs    = 0;
+  char*             p      = oo_offbuf_ptr(&pkt->buf);
+  int               out_rc = 0;
   static const char zeros[64];
 
   /* Not currently required, and a little tricky to get right: */
@@ -322,13 +320,13 @@ static int copy_ceph_pkt(ci_netif* netif, struct tcp_recv_info* rinf,
     return -EOPNOTSUPP;
 
   while( ofs != total && CI_IOVEC_LEN(&rinf->piov.io) != 0 ) {
-    const int hdr_len = offsetof(struct ceph_data_pkt, data);
+    const int            hdr_len = offsetof(struct ceph_data_pkt, data);
     struct ceph_data_pkt data;
-    int n;
+    int                  n;
 
     if( total - ofs < hdr_len ) {
-      LOG_TR(log(LNTS_FMT "bogus plugin metastream ofs=%d total=%d", 
-                 LNTS_PRI_ARGS(netif, rinf->a->ts), ofs, total));
+      LOG_TR(log(LNTS_FMT "bogus plugin metastream ofs=%d total=%d",
+          LNTS_PRI_ARGS(netif, rinf->a->ts), ofs, total));
       goto unrecoverable;
     }
 
@@ -337,86 +335,81 @@ static int copy_ceph_pkt(ci_netif* netif, struct tcp_recv_info* rinf,
     /* NB: if adding a new msg_type here, don't forget that zc_ceph_callback()
      * has a similar switch statement */
     switch( data.msg_type ) {
-    case XSN_CEPH_DATA_INLINE:
-      if( total - ofs < data.msg_len ) {
-        LOG_TR(log(LNTS_FMT "bogus plugin inline len %d-%d<%u", 
-                  LNTS_PRI_ARGS(netif, rinf->a->ts), total, ofs,
-                  data.msg_len));
-        goto unrecoverable;
-      }
-      n = offloaded_copy_block(&rinf->piov.io, p + ofs, data.msg_len,
-                               rinf->a->flags, &out_rc);
-      if( n < 0 )
-        return -EFAULT;
-      if( n != data.msg_len ) {
-        /* Stopped in the middle: hack the packet so that we can resume next
-         * time. NB: this can potentially make onload_tcpdump output a little
-         * odd */
-        data.msg_len -= n;
-        memcpy(p + ofs + n - hdr_len, &data, hdr_len);
-        ofs += n - hdr_len;
-        goto out;
-      }
-      break;
-
-    case XSN_CEPH_DATA_REMOTE:
-      if( total - ofs < sizeof(data.remote) ||
-          data.msg_len != sizeof(data.remote) ) {
-        LOG_TR(log(LNTS_FMT "bogus plugin remote block %d-%d/%u", 
-                  LNTS_PRI_ARGS(netif, rinf->a->ts), total, ofs,
-                  data.msg_len));
-        goto unrecoverable;
-      }
-      memcpy(&data.remote, p + ofs, sizeof(data.remote));
-      while( data.remote.data_len ) {
-        n = offloaded_copy_block(&rinf->piov.io, zeros,
-                                 CI_MIN((uint16_t)sizeof(zeros),
-                                        data.remote.data_len),
-                                 rinf->a->flags, &out_rc);
+      case XSN_CEPH_DATA_INLINE:
+        if( total - ofs < data.msg_len ) {
+          LOG_TR(log(LNTS_FMT "bogus plugin inline len %d-%d<%u",
+              LNTS_PRI_ARGS(netif, rinf->a->ts), total, ofs, data.msg_len));
+          goto unrecoverable;
+        }
+        n = offloaded_copy_block(
+            &rinf->piov.io, p + ofs, data.msg_len, rinf->a->flags, &out_rc);
         if( n < 0 )
           return -EFAULT;
-        data.remote.data_len -= n;
-        data.remote.start_ptr += n;
-        if( n != sizeof(zeros) ) {
-          memcpy(p + ofs, &data.remote, sizeof(data.remote));
-          ofs -= hdr_len;
+        if( n != data.msg_len ) {
+          /* Stopped in the middle: hack the packet so that we can resume next
+           * time. NB: this can potentially make onload_tcpdump output a little
+           * odd */
+          data.msg_len -= n;
+          memcpy(p + ofs + n - hdr_len, &data, hdr_len);
+          ofs += n - hdr_len;
           goto out;
         }
-      }
-      break;
+        break;
 
-    case XSN_CEPH_DATA_LOST_SYNC:
-      if( total - ofs < sizeof(data.lost_sync) ||
-          data.msg_len != sizeof(data.lost_sync) ) {
-        LOG_TR(log(LNTS_FMT "bogus plugin lost-sync block %d-%d/%u", 
-                  LNTS_PRI_ARGS(netif, rinf->a->ts), total, ofs,
-                  data.msg_len));
+      case XSN_CEPH_DATA_REMOTE:
+        if( total - ofs < sizeof(data.remote) ||
+            data.msg_len != sizeof(data.remote) ) {
+          LOG_TR(log(LNTS_FMT "bogus plugin remote block %d-%d/%u",
+              LNTS_PRI_ARGS(netif, rinf->a->ts), total, ofs, data.msg_len));
+          goto unrecoverable;
+        }
+        memcpy(&data.remote, p + ofs, sizeof(data.remote));
+        while( data.remote.data_len ) {
+          n = offloaded_copy_block(&rinf->piov.io, zeros,
+              CI_MIN((uint16_t) sizeof(zeros), data.remote.data_len),
+              rinf->a->flags, &out_rc);
+          if( n < 0 )
+            return -EFAULT;
+          data.remote.data_len -= n;
+          data.remote.start_ptr += n;
+          if( n != sizeof(zeros) ) {
+            memcpy(p + ofs, &data.remote, sizeof(data.remote));
+            ofs -= hdr_len;
+            goto out;
+          }
+        }
+        break;
+
+      case XSN_CEPH_DATA_LOST_SYNC:
+        if( total - ofs < sizeof(data.lost_sync) ||
+            data.msg_len != sizeof(data.lost_sync) ) {
+          LOG_TR(log(LNTS_FMT "bogus plugin lost-sync block %d-%d/%u",
+              LNTS_PRI_ARGS(netif, rinf->a->ts), total, ofs, data.msg_len));
+          goto unrecoverable;
+        }
+        memcpy(&data.lost_sync, p, sizeof(data.lost_sync));
+        log(LNTS_FMT "plugin lost sync: %u/%u",
+            LNTS_PRI_ARGS(netif, rinf->a->ts), data.lost_sync.reason,
+            data.lost_sync.subreason);
+        /* Set the return value so that we'll keep hitting this same lost-sync
+         * message on every receive, and hence block the socket from making
+         * further progress */
+        ofs -= hdr_len;
+        goto out;
+
+      default:
+        LOG_TR(log(LNTS_FMT "bogus plugin metastream header %u/%u",
+            LNTS_PRI_ARGS(netif, rinf->a->ts), data.msg_type, data.msg_len));
         goto unrecoverable;
-      }
-      memcpy(&data.lost_sync, p, sizeof(data.lost_sync));
-      log(LNTS_FMT "plugin lost sync: %u/%u", 
-          LNTS_PRI_ARGS(netif, rinf->a->ts), data.lost_sync.reason,
-          data.lost_sync.subreason);
-      /* Set the return value so that we'll keep hitting this same lost-sync
-       * message on every receive, and hence block the socket from making
-       * further progress */
-      ofs -= hdr_len;
-      goto out;
-
-    default:
-      LOG_TR(log(LNTS_FMT "bogus plugin metastream header %u/%u", 
-                 LNTS_PRI_ARGS(netif, rinf->a->ts), data.msg_type,
-                 data.msg_len));
-      goto unrecoverable;
     }
     ofs += data.msg_len;
   }
 
- out:
+out:
   *ndata = out_rc;
   return ofs;
 
- unrecoverable:
+unrecoverable:
   /* Return the number of bytes successfully consumed, so that if the user
    * tries again then we'll log the same error again. This is a different
    * decision to the one we made at the identical label in zc_ceph_callback()
@@ -429,7 +422,7 @@ static int copy_ceph_pkt(ci_netif* netif, struct tcp_recv_info* rinf,
 
 
 static int copy_one_pkt(ci_netif* netif, struct tcp_recv_info* rinf,
-                        ci_ip_pkt_fmt* pkt, int peek_off, int* ndata)
+    ci_ip_pkt_fmt* pkt, int peek_off, int* ndata)
 {
   int n;
 
@@ -443,14 +436,14 @@ static int copy_one_pkt(ci_netif* netif, struct tcp_recv_info* rinf,
   }
 #endif
 
-  if(CI_LIKELY( ! (rinf->a->flags & MSG_TRUNC) ))
+  if( CI_LIKELY(! (rinf->a->flags & MSG_TRUNC)) )
     n = ci_ip_copy_pkt_to_user(netif, &rinf->piov.io, pkt, peek_off);
   else {
     /* Very strange kernel behaviour: MSG_TRUNC will consume the number
      * of bytes requested, but will not write to the user's pointer in any
      * circumstances. This code does the same. */
-    n = CI_MIN((size_t)oo_offbuf_left(&pkt->buf) - peek_off,
-               rinf->piov.io.iov_len);
+    n = CI_MIN(
+        (size_t) oo_offbuf_left(&pkt->buf) - peek_off, rinf->piov.io.iov_len);
     CI_IOVEC_LEN(&rinf->piov.io) -= n;
   }
   /* NB: on failure of this function (i.e. n<0) the caller doesn't make any
@@ -471,15 +464,14 @@ static int copy_one_pkt(ci_netif* netif, struct tcp_recv_info* rinf,
 ** arg and the CI_MSG_*_LOCKED constants to specify which locks are
 ** already held.
 */
-__attribute__((always_inline))
-static inline int
-ci_tcp_recvmsg_get_impl(struct tcp_recv_info *rinf)
+__attribute__((always_inline)) static inline int ci_tcp_recvmsg_get_impl(
+    struct tcp_recv_info* rinf)
 {
-  ci_netif* netif = rinf->a->ni;
-  ci_tcp_state* ts = rinf->a->ts;
-  int n, ndata, peek_off, total, rc;
+  ci_netif*      netif = rinf->a->ni;
+  ci_tcp_state*  ts    = rinf->a->ts;
+  int            n, ndata, peek_off, total, rc;
   ci_ip_pkt_fmt* pkt;
-  int max_bytes;
+  int            max_bytes;
 #if CI_CFG_TIMESTAMPING && ! defined(__KERNEL__)
   int fill_tstamp;
 #endif
@@ -491,27 +483,28 @@ ci_tcp_recvmsg_get_impl(struct tcp_recv_info *rinf)
   /* The socket must be locked. */
   ci_assert(ci_sock_is_locked(netif, &ts->s.b));
 
-  peek_off = 0;
-  total = 0;
-  rc = 0;
+  peek_off  = 0;
+  total     = 0;
+  rc        = 0;
 
   /* Maximum number of bytes we have in both recv1 and recv2.
    * In this function, we get data from recv1 only, so the actual amount
    * of received data may be less than max_bytes. */
   max_bytes = tcp_rcv_usr(ts);
 
-  if( max_bytes <= 0 || OO_PP_IS_NULL(ts->recv1_extract))
-    return rc;       /* Receive queue is empty. */
+  if( max_bytes <= 0 || OO_PP_IS_NULL(ts->recv1_extract) )
+    return rc; /* Receive queue is empty. */
 
   ci_assert(OO_PP_NOT_NULL(ts->recv1.head));
 
   pkt = PKT_CHK_NNL(netif, ts->recv1_extract);
   if( oo_offbuf_is_empty(&pkt->buf) ) {
-    if( OO_PP_IS_NULL(pkt->next) )  return rc;  /* recv1 is empty. */
+    if( OO_PP_IS_NULL(pkt->next) )
+      return rc; /* recv1 is empty. */
     /* See ci_tcp_recvmsg_get_nopeek() for barrier discussion. */
     ci_wmb();
     ts->recv1_extract = pkt->next;
-    pkt = PKT_CHK_NNL(netif, ts->recv1_extract);
+    pkt               = PKT_CHK_NNL(netif, ts->recv1_extract);
     ci_assert(oo_offbuf_not_empty(&pkt->buf));
   }
   initial_recv1_extract = ts->recv1_extract;
@@ -539,16 +532,17 @@ ci_tcp_recvmsg_get_impl(struct tcp_recv_info *rinf)
     ci_assert(oo_offbuf_left(&pkt->buf) > peek_off);
 
 #if CI_CFG_TIMESTAMPING && ! defined(__KERNEL__)
-  if( fill_tstamp ) {
-    ci_tcp_fill_recv_timestamp(rinf, pkt);
-    if( ! rinf->zc_args )
-      fill_tstamp = 0;
-  }
+    if( fill_tstamp ) {
+      ci_tcp_fill_recv_timestamp(rinf, pkt);
+      if( ! rinf->zc_args )
+        fill_tstamp = 0;
+    }
 #endif
 
     n = rinf->copier(netif, rinf, pkt, peek_off, &ndata);
-#ifdef  __KERNEL__
-    if( n < 0 )  break;
+#ifdef __KERNEL__
+    if( n < 0 )
+      break;
 #endif
     rc += ndata;
     oo_offbuf_advance(&pkt->buf, n);
@@ -556,12 +550,11 @@ ci_tcp_recvmsg_get_impl(struct tcp_recv_info *rinf)
     total += ndata;
     ci_assert_le(total, max_bytes);
 
-    if(CI_LIKELY( ! (rinf->a->flags & (MSG_PEEK | ONLOAD_MSG_ONEPKT)) )) {
-      if( ci_tcp_recvmsg_get_nopeek(peek_off, ts, netif, &pkt, total, ndata,
-                                    max_bytes) != 0 )
+    if( CI_LIKELY(! (rinf->a->flags & (MSG_PEEK | ONLOAD_MSG_ONEPKT))) ) {
+      if( ci_tcp_recvmsg_get_nopeek(
+              peek_off, ts, netif, &pkt, total, ndata, max_bytes) != 0 )
         break;
-    }
-    else {
+    } else {
       if( rinf->a->flags & MSG_PEEK ) {
         /* copy did an implicit advance of the offbuf which we do not want */
         oo_offbuf_retard(&pkt->buf, n);
@@ -572,14 +565,13 @@ ci_tcp_recvmsg_get_impl(struct tcp_recv_info *rinf)
           if( total == max_bytes || OO_PP_IS_NULL(pkt->next) )
             /* We've emptied the receive queue. */
             return rc;
-          pkt = PKT_CHK_NNL(netif, pkt->next);
+          pkt      = PKT_CHK_NNL(netif, pkt->next);
           peek_off = 0;
           ci_assert(oo_offbuf_not_empty(&pkt->buf));
         }
-      }
-      else {
-        if( ci_tcp_recvmsg_get_nopeek(peek_off, ts, netif, &pkt, total, ndata,
-                                      max_bytes) != 0 )
+      } else {
+        if( ci_tcp_recvmsg_get_nopeek(
+                peek_off, ts, netif, &pkt, total, ndata, max_bytes) != 0 )
           break;
       }
 
@@ -597,8 +589,8 @@ ci_tcp_recvmsg_get_impl(struct tcp_recv_info *rinf)
     ** comment; darn.
     */
   }
-  /* we do this here as the last thing to avoid sending many small window updates
-   * in cases with small recv window and small segments */
+  /* we do this here as the last thing to avoid sending many small window
+   * updates in cases with small recv window and small segments */
   if( initial_recv1_extract != ts->recv1_extract &&
       CI_UNLIKELY(SEQ_LE(ts->ack_trigger, ts->rcv_delivered)) ) {
     ci_tcp_recvmsg_send_wnd_update(netif, ts);
@@ -607,16 +599,14 @@ ci_tcp_recvmsg_get_impl(struct tcp_recv_info *rinf)
 }
 
 
-__attribute__((always_inline))
-static inline int
-ci_tcp_recvmsg_get_inline(struct tcp_recv_info *rinf)
+__attribute__((always_inline)) static inline int ci_tcp_recvmsg_get_inline(
+    struct tcp_recv_info* rinf)
 {
   return ci_tcp_recvmsg_get_impl(rinf);
 }
 
 
-static int
-ci_tcp_recvmsg_get_outofline(struct tcp_recv_info *rinf)
+static int ci_tcp_recvmsg_get_outofline(struct tcp_recv_info* rinf)
 {
   return ci_tcp_recvmsg_get_impl(rinf);
 }
@@ -626,14 +616,14 @@ ci_tcp_recvmsg_get_outofline(struct tcp_recv_info *rinf)
 /* Returns >0 if socket is readable.  Returns 0 if spin times-out.  Returns
  * -ve error code otherwise.
  */
-static int ci_tcp_recvmsg_spin(ci_netif* ni, ci_tcp_state* ts,
-                               ci_uint64 start_frc)
+static int ci_tcp_recvmsg_spin(
+    ci_netif* ni, ci_tcp_state* ts, ci_uint64 start_frc)
 {
-  ci_uint64 now_frc;
-  ci_uint64 schedule_frc = start_frc;
-  citp_signal_info* si = citp_signal_get_specific_inited();
-  ci_uint64 max_spin = ts->s.b.spin_cycles;
-  int rc, spin_limit_by_so = 0;
+  ci_uint64                now_frc;
+  ci_uint64                schedule_frc = start_frc;
+  citp_signal_info*        si           = citp_signal_get_specific_inited();
+  ci_uint64                max_spin     = ts->s.b.spin_cycles;
+  int                      rc, spin_limit_by_so = 0;
 
   /* Cache the next expected packet buffer to save work within the loop.
    * We need to update this after polling. If someone else polls, then this
@@ -644,15 +634,16 @@ static int ci_tcp_recvmsg_spin(ci_netif* ni, ci_tcp_state* ts,
    * If there is no future packet to poll, then we point to a local location
    * which always contains the "poison" value.
    */
-  int intf_i = ts->s.pkt.intf_i;
-  const uint32_t poison = CI_PKT_RX_POISON;
-  const volatile uint32_t* future = ci_netif_intf_rx_future(ni, intf_i, &poison);
+  int                      intf_i = ts->s.pkt.intf_i;
+  const uint32_t           poison = CI_PKT_RX_POISON;
+  const volatile uint32_t* future =
+      ci_netif_intf_rx_future(ni, intf_i, &poison);
 
   if( ts->s.so.rcvtimeo_msec ) {
-    ci_uint64 max_so_spin = (ci_uint64)ts->s.so.rcvtimeo_msec *
-        IPTIMER_STATE(ni)->khz;
+    ci_uint64 max_so_spin =
+        (ci_uint64) ts->s.so.rcvtimeo_msec * IPTIMER_STATE(ni)->khz;
     if( max_so_spin <= max_spin ) {
-      max_spin = max_so_spin;
+      max_spin         = max_so_spin;
       spin_limit_by_so = 1;
     }
   }
@@ -679,16 +670,15 @@ static int ci_tcp_recvmsg_spin(ci_netif* ni, ci_tcp_state* ts,
         if( tcp_rcv_usr(ts) )
           goto out;
         future = ci_netif_intf_rx_future(ni, intf_i, &poison);
-      }
-      else if( ! ni->state->is_spinner )
+      } else if( ! ni->state->is_spinner )
         ni->state->is_spinner = 1;
     }
     if( tcp_rcv_usr(ts) || TCP_RX_DONE(ts) )
       goto out;
 
     ci_frc64(&now_frc);
-    rc = OO_SPINLOOP_PAUSE_CHECK_SIGNALS(ni, now_frc, &schedule_frc, 
-                                         ts->s.so.rcvtimeo_msec, &ts->s.b, si);
+    rc = OO_SPINLOOP_PAUSE_CHECK_SIGNALS(
+        ni, now_frc, &schedule_frc, ts->s.so.rcvtimeo_msec, &ts->s.b, si);
     if( rc != 0 )
       goto out;
 #if CI_CFG_SPIN_STATS
@@ -699,7 +689,7 @@ static int ci_tcp_recvmsg_spin(ci_netif* ni, ci_tcp_state* ts,
   } while( now_frc - start_frc < max_spin );
 
   rc = spin_limit_by_so ? -EAGAIN : 0;
- out:
+out:
   ni->state->is_spinner = 0;
   return rc;
 }
@@ -715,9 +705,9 @@ static int ci_tcp_recvmsg_spin(ci_netif* ni, ci_tcp_state* ts,
 ** MSG_DONTWAIT or MSG_PEEK.  (On linux at least: MSG_PEEK cancels
 ** MSG_WAITALL, and MSG_DONTWAIT overrides MSG_WAITALL).
 */
-#define FLAGS_AND_LOWAT_PERMIT_FAST_RET_WITH_DATA(ts, bytes, flags)     \
-  ((flags & (MSG_DONTWAIT | MSG_PEEK)) ||                               \
-   ((~flags & MSG_WAITALL) && (bytes) >= (ts)->s.so.rcvlowat))
+#define FLAGS_AND_LOWAT_PERMIT_FAST_RET_WITH_DATA(ts, bytes, flags) \
+  ((flags & (MSG_DONTWAIT | MSG_PEEK)) ||                           \
+      ((~flags & MSG_WAITALL) && (bytes) >= (ts)->s.so.rcvlowat))
 
 
 static inline void ci_tcp_recvmsg_init_piov(struct tcp_recv_info* rinf)
@@ -728,34 +718,31 @@ static inline void ci_tcp_recvmsg_init_piov(struct tcp_recv_info* rinf)
      * always see that there's 'infinite' space left, but let's set the
      * pointers to NULL as well, to catch anywhere that might actually try to
      * write anything. */
-    rinf->piov.iov = NULL;
-    rinf->piov.iovlen = 1;
-    rinf->piov.io.iov_len = ~(size_t)0;
+    rinf->piov.iov         = NULL;
+    rinf->piov.iovlen      = 1;
+    rinf->piov.io.iov_len  = ~(size_t) 0;
     rinf->piov.io.iov_base = NULL;
-  }
-  else {
+  } else {
     /* [piov] gives keeps track of our position in the apps buffer(s). */
-    ci_iovec_ptr_init_nz(&rinf->piov,
-                         rinf->a->msg->msg_iov,rinf-> a->msg->msg_iovlen);
+    ci_iovec_ptr_init_nz(
+        &rinf->piov, rinf->a->msg->msg_iov, rinf->a->msg->msg_iovlen);
   }
 }
 
-__attribute__((always_inline))
-static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
-                                      pkt_copy_t copier,
-                                      struct onload_zc_recv_args* zc_args)
+__attribute__((always_inline)) static inline int ci_tcp_recvmsg_impl(
+    const ci_tcp_recvmsg_args* a, pkt_copy_t copier,
+    struct onload_zc_recv_args* zc_args)
 {
-  int                   have_polled;
-  ci_uint64             sleep_seq;
-  ci_tcp_state*         ts = a->ts;
-  ci_netif*             ni = a->ni;
-  int                   flags = a->flags;
-  ci_uint64             start_frc = 0; /* suppress compiler warning */
+  ci_uint64     sleep_seq;
+  ci_tcp_state* ts        = a->ts;
+  ci_netif*     ni        = a->ni;
+  int           flags     = a->flags;
+  ci_uint64     start_frc = 0; /* suppress compiler warning */
 #ifndef __KERNEL__
-  unsigned              tcp_recv_spin = 0;
+  unsigned tcp_recv_spin = 0;
 #endif
-  ci_uint32             timeout = ts->s.so.rcvtimeo_msec;
-  struct tcp_recv_info  rinf;
+  ci_uint32            timeout = ts->s.so.rcvtimeo_msec;
+  struct tcp_recv_info rinf;
 
   ci_assert(a);
   ci_assert(ni);
@@ -763,26 +750,26 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
   ci_assert(a->msg);
 
   rinf.stack_locked = 0;
-  rinf.a = a;
-  rinf.rc = 0;
-  rinf.msg_flags = 0;
-  rinf.copier = copier;
-  rinf.zc_args = zc_args;
+  rinf.a            = a;
+  rinf.rc           = 0;
+  rinf.msg_flags    = 0;
+  rinf.copier       = copier;
+  rinf.zc_args      = zc_args;
 #ifdef __KERNEL__
   rinf.controllen = 0;
 #else
-  rinf.controllen = a->msg->msg_controllen;
+  rinf.controllen        = a->msg->msg_controllen;
   a->msg->msg_controllen = 0;
 #endif
 
   /* Grab the per-socket lock so we can access the receive queue. */
   rinf.rc = ci_sock_lock(ni, &ts->s.b);
-  if(CI_UNLIKELY( rinf.rc != 0 ))
+  if( CI_UNLIKELY(rinf.rc != 0) )
     return rinf.rc;
 
-  if( ts->s.b.state == CI_TCP_LISTEN )  goto check_errno;
+  if( ts->s.b.state == CI_TCP_LISTEN )
+    goto check_errno;
 
-  have_polled = 0;
   ci_assert_equal(rinf.rc, 0);
 
 #ifndef __KERNEL__
@@ -794,26 +781,26 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
 
   ci_tcp_recvmsg_init_piov(&rinf);
 
-  LOG_TR(log(LNTS_FMT "recvmsg len=%d flags=%x bytes_in_rxq=%d", 
-             LNTS_PRI_ARGS(ni, ts),
-             zc_args ? -1 : ci_iovec_ptr_bytes_count(&rinf.piov),
-             flags, tcp_rcv_usr(ts)));
+  LOG_TR(log(LNTS_FMT "recvmsg len=%d flags=%x bytes_in_rxq=%d",
+      LNTS_PRI_ARGS(ni, ts),
+      zc_args ? -1 : ci_iovec_ptr_bytes_count(&rinf.piov), flags,
+      tcp_rcv_usr(ts)));
 
 #ifndef __KERNEL__
-  tcp_recv_spin = 
-    oo_per_thread_get()->spinstate & (1 << ONLOAD_SPIN_TCP_RECV);
+  tcp_recv_spin = oo_per_thread_get()->spinstate & (1 << ONLOAD_SPIN_TCP_RECV);
 #endif
   ci_frc64(&start_frc);
 
- poll_recv_queue:
+poll_recv_queue:
   rinf.rc += ci_tcp_recvmsg_get_inline(&rinf);
 
   /* Return immediately if we've filled the app's buffer(s).
    * In case of empty buffer, we should wait for socket to be readable.
-  */
+   */
   if( ci_iovec_ptr_is_empty_proper(&rinf.piov) &&
-      ( rinf.rc != 0 || TCP_RX_DONE(ts) || tcp_rcv_usr(ts) ) ) {
-    if( CI_UNLIKELY(rinf.rc == 0) )  goto check_errno;
+      (rinf.rc != 0 || TCP_RX_DONE(ts) || tcp_rcv_usr(ts)) ) {
+    if( CI_UNLIKELY(rinf.rc == 0) )
+      goto check_errno;
     goto success_unlock_out;
   }
 
@@ -823,41 +810,30 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
   if( (rinf.a->flags & ONLOAD_MSG_ONEPKT) && (rinf.rc > 0) )
     goto success_unlock_out;
 
-  if( ! have_polled ) {
-    /* We've not yet filled the app's buffer.  But the receive queue may
-    ** not be up-to-date, so we need to check that it is, or bring it
-    ** up-to-date ourselves.
-    */
-    have_polled = 1;
+  /* We've not yet filled the app's buffer.  But the receive queue may
+  ** not be up-to-date, so we need to check that it is, or bring it
+  ** up-to-date ourselves.
+  */
 
-    if( ci_netif_may_poll(ni) && ci_netif_need_poll_spinning(ni, start_frc) ) {
-      if( ci_netif_trylock(ni) ) {
-        ci_uint32 rcv_added_before = ts->rcv_added;
-        int any_evs = ci_netif_poll(ni);
-        if( ts->rcv_added != rcv_added_before ) {
-          /* We've handled some events, but possibly not all.  So if the
-           * events we've handled do not satisfy the request, we need to
-           * ensure we come back and poll some more.
-           */
-          have_polled = 0;
+  if( ci_netif_may_poll(ni) && ci_netif_need_poll_spinning(ni, start_frc) ) {
+    if( ci_netif_trylock(ni) ) {
+      ci_uint32 rcv_added_before = ts->rcv_added;
+      int       any_evs          = ci_netif_poll(ni);
+      if( any_evs )
+        ci_netif_poll(ni);
+      ci_netif_unlock(ni);
+      if( ts->rcv_added != rcv_added_before ) {
+        if( (flags & MSG_PEEK) ) {
+          ci_tcp_recvmsg_init_piov(&rinf);
+          rinf.rc = 0;
         }
-        else if( any_evs )
-          ci_netif_poll(ni);
-	ci_netif_unlock(ni);
-	if( ts->rcv_added != rcv_added_before ) {
-	  if( (flags & MSG_PEEK) ) {
-            ci_tcp_recvmsg_init_piov(&rinf);
-            rinf.rc = 0;
-          }
-	  goto poll_recv_queue;
-	}
+        goto poll_recv_queue;
       }
-      else {
-        /* The netif lock is contended, so the chances are we're up-to-date.
-        ** Even if we're not, at least we will be soon.  So we pretend we are
-        ** up-to-date, and continue...
-        */
-      }
+    } else {
+      /* The netif lock is contended, so the chances are we're up-to-date.
+      ** Even if we're not, at least we will be soon.  So we pretend we are
+      ** up-to-date, and continue...
+      */
     }
   }
 
@@ -866,7 +842,7 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
   */
   /* \todo For MSG_PEEK, we always will re-copy all data if we did not
    * filled user buffer. */
-  if(CI_UNLIKELY( OO_PP_NOT_NULL(ts->recv2.head) ))
+  if( CI_UNLIKELY(OO_PP_NOT_NULL(ts->recv2.head)) )
     if( ci_tcp_recvmsg_recv2(&rinf) )
       goto success_unlock_out;
 
@@ -874,10 +850,12 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
   ** haven't filled the app's buffer.
   */
 
-  if( rinf.rc && FLAGS_AND_LOWAT_PERMIT_FAST_RET_WITH_DATA(ts, rinf.rc, flags) )
+  if( rinf.rc &&
+      FLAGS_AND_LOWAT_PERMIT_FAST_RET_WITH_DATA(ts, rinf.rc, flags) )
     goto success_unlock_out;
 
-  if( TCP_RX_DONE(ts) )  goto rx_done;
+  if( TCP_RX_DONE(ts) )
+    goto rx_done;
 
   if( rinf.rc == 0 && (flags & MSG_DONTWAIT) ) {
     rinf.rc = -EAGAIN;
@@ -885,7 +863,7 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
   }
 
   /* Must not delay return if we have any data and are peeking. */
-  ci_assert(!(flags & MSG_PEEK) || rinf.rc == 0);
+  ci_assert(! (flags & MSG_PEEK) || rinf.rc == 0);
 
 #ifndef __KERNEL__
   /* Spin (if enabled) until timeout, or something happens, or we get
@@ -920,8 +898,10 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
 
   sleep_seq = ts->s.b.sleep_seq.all;
   ci_rmb();
-  if( tcp_rcv_usr(ts) )  goto poll_recv_queue;
-  if( TCP_RX_DONE(ts) )  goto rx_done;
+  if( tcp_rcv_usr(ts) )
+    goto poll_recv_queue;
+  if( TCP_RX_DONE(ts) )
+    goto rx_done;
 
   /* ?? TODO: lock recv queue so other thread can't get in in middle of our
   ** receive.  NB. Need to check what happens on Linux if one thread blocks
@@ -933,30 +913,28 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
     int rc2;
 
     /* This function drops the socket lock, and returns unlocked. */
-    ci_assert(!rinf.stack_locked);
+    ci_assert(! rinf.stack_locked);
     rc2 = ci_sock_sleep(ni, &ts->s.b, CI_SB_FLAG_WAKE_RX,
-                        CI_SLEEP_SOCK_LOCKED | CI_SLEEP_SOCK_RQ,
-                        sleep_seq, &timeout);
+        CI_SLEEP_SOCK_LOCKED | CI_SLEEP_SOCK_RQ, sleep_seq, &timeout);
     if( rc2 == 0 )
       rc2 = ci_sock_lock(ni, &ts->s.b);
     if( rc2 < 0 ) {
       /* If we've received anything at all, we must say how much. */
       if( rinf.rc ) {
 #ifndef __KERNEL__
-        ci_tcp_recv_fill_msgname(ts, (struct sockaddr*) a->msg->msg_name,
-                                 &a->msg->msg_namelen);
+        ci_tcp_recv_fill_msgname(
+            ts, (struct sockaddr*) a->msg->msg_name, &a->msg->msg_namelen);
 #endif
       } else
         rinf.rc = rc2;
       goto out;
     }
   }
-  ci_assert(have_polled);
   goto poll_recv_queue;
 
 
 #ifndef __KERNEL__
- slow_path:
+slow_path:
 
   if( flags & MSG_ERRQUEUE ) {
 #if CI_CFG_TIMESTAMPING
@@ -979,7 +957,7 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
       ci_rmb();
 
       if( ! (pkt->flags &
-             (CI_PKT_FLAG_TX_TIMESTAMPED | CI_PKT_FLAG_INDIRECT)) ) {
+              (CI_PKT_FLAG_TX_TIMESTAMPED | CI_PKT_FLAG_INDIRECT)) ) {
         if( ! rinf.stack_locked ) {
           ci_netif_lock(ni);
           rinf.stack_locked = 1;
@@ -989,75 +967,75 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
         goto slow_path;
       }
 
-      a->msg->msg_controllen = rinf.controllen;
-      cmsg_state.msg = a->msg;
-      cmsg_state.cm = a->msg->msg_control;
+      a->msg->msg_controllen     = rinf.controllen;
+      cmsg_state.msg             = a->msg;
+      cmsg_state.cm              = a->msg->msg_control;
       cmsg_state.cmsg_bytes_used = 0;
-      cmsg_state.p_msg_flags = &rinf.msg_flags;
+      cmsg_state.p_msg_flags     = &rinf.msg_flags;
 
       if( pkt->flags & CI_PKT_FLAG_TX_TIMESTAMPED ) {
         if( ts->s.timestamping_flags & ONLOAD_SOF_TIMESTAMPING_ONLOAD ) {
           if( pkt->flags & ~CI_PKT_FLAG_RTQ_RETRANS ) {
-            struct onload_timestamp ts = {pkt->hw_stamp.tv_sec,
-                                          pkt->hw_stamp.tv_nsec};
+            struct onload_timestamp ts = { pkt->hw_stamp.tv_sec,
+              pkt->hw_stamp.tv_nsec };
             ci_put_cmsg(&cmsg_state, SOL_SOCKET, ONLOAD_SCM_TIMESTAMPING,
-                        sizeof(ts), &ts);
-          }
-          else {
+                sizeof(ts), &ts);
+          } else {
             /* Ignore retransmit timestamps. We might want something like
-            * ONLOAD_SCM_TIMESTAMPING_STREAM to report them along with the
-            * original transmission time */
+             * ONLOAD_SCM_TIMESTAMPING_STREAM to report them along with the
+             * original transmission time */
             goto timestamp_q_check;
           }
-        }
-        else {
+        } else {
           struct onload_scm_timestamping_stream stamps;
-          int tx_hw_stamp_in_sync;
+          int                                   tx_hw_stamp_in_sync;
           memset(&stamps, 0, sizeof(stamps));
-          tx_hw_stamp_in_sync = pkt->hw_stamp.tv_nsec &
-                                CI_IP_PKT_HW_STAMP_FLAG_IN_SYNC;
+          tx_hw_stamp_in_sync =
+              pkt->hw_stamp.tv_nsec & CI_IP_PKT_HW_STAMP_FLAG_IN_SYNC;
 
           if( pkt->flags & CI_PKT_FLAG_RTQ_RETRANS ) {
             if( pkt->pf.tcp_tx.first_tx_hw_stamp.tv_nsec &
                 CI_IP_PKT_HW_STAMP_FLAG_IN_SYNC ) {
-              stamps.first_sent.tv_sec = pkt->pf.tcp_tx.first_tx_hw_stamp.tv_sec;
-              stamps.first_sent.tv_nsec = pkt->pf.tcp_tx.first_tx_hw_stamp.tv_nsec;
+              stamps.first_sent.tv_sec =
+                  pkt->pf.tcp_tx.first_tx_hw_stamp.tv_sec;
+              stamps.first_sent.tv_nsec =
+                  pkt->pf.tcp_tx.first_tx_hw_stamp.tv_nsec;
             }
             if( tx_hw_stamp_in_sync ) {
-              stamps.last_sent.tv_sec = pkt->hw_stamp.tv_sec;
+              stamps.last_sent.tv_sec  = pkt->hw_stamp.tv_sec;
               stamps.last_sent.tv_nsec = pkt->hw_stamp.tv_nsec;
             }
-          }
-          else if( tx_hw_stamp_in_sync ) {
-            stamps.first_sent.tv_sec = pkt->hw_stamp.tv_sec;
+          } else if( tx_hw_stamp_in_sync ) {
+            stamps.first_sent.tv_sec  = pkt->hw_stamp.tv_sec;
             stamps.first_sent.tv_nsec = pkt->hw_stamp.tv_nsec;
           }
           stamps.len = pkt->pf.tcp_tx.end_seq - pkt->pf.tcp_tx.start_seq;
 
-          /* FIN and SYN eat seq space, but the user is not interested in them */
+          /* FIN and SYN eat seq space, but the user is not interested in them
+           */
           if( TX_PKT_IPX_TCP(ipcache_af(&ts->s.pkt), pkt)->tcp_flags &
-              (CI_TCP_FLAG_SYN|CI_TCP_FLAG_FIN) )
+              (CI_TCP_FLAG_SYN | CI_TCP_FLAG_FIN) )
             stamps.len--;
 
           ci_put_cmsg(&cmsg_state, SOL_SOCKET, ONLOAD_SCM_TIMESTAMPING_STREAM,
-                      sizeof(stamps), &stamps);
+              sizeof(stamps), &stamps);
         }
       }
       if( pkt->flags & CI_PKT_FLAG_INDIRECT ) {
-        struct ci_pkt_zc_header* zch = oo_tx_zc_header(pkt);
+        struct ci_pkt_zc_header*  zch = oo_tx_zc_header(pkt);
         struct ci_pkt_zc_payload* zcp;
-        OO_TX_FOR_EACH_ZC_PAYLOAD(ni, zch, zcp) {
+        OO_TX_FOR_EACH_ZC_PAYLOAD(ni, zch, zcp)
+        {
           if( zcp->is_remote && zcp->use_remote_cookie ) {
             ci_put_cmsg(&cmsg_state, SOL_IP, ONLOAD_SO_ONLOADZC_COMPLETE,
-                        sizeof(zcp->remote.app_cookie),
-                        &zcp->remote.app_cookie);
+                sizeof(zcp->remote.app_cookie), &zcp->remote.app_cookie);
           }
         }
       }
 
       ci_ip_cmsg_finish(&cmsg_state);
       rinf.msg_flags |= MSG_ERRQUEUE;
- 
+
       /* Wake up TX if necessary as a result of delivering from timestamp_q */
       if( NI_OPTS(ni).tcp_sndbuf_mode >= 1 &&
           ci_tcp_tx_advertise_space(ni, ts) ) {
@@ -1070,8 +1048,7 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
 
       rinf.rc = 0;
       goto unlock_out;
-    }
-    else {
+    } else {
       /* Try polling to see if there is a TX timestamp event available
        * to satisfy this request
        */
@@ -1083,9 +1060,8 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
         if( pkt != NULL ) {
           if( ! (pkt->flags & CI_PKT_FLAG_TX_PENDING) )
             goto timestamp_q_nonempty;
-        }
-        else if( (pkt = ci_udp_recv_q_get(ni, &ts->timestamp_q)) != NULL
-                 && ! (pkt->flags & CI_PKT_FLAG_TX_PENDING) ) {
+        } else if( (pkt = ci_udp_recv_q_get(ni, &ts->timestamp_q)) != NULL &&
+                   ! (pkt->flags & CI_PKT_FLAG_TX_PENDING) ) {
           goto timestamp_q_nonempty;
         }
       }
@@ -1098,50 +1074,53 @@ static inline int ci_tcp_recvmsg_impl(const ci_tcp_recvmsg_args* a,
   ci_assert(flags & MSG_OOB);
   rinf.rc = ci_tcp_recvmsg_urg(&rinf);
 
-  if( rinf.rc >= 0 )  goto success_unlock_out;
+  if( rinf.rc >= 0 )
+    goto success_unlock_out;
   goto unlock_out;
 #endif
 
- rx_done:
-  if( tcp_rcv_usr(ts) && !ci_iovec_ptr_is_empty_proper(&rinf.piov) )
+rx_done:
+  if( tcp_rcv_usr(ts) && ! ci_iovec_ptr_is_empty_proper(&rinf.piov) )
     /* Race breaker: rx_errno can get updated asynchronously just after
     ** we've looked at the receive queue.  We need to go back and get that
     ** data.
     */
     goto poll_recv_queue;
-  if( rinf.rc )  goto success_unlock_out;
- check_errno:
+  if( rinf.rc )
+    goto success_unlock_out;
+check_errno:
   /* tcp recv() does not set errno if the connection was properly shut down */
   if( ts->tcpflags & CI_TCPT_FLAG_FIN_RECEIVED )
     goto unlock_out;
-  if (ts->s.so_error) {
+  if( ts->s.so_error ) {
     ci_int32 rc1 = ci_get_so_error(&ts->s);
-    if (rc1 != 0)
+    if( rc1 != 0 )
       rinf.rc = -rc1;
   } else if( TCP_RX_ERRNO(ts) ) {
     rinf.rc = -TCP_RX_ERRNO(ts);
   }
   goto unlock_out;
 
- success_unlock_out:
+success_unlock_out:
 #ifndef __KERNEL__
   ci_tcp_recv_fill_msgname(ts, (struct sockaddr*) a->msg->msg_name,
-                           &a->msg->msg_namelen);  /*!\TODO fixme remove cast*/
+      &a->msg->msg_namelen); /*!\TODO fixme remove cast*/
 #endif
- unlock_out:
+unlock_out:
 
   /* If we've received FIN and RXQ is empty, let's reap it.
    * See the counterpart in ci_tcp_rx_process_fin(), if FIN arrives with
    * the empty receive queue. */
-  if( ( ( (ts->s.b.state & CI_TCP_STATE_RECVD_FIN) && tcp_rcv_usr(ts) == 0 )
-        || ni->state->mem_pressure ) && ci_netif_trylock(ni) ) {
+  if( (((ts->s.b.state & CI_TCP_STATE_RECVD_FIN) && tcp_rcv_usr(ts) == 0) ||
+          ni->state->mem_pressure) &&
+      ci_netif_trylock(ni) ) {
     ci_tcp_rx_reap_rxq_bufs_socklocked(ni, ts);
     ci_netif_unlock(ni);
   }
 
   ci_sock_unlock(ni, &ts->s.b);
- out:
-  if(CI_UNLIKELY( ni->state->rxq_low ))
+out:
+  if( CI_UNLIKELY(ni->state->rxq_low) )
     ci_netif_rxq_low_on_recv(ni, &ts->s, rinf.rc);
 #ifndef __KERNEL__
   if( rinf.rc >= 0 )
@@ -1161,8 +1140,7 @@ int ci_tcp_recvmsg(const ci_tcp_recvmsg_args* a)
 
 
 static void move_from_recv2_to_recv1(ci_netif* ni, ci_tcp_state* ts,
-                                     ci_ip_pkt_fmt* head,
-                                     ci_ip_pkt_fmt* tail, int n)
+    ci_ip_pkt_fmt* head, ci_ip_pkt_fmt* tail, int n)
 {
   /* Move the [n] packets from [head] to [tail] inclusive from the
   ** beginning of [recv2] to [recv1].  If [recv2] is emptied, switch back
@@ -1180,8 +1158,9 @@ static void move_from_recv2_to_recv1(ci_netif* ni, ci_tcp_state* ts,
 
   if( n ) {
     LOG_URG(log(NTS_FMT "recvmsg: moving %d pkts from recv2 to recv1",
-                NTS_PRI_ARGS(ni, ts), n));
-    /* as this is move between recv queues - no pkt receive adjustment needed */
+        NTS_PRI_ARGS(ni, ts), n));
+    /* as this is move between recv queues - no pkt receive adjustment needed
+     */
     ci_ip_queue_move(ni, recv2, recv1, tail, n);
     /* The extract pointer can only be made -ve when the receive queues are
     ** emptied (and both locks are held).  It can only be -ve here if after
@@ -1190,43 +1169,42 @@ static void move_from_recv2_to_recv1(ci_netif* ni, ci_tcp_state* ts,
     */
     if( OO_PP_IS_NULL(ts->recv1_extract) ) {
       ts->recv1_extract = recv1->head;
-    }
-    else {
+    } else {
       /*
        * must point to an emptied packet
        * - pull up to the first packet moved from recv2
        */
       ci_assert(oo_offbuf_is_empty(&(PKT_CHK(ni, ts->recv1_extract)->buf)));
       ts->recv1_extract = OO_PKT_P(head);
-      ci_assert_impl(OO_PP_IS_NULL(recv1->head),
-                     OO_PP_IS_NULL(ts->recv1_extract));
+      ci_assert_impl(
+          OO_PP_IS_NULL(recv1->head), OO_PP_IS_NULL(ts->recv1_extract));
     }
-    
   }
 
   /* If we've managed to empty recv2, and we're not still waiting for the
    * urgent data to arrive, then we can switch back to recv1.
    */
-  if( OO_PP_IS_NULL(recv2->head) && !(tcp_urg_data(ts) & CI_TCP_URG_COMING) ) {
+  if( OO_PP_IS_NULL(recv2->head) &&
+      ! (tcp_urg_data(ts) & CI_TCP_URG_COMING) ) {
     LOG_URG(log(NTS_FMT "recvmsg: switch to recv1", NTS_PRI_ARGS(ni, ts)));
     TS_QUEUE_RX_SET(ts, recv1);
-    ci_assert(!(tcp_urg_data(ts) & CI_TCP_URG_PTR_VALID));
+    ci_assert(! (tcp_urg_data(ts) & CI_TCP_URG_PTR_VALID));
   }
 }
 
 
 #ifndef __KERNEL__
-static int ci_tcp_recvmsg_urg(struct tcp_recv_info *rinf)
+static int ci_tcp_recvmsg_urg(struct tcp_recv_info* rinf)
 {
-  ci_netif* ni = rinf->a->ni;
-  ci_tcp_state* ts = rinf->a->ts;
+  ci_netif*      ni  = rinf->a->ni;
+  ci_tcp_state*  ts  = rinf->a->ts;
   struct msghdr* msg = rinf->a->msg;
-  ci_iovec_ptr piov;
-  ci_uint8 oob;
-  int can_write;
-  int rc = 0;
+  ci_iovec_ptr   piov;
+  ci_uint8       oob;
+  int            can_write;
+  int            rc = 0;
 
-  if( !rinf->stack_locked ) {
+  if( ! rinf->stack_locked ) {
     rc = ci_netif_lock(ni);
     if( rc != 0 )
       return rc;
@@ -1238,7 +1216,7 @@ static int ci_tcp_recvmsg_urg(struct tcp_recv_info *rinf)
 
   ci_assert(msg->msg_iovlen > 0);
   ci_iovec_ptr_init_nz(&piov, msg->msg_iov, msg->msg_iovlen);
-  can_write = !ci_iovec_ptr_is_empty_proper(&piov);
+  can_write = ! ci_iovec_ptr_is_empty_proper(&piov);
 
   if( ts->s.s_flags & CI_SOCK_FLAG_OOBINLINE ) {
     LOG_URG(ci_log("%s: OOBINLINE is set, rc=-EINVAL", __FUNCTION__));
@@ -1260,7 +1238,7 @@ static int ci_tcp_recvmsg_urg(struct tcp_recv_info *rinf)
     goto out;
   }
 
-  if (ts->s.b.state == CI_TCP_CLOSED) {
+  if( ts->s.b.state == CI_TCP_CLOSED ) {
     LOG_URG(ci_log("%s: tcp state is CLOSED, rc=0", __FUNCTION__));
     goto out;
   }
@@ -1271,11 +1249,12 @@ static int ci_tcp_recvmsg_urg(struct tcp_recv_info *rinf)
   oob = tcp_urg_data(ts) & CI_TCP_URG_DATA_MASK;
   rinf->msg_flags |= MSG_OOB;
 
-  LOG_URG(ci_log("Reading OOB byte, oob=0x%X, flags=0x%X", oob, rinf->a->flags));
+  LOG_URG(
+      ci_log("Reading OOB byte, oob=0x%X, flags=0x%X", oob, rinf->a->flags));
 
   /* if we are not in peek mode, mark the oob state as read */
-  if (~rinf->a->flags & MSG_PEEK)
-    tcp_urg_data(ts) &=~ (CI_TCP_URG_IS_HERE | CI_TCP_URG_DATA_MASK);
+  if( ~rinf->a->flags & MSG_PEEK )
+    tcp_urg_data(ts) &= ~(CI_TCP_URG_IS_HERE | CI_TCP_URG_DATA_MASK);
 
   /*! Linux appears to treat the MSG_TRUNC flag, in TCP, as a
    *  "PEEK and clear data" flag.
@@ -1295,10 +1274,10 @@ static int ci_tcp_recvmsg_urg(struct tcp_recv_info *rinf)
   ** ci_iovec_ptr_is_empty_proper() above has moved us to a non-zero-length
   ** buffer, so we can just copy the byte here.
   */
-  *(char*)CI_IOVEC_BASE(&piov.io) = oob;
-  rc = 1;
+  *(char*) CI_IOVEC_BASE(&piov.io) = oob;
+  rc                               = 1;
 
- out:
+out:
   CHECK_TS(ni, ts);
   ci_netif_unlock(ni);
   rinf->stack_locked = 0;
@@ -1307,32 +1286,32 @@ static int ci_tcp_recvmsg_urg(struct tcp_recv_info *rinf)
 #endif
 
 
-static void ci_tcp_recvmsg_recv2_peek2(struct tcp_recv_info *rinfo,
-                                       int start_skip, int stop_at_mark,
-                                       unsigned rd_nxt_seq)
+static void ci_tcp_recvmsg_recv2_peek2(struct tcp_recv_info* rinfo,
+    int start_skip, int stop_at_mark, unsigned rd_nxt_seq)
 {
-  /* 
+  /*
    * This function is used to peek at data on recv2.  Either to look a data
    ** before the mark, or at data after the OOB byte.
-   * 
+   *
    * Windows: unlike normal reads, peeks will not read past any OOBB
    */
-  ci_tcp_state* ts = rinfo->a->ts;
-  ci_netif* ni = rinfo->a->ni;
+  ci_tcp_state*    ts    = rinfo->a->ts;
+  ci_netif*        ni    = rinfo->a->ni;
   ci_ip_pkt_queue* recv2 = &ts->recv2;
-  ci_ip_pkt_fmt* pkt = PKT_CHK(ni, recv2->head);
-  oo_offbuf* buf = &pkt->buf;
-  int rc, n, peek_off = start_skip;
-  int orig_buf_end;
+  ci_ip_pkt_fmt*   pkt   = PKT_CHK(ni, recv2->head);
+  oo_offbuf*       buf   = &pkt->buf;
+  int              rc, n, peek_off = start_skip;
+  int              orig_buf_end;
 
   ci_assert(oo_offbuf_left(buf) >= start_skip);
   ci_assert(tcp_urg_data(ts) & CI_TCP_URG_PTR_VALID);
-  ci_assert(!stop_at_mark || SEQ_LE(rd_nxt_seq, tcp_rcv_up(ts)));
+  ci_assert(! stop_at_mark || SEQ_LE(rd_nxt_seq, tcp_rcv_up(ts)));
 
-  LOG_URG(log(LNTS_FMT "recv2_peek: so_far=%d skip=%d stop@mark=%d "
-              "rd_nxt_seq=%08x rcv_up=%08x", LNTS_PRI_ARGS(ni, ts),
-              rinfo->rc, start_skip, stop_at_mark,
-              rd_nxt_seq, tcp_rcv_up(ts)));
+  LOG_URG(
+      log(LNTS_FMT "recv2_peek: so_far=%d skip=%d stop@mark=%d "
+                   "rd_nxt_seq=%08x rcv_up=%08x",
+          LNTS_PRI_ARGS(ni, ts), rinfo->rc, start_skip, stop_at_mark,
+          rd_nxt_seq, tcp_rcv_up(ts)));
 
   rd_nxt_seq += start_skip;
 
@@ -1351,13 +1330,13 @@ static void ci_tcp_recvmsg_recv2_peek2(struct tcp_recv_info *rinfo,
     }
 
     rc = 0;
-    n = rinfo->copier(ni, rinfo, pkt, peek_off, &rc);
+    n  = rinfo->copier(ni, rinfo, pkt, peek_off, &rc);
     ci_assert_equal(n, rc); /* zc shenanigans not supported with urgent data */
     pkt->buf.end = orig_buf_end;
 #ifdef __KERNEL__
     if( n < 0 ) {
-      LOG_URG(log(LNTS_FMT "%s: copy_to_user returned %d", 
-                  LNTS_PRI_ARGS(ni, ts), __FUNCTION__, n));
+      LOG_URG(log(LNTS_FMT "%s: copy_to_user returned %d",
+          LNTS_PRI_ARGS(ni, ts), __FUNCTION__, n));
       if( rinfo->rc == 0 )
         rinfo->rc = n;
       break;
@@ -1370,34 +1349,34 @@ static void ci_tcp_recvmsg_recv2_peek2(struct tcp_recv_info *rinfo,
     if( ! iovec_roll_over(&rinfo->piov) )
       break;
     if( oo_offbuf_left(buf) - peek_off == 0 ) {
-      if( OO_PP_IS_NULL(pkt->next) ) 
-	break;
-      pkt = PKT_CHK(ni, pkt->next);
-      buf = &pkt->buf;
+      if( OO_PP_IS_NULL(pkt->next) )
+        break;
+      pkt      = PKT_CHK(ni, pkt->next);
+      buf      = &pkt->buf;
       peek_off = 0;
     }
   }
 }
 
 
-static int ci_tcp_recvmsg_recv2_peek(struct tcp_recv_info *rinf)
+static int ci_tcp_recvmsg_recv2_peek(struct tcp_recv_info* rinf)
 {
-  ci_tcp_state* ts = rinf->a->ts;
-  ci_netif* ni = rinf->a->ni;
+  ci_tcp_state*    ts    = rinf->a->ts;
+  ci_netif*        ni    = rinf->a->ni;
   ci_ip_pkt_queue* recv2 = &ts->recv2;
-  ci_ip_pkt_fmt* pkt;
-  int skip, stop_at_mark;
-  unsigned rd_nxt_seq;
-  int af = ipcache_af(&ts->s.pkt);
+  ci_ip_pkt_fmt*   pkt;
+  int              skip, stop_at_mark;
+  unsigned         rd_nxt_seq;
+  int              af = ipcache_af(&ts->s.pkt);
 
-  if( !rinf->stack_locked ) {
+  if( ! rinf->stack_locked ) {
     int rc = ci_netif_lock(ni);
     if( rc != 0 )
       return rc;
     rinf->stack_locked = 1;
   }
 
-  pkt = PKT_CHK(ni, recv2->head);
+  pkt        = PKT_CHK(ni, recv2->head);
   rd_nxt_seq = PKT_IPX_RX_BUF_SEQ(af, pkt);
 
   /* Double-check for packets added to recv1 after we finished sucking data
@@ -1405,7 +1384,7 @@ static int ci_tcp_recvmsg_recv2_peek(struct tcp_recv_info *rinf)
   */
   if( OO_PP_NOT_NULL(ts->recv1_extract) ) {
     ci_ip_pkt_fmt* r1pkt = PKT_CHK(ni, ts->recv1_extract);
-    unsigned seq = PKT_IPX_RX_BUF_SEQ(af, r1pkt) + rinf->rc;
+    unsigned       seq   = PKT_IPX_RX_BUF_SEQ(af, r1pkt) + rinf->rc;
     /* We think we've read everything in recv1, and [seq] points just
     ** beyond that.  So it ought to match the beginning of recv2.  If it
     ** doesn't, then something else has been added to recv1.
@@ -1423,23 +1402,22 @@ static int ci_tcp_recvmsg_recv2_peek(struct tcp_recv_info *rinf)
   ** it.  Otherwise peek the data up to the mark.
   */
   if( tcp_rcv_up(ts) == rd_nxt_seq ) {
-    skip = !(ts->s.s_flags & CI_SOCK_FLAG_OOBINLINE);
+    skip         = ! (ts->s.s_flags & CI_SOCK_FLAG_OOBINLINE);
     stop_at_mark = 0;
-  }
-  else {
-    skip = 0;
+  } else {
+    skip         = 0;
     stop_at_mark = 1;
   }
   ci_tcp_recvmsg_recv2_peek2(rinf, skip, stop_at_mark, rd_nxt_seq);
 
- out:
+out:
   ci_netif_unlock(ni);
   rinf->stack_locked = 0;
   return rinf->rc;
 }
 
 
-static int ci_tcp_recvmsg_handle_race(struct tcp_recv_info *rinf)
+static int ci_tcp_recvmsg_handle_race(struct tcp_recv_info* rinf)
 {
   int rc;
 
@@ -1468,32 +1446,33 @@ ci_inline int ci_tcp_recv1_is_empty(ci_netif* ni, ci_tcp_state* ts)
   /* NB. The first buffer pointed to by the extract pointer may be empty,
   ** but any subsequent ones must not be.
   */
-  ci_ip_pkt_fmt *pkt;
-  if( OO_PP_IS_NULL(ts->recv1_extract) )  return 1;
+  ci_ip_pkt_fmt* pkt;
+  if( OO_PP_IS_NULL(ts->recv1_extract) )
+    return 1;
   pkt = PKT_CHK_NNL(ni, ts->recv1_extract);
   return oo_offbuf_is_empty(&pkt->buf) && OO_PP_IS_NULL(pkt->next);
 }
 
 
-static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf)
+static int ci_tcp_recvmsg_recv2(struct tcp_recv_info* rinf)
 {
-  ci_tcp_state* ts = rinf->a->ts;
-  ci_netif* ni = rinf->a->ni;
+  ci_tcp_state*    ts    = rinf->a->ts;
+  ci_netif*        ni    = rinf->a->ni;
   ci_ip_pkt_queue* recv2 = &ts->recv2;
-  ci_ip_pkt_fmt* pkt, *head_pkt, *tail_pkt;
-  oo_offbuf* buf;
-  unsigned rd_nxt_seq, n;
-  int must_return_from_recv = 0;
-  int af = ipcache_af(&ts->s.pkt);
+  ci_ip_pkt_fmt *  pkt, *head_pkt, *tail_pkt;
+  oo_offbuf*       buf;
+  unsigned         rd_nxt_seq, n;
+  int              must_return_from_recv = 0;
+  int              af                    = ipcache_af(&ts->s.pkt);
 
   if( rinf->a->flags & MSG_PEEK )
     return ci_tcp_recvmsg_recv2_peek(rinf);
 
- again:
+again:
   LOG_URG(ci_log("%s: again rc=%d", __FUNCTION__, rinf->rc));
-  
+
   ci_assert(ci_sock_is_locked(ni, &ts->s.b));
-  if( !rinf->stack_locked ) {
+  if( ! rinf->stack_locked ) {
     int rc = ci_netif_lock(ni);
     if( rc != 0 )
       return rc;
@@ -1504,7 +1483,8 @@ static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf)
   /* Double-check for packets added to recv1. */
   if( ! ci_tcp_recv1_is_empty(ni, ts) ) {
     must_return_from_recv = ci_tcp_recvmsg_handle_race(rinf);
-    if( must_return_from_recv )  goto unlock_out;
+    if( must_return_from_recv )
+      goto unlock_out;
   }
 
   ci_assert(ci_tcp_recv1_is_empty(ni, ts));
@@ -1516,10 +1496,10 @@ static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf)
   /* Calculate the sequence number of the first un-read byte in this pkt. */
   rd_nxt_seq = PKT_IPX_RX_BUF_SEQ(af, pkt);
 
-  LOG_URG(log("%s: "NTS_FMT "so_far=%d flags=%x nxt_seq=%08x rcv_up=%08x "
-              "urg_data=%03x", __FUNCTION__, NTS_PRI_ARGS(ni, ts),
-              rinf->rc, rinf->a->flags, rd_nxt_seq, tcp_rcv_up(ts),
-              tcp_urg_data(ts)));
+  LOG_URG(log("%s: " NTS_FMT "so_far=%d flags=%x nxt_seq=%08x rcv_up=%08x "
+              "urg_data=%03x",
+      __FUNCTION__, NTS_PRI_ARGS(ni, ts), rinf->rc, rinf->a->flags, rd_nxt_seq,
+      tcp_rcv_up(ts), tcp_urg_data(ts)));
 
   ci_assert(tcp_urg_data(ts) & CI_TCP_URG_PTR_VALID);
 
@@ -1541,8 +1521,8 @@ static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf)
   **/
   if( tcp_rcv_up(ts) == rd_nxt_seq || rinf->zc_args ) {
     /* We are staring at the urgent byte. */
-    LOG_URG(ci_log("%s: We're staring at the oob byte and rc=%d",
-              __FUNCTION__, rinf->rc));
+    LOG_URG(ci_log("%s: We're staring at the oob byte and rc=%d", __FUNCTION__,
+        rinf->rc));
 
     /*
      * windows allows in-band reads to pass the mark - so don't quit here
@@ -1550,11 +1530,11 @@ static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf)
     if( rinf->rc && ! rinf->zc_args ) {
       /* We've consumed some data, so stop at the mark. */
       LOG_URG(ci_log("%s: We're staring at the oob byte and rc=%d",
-              __FUNCTION__, rinf->rc));
+          __FUNCTION__, rinf->rc));
       must_return_from_recv = 1;
       goto unlock_out;
     }
-    
+
 
     if( ! (ts->s.s_flags & CI_SOCK_FLAG_OOBINLINE) &&
         ! oo_offbuf_is_empty(buf) ) {
@@ -1575,7 +1555,8 @@ static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf)
      * - so leave as valid
      */
     tcp_urg_data_invalidate(ts);
-    move_from_recv2_to_recv1(ni, ts, pkt, PKT_CHK(ni,recv2->tail), recv2->num);
+    move_from_recv2_to_recv1(
+        ni, ts, pkt, PKT_CHK(ni, recv2->tail), recv2->num);
     ci_assert(OO_PP_IS_NULL(recv2->head));
     ci_assert(TS_QUEUE_RX(ts) == &ts->recv1);
     ci_netif_unlock(ni);
@@ -1588,12 +1569,13 @@ static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf)
   ** packets that come before the mark.
   */
   head_pkt = pkt;
-  n = 0;
+  n        = 0;
   tail_pkt = 0; /* just to suppress compiler warning */
   while( SEQ_GE(tcp_rcv_up(ts), pkt->pf.tcp_rx.end_seq) ) {
     tail_pkt = pkt;
     ++n;
-    if( OO_PP_IS_NULL(pkt->next) )  break;
+    if( OO_PP_IS_NULL(pkt->next) )
+      break;
     pkt = PKT_CHK(ni, pkt->next);
   }
   if( n ) {
@@ -1607,26 +1589,29 @@ static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf)
     rinf->stack_locked = 0;
     /* Pull data out of recv1 and return if we fill app's buffer. */
     rinf->rc += ci_tcp_recvmsg_get_outofline(rinf);
-    must_return_from_recv = ci_iovec_ptr_is_empty_proper(&rinf->piov) ||
-                      ((rinf->a->flags & ONLOAD_MSG_ONEPKT) && (rinf->rc > 0));
-    if( must_return_from_recv )  goto out;
+    must_return_from_recv =
+        ci_iovec_ptr_is_empty_proper(&rinf->piov) ||
+        ((rinf->a->flags & ONLOAD_MSG_ONEPKT) && (rinf->rc > 0));
+    if( must_return_from_recv )
+      goto out;
     /* May need to pull some more from recv2 before the mark.  NB. Can't
     ** just fall through to the code below, because the mark may have moved
     ** forward because we dropped the netif lock.
     */
-    if( OO_PP_NOT_NULL(recv2->head) )  goto again;
+    if( OO_PP_NOT_NULL(recv2->head) )
+      goto again;
     goto out;
-  }
-  else {
+  } else {
     /* The packet at the head of recv2 (if any) contains normal data
     ** followed by urgent data.  So read the normal data.
     */
     int n;
     ci_assert(! rinf->zc_args);
-    if( OO_PP_IS_NULL(recv2->head) )  goto unlock_out;
-    n = tcp_rcv_up(ts) - rd_nxt_seq;    /* number of normal bytes */
-    LOG_URG(ci_log("%s: reading %d bytes from urg segment before OOBB",
-		   __FUNCTION__, n));
+    if( OO_PP_IS_NULL(recv2->head) )
+      goto unlock_out;
+    n = tcp_rcv_up(ts) - rd_nxt_seq; /* number of normal bytes */
+    LOG_URG(ci_log(
+        "%s: reading %d bytes from urg segment before OOBB", __FUNCTION__, n));
     ci_assert(n > 0);
     ci_assert_lt(n, oo_offbuf_left(buf));
     n = ci_copy_to_iovec(&rinf->piov, oo_offbuf_ptr(buf), n);
@@ -1638,29 +1623,29 @@ static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf)
     ** recvmsg() can return now.
     */
     must_return_from_recv = 1;
-
   }
 
- unlock_out:
+unlock_out:
   CHECK_TS(ni, ts);
   if( rinf->stack_locked ) {
     ci_netif_unlock(ni);
     rinf->stack_locked = 0;
   }
- out:
+out:
   if( NI_OPTS(ni).tcp_rcvbuf_mode == 1 )
     ci_tcp_rcvbuf_drs(ni, ts);
 
   /* Must return if we've filled the app buffer. */
-  must_return_from_recv |= ci_iovec_ptr_is_empty_proper(&rinf->piov) ||
-                      ((rinf->a->flags & ONLOAD_MSG_ONEPKT) && (rinf->rc > 0));
+  must_return_from_recv |=
+      ci_iovec_ptr_is_empty_proper(&rinf->piov) ||
+      ((rinf->a->flags & ONLOAD_MSG_ONEPKT) && (rinf->rc > 0));
 
-  LOG_URG(ci_log("%s: returning %d rc=%d "
-		 "ci_iovec_ptr_is_empty_proper=%d",
-		 __FUNCTION__, must_return_from_recv,
-		 rinf->rc,
-		 ci_iovec_ptr_is_empty_proper(&rinf->piov)));
-  
+  LOG_URG(
+      ci_log("%s: returning %d rc=%d "
+             "ci_iovec_ptr_is_empty_proper=%d",
+          __FUNCTION__, must_return_from_recv, rinf->rc,
+          ci_iovec_ptr_is_empty_proper(&rinf->piov)));
+
   return must_return_from_recv;
 }
 
@@ -1668,36 +1653,36 @@ static int ci_tcp_recvmsg_recv2(struct tcp_recv_info *rinf)
 #ifndef __KERNEL__
 
 #if CI_CFG_TCP_OFFLOAD_RECYCLER
-#define CI_ZC_IOV_STATIC_MAX  32
+#define CI_ZC_IOV_STATIC_MAX 32
 
 CI_BUILD_ASSERT((ONLOAD_ZC_RECV_FLAG_OFFLOAD_OOB &
-                 ~ONLOAD_ZC_RECV_FLAG_OFFLOAD_RESERVED) == 0);
+                    ~ONLOAD_ZC_RECV_FLAG_OFFLOAD_RESERVED) == 0);
 
 static int zc_ceph_callback(ci_netif* netif, struct tcp_recv_info* rinf,
-                            ci_ip_pkt_fmt* pkt, int peek_off, int* ndata)
+    ci_ip_pkt_fmt* pkt, int peek_off, int* ndata)
 {
-  int total = oo_offbuf_left(&pkt->buf);
-  int n = total;
-  char* p = oo_offbuf_ptr(&pkt->buf);
-  struct onload_zc_iovec static_iov[CI_ZC_IOV_STATIC_MAX];
-  struct onload_zc_iovec* iov = static_iov;
-  int iovlen = 0;
-  int iov_max = CI_ZC_IOV_STATIC_MAX;
-  int out_rc = 0;
+  int                        total = oo_offbuf_left(&pkt->buf);
+  int                        n     = total;
+  char*                      p     = oo_offbuf_ptr(&pkt->buf);
+  struct onload_zc_iovec     static_iov[CI_ZC_IOV_STATIC_MAX];
+  struct onload_zc_iovec*    iov     = static_iov;
+  int                        iovlen  = 0;
+  int                        iov_max = CI_ZC_IOV_STATIC_MAX;
+  int                        out_rc  = 0;
   enum onload_zc_callback_rc cb_rc;
-  ssize_t overrun;
+  ssize_t                    overrun;
 
   /* Not currently a required feature, and a little tricky to get right: */
   if( rinf->msg_flags & MSG_PEEK )
     return -EOPNOTSUPP;
 
   while( n ) {
-    const int hdr_len = offsetof(struct ceph_data_pkt, data);
+    const int            hdr_len = offsetof(struct ceph_data_pkt, data);
     struct ceph_data_pkt data;
 
     if( n < hdr_len ) {
       LOG_TR(log(LNTS_FMT "bogus plugin metastream len=%d",
-                 LNTS_PRI_ARGS(netif, rinf->a->ts), n));
+          LNTS_PRI_ARGS(netif, rinf->a->ts), n));
       goto unrecoverable;
     }
 
@@ -1712,15 +1697,15 @@ static int zc_ceph_callback(ci_netif* netif, struct tcp_recv_info* rinf,
        * the DDR ring buffer. A message will never require more than two
        * iovs: the plugin will not deliver a message longer than ddr_size. */
       struct onload_zc_iovec* iov_new;
-      LOG_TR(log(LNTS_FMT "large number of iovs in metapkt (%d @ %d/%d)", 
-                 LNTS_PRI_ARGS(netif, rinf->a->ts), iovlen,
-                 (int)(p - PKT_START(pkt)),
-                 (int)(oo_offbuf_end(&pkt->buf) - PKT_START(pkt))));
+      LOG_TR(log(LNTS_FMT "large number of iovs in metapkt (%d @ %d/%d)",
+          LNTS_PRI_ARGS(netif, rinf->a->ts), iovlen,
+          (int) (p - PKT_START(pkt)),
+          (int) (oo_offbuf_end(&pkt->buf) - PKT_START(pkt))));
       iov_max = iov_max + (iov_max >> 1);
-      iov_new = realloc(iov == static_iov ? NULL : iov,
-                        iov_max * sizeof(*iov));
+      iov_new =
+          realloc(iov == static_iov ? NULL : iov, iov_max * sizeof(*iov));
       if( ! iov_new ) {
-        log(LNTS_FMT "OOM growing iov array (%d)", 
+        log(LNTS_FMT "OOM growing iov array (%d)",
             LNTS_PRI_ARGS(netif, rinf->a->ts), iov_max);
         goto unrecoverable;
       }
@@ -1733,89 +1718,92 @@ static int zc_ceph_callback(ci_netif* netif, struct tcp_recv_info* rinf,
     /* NB: if adding a new msg_type here, don't forget that copy_ceph_pkt()
      * has a similar switch statement */
     switch( data.msg_type ) {
-    case XSN_CEPH_DATA_INLINE:
-      if( n < data.msg_len ) {
-        LOG_TR(log(LNTS_FMT "bogus plugin inline len %d<%u", 
-                  LNTS_PRI_ARGS(netif, rinf->a->ts), n, data.msg_len));
-        goto unrecoverable;
-      }
-      iov[iovlen].iov_base = p;
-      iov[iovlen].iov_len = data.msg_len;
-      iov[iovlen].addr_space = EF_ADDRSPACE_LOCAL;
-      iov[iovlen].buf = ONLOAD_ZC_HANDLE_NONZC;
-      iov[iovlen].iov_flags = 0;
-      out_rc += data.msg_len;
-      break;
+      case XSN_CEPH_DATA_INLINE:
+        if( n < data.msg_len ) {
+          LOG_TR(log(LNTS_FMT "bogus plugin inline len %d<%u",
+              LNTS_PRI_ARGS(netif, rinf->a->ts), n, data.msg_len));
+          goto unrecoverable;
+        }
+        iov[iovlen].iov_base   = p;
+        iov[iovlen].iov_len    = data.msg_len;
+        iov[iovlen].addr_space = EF_ADDRSPACE_LOCAL;
+        iov[iovlen].buf        = ONLOAD_ZC_HANDLE_NONZC;
+        iov[iovlen].iov_flags  = 0;
+        out_rc += data.msg_len;
+        break;
 
-    case XSN_CEPH_DATA_REMOTE:
-      if( n < sizeof(data.remote) || data.msg_len != sizeof(data.remote) ) {
-        LOG_TR(log(LNTS_FMT "bogus plugin remote block %d/%u", 
-                  LNTS_PRI_ARGS(netif, rinf->a->ts), n, data.msg_len));
-        goto unrecoverable;
-      }
-      memcpy(&data.remote, p, sizeof(data.remote));
-      iov[iovlen].iov_ptr = data.remote.start_ptr + rinf->a->ts->plugin_ddr_base;
-      iov[iovlen].iov_len = data.remote.data_len;
-      iov[iovlen].iov_flags = 0;
-      iov[iovlen].addr_space = netif->state->nic[pkt->intf_i].plugin_addr_space;
-      out_rc += data.remote.data_len;
-
-      overrun = data.remote.start_ptr + data.remote.data_len - rinf->a->ts->plugin_ddr_size;
-      if( overrun > 0 ) {
-        /* This data wraps round the DDR ring buffer; the end of the data
-         * will be found at the start of the ring. */
-        iov[iovlen].iov_len -= overrun;
-        iov[iovlen].buf = ONLOAD_ZC_HANDLE_NONZC;
-
-        ++iovlen;
-        iov[iovlen].iov_ptr = rinf->a->ts->plugin_ddr_base;
-        iov[iovlen].iov_len = overrun;
-        iov[iovlen].addr_space = netif->state->nic[pkt->intf_i].plugin_addr_space;
-        iov[iovlen].buf = ONLOAD_ZC_HANDLE_NONZC;
+      case XSN_CEPH_DATA_REMOTE:
+        if( n < sizeof(data.remote) || data.msg_len != sizeof(data.remote) ) {
+          LOG_TR(log(LNTS_FMT "bogus plugin remote block %d/%u",
+              LNTS_PRI_ARGS(netif, rinf->a->ts), n, data.msg_len));
+          goto unrecoverable;
+        }
+        memcpy(&data.remote, p, sizeof(data.remote));
+        iov[iovlen].iov_ptr =
+            data.remote.start_ptr + rinf->a->ts->plugin_ddr_base;
+        iov[iovlen].iov_len   = data.remote.data_len;
         iov[iovlen].iov_flags = 0;
-      }
+        iov[iovlen].addr_space =
+            netif->state->nic[pkt->intf_i].plugin_addr_space;
+        out_rc += data.remote.data_len;
 
-      /* CRC iov; we are currently wasting a new iov, since we can't distinguish
-       * whether the CRC is enabled or not. */
-      ++iovlen;
-      iov[iovlen].iov_flags = ONLOAD_ZC_RECV_FLAG_OFFLOAD_OOB;
+        overrun = data.remote.start_ptr + data.remote.data_len -
+                  rinf->a->ts->plugin_ddr_size;
+        if( overrun > 0 ) {
+          /* This data wraps round the DDR ring buffer; the end of the data
+           * will be found at the start of the ring. */
+          iov[iovlen].iov_len -= overrun;
+          iov[iovlen].buf = ONLOAD_ZC_HANDLE_NONZC;
 
-      /* Pass the address of the CRC within the packet buffer.  This is not
-       * necessarily naturally aligned. */
-      iov[iovlen].iov_len = sizeof(data.remote.data_crc);
-      iov[iovlen].iov_base = p + CI_MEMBER_OFFSET(typeof(data.remote),
-                                                  data_crc);
-      ci_assert_le((uintptr_t) iov[iovlen].iov_base + iov[iovlen].iov_len,
-                   (uintptr_t) p + sizeof(data.remote));
+          ++iovlen;
+          iov[iovlen].iov_ptr = rinf->a->ts->plugin_ddr_base;
+          iov[iovlen].iov_len = overrun;
+          iov[iovlen].addr_space =
+              netif->state->nic[pkt->intf_i].plugin_addr_space;
+          iov[iovlen].buf       = ONLOAD_ZC_HANDLE_NONZC;
+          iov[iovlen].iov_flags = 0;
+        }
 
-      iov[iovlen].addr_space = EF_ADDRSPACE_LOCAL;
-      iov[iovlen].buf = ONLOAD_ZC_HANDLE_NONZC;
+        /* CRC iov; we are currently wasting a new iov, since we can't
+         * distinguish whether the CRC is enabled or not. */
+        ++iovlen;
+        iov[iovlen].iov_flags = ONLOAD_ZC_RECV_FLAG_OFFLOAD_OOB;
 
-      break;
+        /* Pass the address of the CRC within the packet buffer.  This is not
+         * necessarily naturally aligned. */
+        iov[iovlen].iov_len   = sizeof(data.remote.data_crc);
+        iov[iovlen].iov_base =
+            p + CI_MEMBER_OFFSET(typeof(data.remote), data_crc);
+        ci_assert_le((uintptr_t) iov[iovlen].iov_base + iov[iovlen].iov_len,
+            (uintptr_t) p + sizeof(data.remote));
 
-    case XSN_CEPH_DATA_LOST_SYNC:
-      if( n < sizeof(data.lost_sync) ||
-          data.msg_len != sizeof(data.lost_sync) ) {
-        LOG_TR(log(LNTS_FMT "bogus plugin lost-sync block %d/%u", 
-                  LNTS_PRI_ARGS(netif, rinf->a->ts), n, data.msg_len));
+        iov[iovlen].addr_space = EF_ADDRSPACE_LOCAL;
+        iov[iovlen].buf        = ONLOAD_ZC_HANDLE_NONZC;
+
+        break;
+
+      case XSN_CEPH_DATA_LOST_SYNC:
+        if( n < sizeof(data.lost_sync) ||
+            data.msg_len != sizeof(data.lost_sync) ) {
+          LOG_TR(log(LNTS_FMT "bogus plugin lost-sync block %d/%u",
+              LNTS_PRI_ARGS(netif, rinf->a->ts), n, data.msg_len));
+          goto unrecoverable;
+        }
+        memcpy(&data.lost_sync, p, sizeof(data.lost_sync));
+        log(LNTS_FMT "plugin lost sync: %u/%u",
+            LNTS_PRI_ARGS(netif, rinf->a->ts), data.lost_sync.reason,
+            data.lost_sync.subreason);
+        rinf->a->msg->msg_controllen = 0;
+        *ndata                       = out_rc;
+        /* Set the return value so that we'll keep hitting this same lost-sync
+         * message on every receive, and hence block the socket from making
+         * further progress */
+        return total - n - hdr_len;
+
+      default:
+        LOG_TR(log(LNTS_FMT "bogus plugin metastream header %u/%u",
+            LNTS_PRI_ARGS(netif, rinf->a->ts), data.msg_type, data.msg_len));
         goto unrecoverable;
-      }
-      memcpy(&data.lost_sync, p, sizeof(data.lost_sync));
-      log(LNTS_FMT "plugin lost sync: %u/%u", 
-                 LNTS_PRI_ARGS(netif, rinf->a->ts), data.lost_sync.reason,
-                 data.lost_sync.subreason);
-      rinf->a->msg->msg_controllen = 0;
-      *ndata = out_rc;
-      /* Set the return value so that we'll keep hitting this same lost-sync
-       * message on every receive, and hence block the socket from making
-       * further progress */
-      return total - n - hdr_len;
-
-    default:
-      LOG_TR(log(LNTS_FMT "bogus plugin metastream header %u/%u", 
-                 LNTS_PRI_ARGS(netif, rinf->a->ts), data.msg_type,
-                 data.msg_len));
-      goto unrecoverable;
     }
 
     ++iovlen;
@@ -1833,22 +1821,22 @@ static int zc_ceph_callback(ci_netif* netif, struct tcp_recv_info* rinf,
    * this case, is the first iov of the last batch, to match how UDP uses the
    * zc callback. */
   pkt->rx_flags |= CI_PKT_RX_FLAG_KEEP;
-  pkt->user_refcount = CI_ZC_USER_REFCOUNT_ONE;
-  iov[0].buf = zc_pktbuf_to_handle(pkt);
-  rinf->zc_args->msg.iov = iov;
+  pkt->user_refcount                   = CI_ZC_USER_REFCOUNT_ONE;
+  iov[0].buf                           = zc_pktbuf_to_handle(pkt);
+  rinf->zc_args->msg.iov               = iov;
   rinf->zc_args->msg.msghdr.msg_iovlen = iovlen;
-  rinf->zc_args->msg.msghdr.msg_flags = rinf->msg_flags;
-  cb_rc = rinf->zc_args->cb(rinf->zc_args, 0);
+  rinf->zc_args->msg.msghdr.msg_flags  = rinf->msg_flags;
+  cb_rc                                = rinf->zc_args->cb(rinf->zc_args, 0);
 
   if( cb_rc & ONLOAD_ZC_TERMINATE ) {
     /* Make it look like the non-zc buffer is full */
     rinf->piov.io.iov_len = 0;
-    rinf->piov.iovlen = 0;
+    rinf->piov.iovlen     = 0;
   }
   ci_pkt_zc_free_clean(pkt, cb_rc);
 
   *ndata = out_rc;
- unrecoverable:
+unrecoverable:
   /* The correct thing to do with bad framing is debatable. This code throws
    * away the remainder of the packet and continues on without telling the
    * app. An easy other option would be to put the app in a continuous loop of
@@ -1863,11 +1851,11 @@ static int zc_ceph_callback(ci_netif* netif, struct tcp_recv_info* rinf,
 
 
 static int zc_call_callback(ci_netif* netif, struct tcp_recv_info* rinf,
-                            ci_ip_pkt_fmt* pkt, int peek_off, int* ndata)
+    ci_ip_pkt_fmt* pkt, int peek_off, int* ndata)
 {
-  int n = oo_offbuf_left(&pkt->buf);
+  int                        n = oo_offbuf_left(&pkt->buf);
   enum onload_zc_callback_rc cb_rc;
-  struct onload_zc_iovec iov;
+  struct onload_zc_iovec     iov;
 
 #if CI_CFG_TCP_OFFLOAD_RECYCLER
   if( ci_tcp_is_pluginized(rinf->a->ts) )
@@ -1884,17 +1872,17 @@ static int zc_call_callback(ci_netif* netif, struct tcp_recv_info* rinf,
    */
   pkt->rx_flags |= CI_PKT_RX_FLAG_KEEP;
 
-  rinf->zc_args->msg.iov = &iov;
+  rinf->zc_args->msg.iov               = &iov;
   rinf->zc_args->msg.msghdr.msg_iovlen = 1;
-  rinf->zc_args->msg.msghdr.msg_flags = rinf->msg_flags;
-  iov.buf = zc_pktbuf_to_handle(pkt);
-  iov.iov_base = oo_offbuf_ptr(&pkt->buf) + peek_off;
-  iov.iov_len = oo_offbuf_left(&pkt->buf) - peek_off;
-  iov.iov_flags = 0;
+  rinf->zc_args->msg.msghdr.msg_flags  = rinf->msg_flags;
+  iov.buf                              = zc_pktbuf_to_handle(pkt);
+  iov.iov_base                         = oo_offbuf_ptr(&pkt->buf) + peek_off;
+  iov.iov_len                          = oo_offbuf_left(&pkt->buf) - peek_off;
+  iov.iov_flags                        = 0;
 
-  iov.addr_space = EF_ADDRSPACE_LOCAL;
-  pkt->user_refcount = CI_ZC_USER_REFCOUNT_ONE;
-  cb_rc = rinf->zc_args->cb(rinf->zc_args, 0);
+  iov.addr_space                       = EF_ADDRSPACE_LOCAL;
+  pkt->user_refcount                   = CI_ZC_USER_REFCOUNT_ONE;
+  cb_rc                                = rinf->zc_args->cb(rinf->zc_args, 0);
 
   ci_pkt_zc_free_clean(pkt, cb_rc);
   if( cb_rc & ONLOAD_ZC_KEEP ) {
@@ -1906,25 +1894,25 @@ static int zc_call_callback(ci_netif* netif, struct tcp_recv_info* rinf,
   if( cb_rc & ONLOAD_ZC_TERMINATE ) {
     /* Make it look like the non-zc buffer is full */
     rinf->piov.io.iov_len = 0;
-    rinf->piov.iovlen = 0;
+    rinf->piov.iovlen     = 0;
   }
 
   rinf->a->msg->msg_controllen = 0;
 
-  *ndata = n;
+  *ndata                       = n;
   return n;
 }
 
 
-int ci_tcp_zc_recvmsg(const ci_tcp_recvmsg_args* a,
-                      struct onload_zc_recv_args* args)
+int ci_tcp_zc_recvmsg(
+    const ci_tcp_recvmsg_args* a, struct onload_zc_recv_args* args)
 {
   /* This fill_msgname is duplicated at the end of ci_tcp_recvmsg_impl, but we
    * want to get the value filled in before the callback is called. The
    * potential for inefficiency is basically irrelevant since the function
    * does very little in all standard build configurations */
-  ci_tcp_recv_fill_msgname(a->ts, (struct sockaddr*) a->msg->msg_name,
-                           &a->msg->msg_namelen);
+  ci_tcp_recv_fill_msgname(
+      a->ts, (struct sockaddr*) a->msg->msg_name, &a->msg->msg_namelen);
   return ci_tcp_recvmsg_impl(a, zc_call_callback, args);
 }
 #endif

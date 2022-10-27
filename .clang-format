@@ -1,0 +1,23 @@
+---
+BasedOnStyle: Google
+IndentWidth: 2
+ColumnLimit: 79
+AlignAfterOpenBracket: DontAlign
+SpacesInConditionalStatement: true
+SortIncludes: false
+BreakBeforeBraces: Linux
+SpaceBeforeCpp11BracedList: true 
+SpaceBeforeParens: Never
+SpaceAfterCStyleCast: true
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never 
+AllowShortLoopsOnASingleLine: false
+SpacesInContainerLiterals: true
+Cpp11BracedListStyle: false
+MaxEmptyLinesToKeep: 2
+AlignConsecutiveMacros: AcrossEmptyLinesAndComments
+AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
+AlignTrailingComments: true
+SpacesBeforeTrailingComments: 5
+SpaceAfterLogicalNot: true
