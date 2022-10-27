@@ -49,7 +49,7 @@
 #include "mp_commands.h"
 
 #define RTE_LOGTYPE_APP RTE_LOGTYPE_USER1
-#define DEBUG_TX 0
+#define DEBUG_TX 1
 #define DEBUG_RX 1
 
 static const char *_TX_RING = "TX_RING";

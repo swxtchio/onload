@@ -68,6 +68,7 @@ void __ci_tcp_listen_to_normal(ci_netif *netif, ci_tcp_socket_listen *tls)
 #endif
 }
 
+#ifndef __KERNEL__
 // Poll until we aren't fin wait 1 anymore
 int ci_tcp_fin_added(ci_tcp_state *ts, ci_netif *netif)
 {
@@ -141,6 +142,7 @@ int ci_tcp_fin_added(ci_tcp_state *ts, ci_netif *netif)
 
   return 0;
 }
+#endif
 
 int ci_tcp_add_fin(ci_tcp_state *ts, ci_netif *netif)
 {
@@ -291,6 +293,7 @@ int __ci_tcp_shutdown(ci_netif *netif, ci_tcp_state *ts, int how)
       ci_tcp_rto_set(netif, ts);
   }
 
+#ifndef __KERNEL__
   if (rc == 0)
   {
     rc = ci_tcp_fin_added(ts, netif);
@@ -299,12 +302,11 @@ int __ci_tcp_shutdown(ci_netif *netif, ci_tcp_state *ts, int how)
       ci_log("failed to add the fin");
     }
   }
+#endif
 
-  /*
-    ci_tcp_wake_not_in_poll(netif, ts,
-                            CI_SB_FLAG_WAKE_TX |
-                                (how == SHUT_RDWR ? CI_SB_FLAG_WAKE_RX : 0));
-                                */
+  ci_tcp_wake_not_in_poll(netif, ts,
+                          CI_SB_FLAG_WAKE_TX |
+                              (how == SHUT_RDWR ? CI_SB_FLAG_WAKE_RX : 0));
   return 0;
 }
 
