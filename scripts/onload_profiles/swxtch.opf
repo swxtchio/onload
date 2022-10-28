@@ -5,3 +5,4 @@ onload_set EF_TCP_RECV_SPIN 1
 onload_set EF_TCP_SEND_SPIN 1
 onload_set EF_UDP_RECV_SPIN 1
 onload_set EF_UDP_SEND_SPIN 1
+#onload_set EF_UNIX_LOG 0x8 # this is a crappy bitmask that can be found in opts_citp_def.h and it only seems to kind of work

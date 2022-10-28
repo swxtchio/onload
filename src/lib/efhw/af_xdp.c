@@ -30,8 +30,8 @@
 
 int enable_af_xdp_flow_filters = 1;
 module_param(enable_af_xdp_flow_filters, int, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(enable_af_xdp_flow_filters,
-                 "Enables flow filter use for AF_XDP devices ");
+MODULE_PARM_DESC(
+    enable_af_xdp_flow_filters, "Enables flow filter use for AF_XDP devices ");
 /* filter id when no actual filter is installed */
 #define AF_XDP_NO_FILTER_MAGIC_ID 0x7FFFFF00
 
@@ -80,12 +80,12 @@ static int __sys_call_area_alloc(struct sys_call_area* area, const char* func)
    * etc.
    */
   EFHW_ASSERT(current);
-  EFHW_ASSERT( ! (current->flags & PF_WQ_WORKER) );
-  EFHW_ASSERT( ! (current->flags & PF_KTHREAD) );
+  EFHW_ASSERT(! (current->flags & PF_WQ_WORKER));
+  EFHW_ASSERT(! (current->flags & PF_KTHREAD));
 
 
   area->user_addr = vm_mmap(NULL, 0, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                            MAP_ANONYMOUS | MAP_PRIVATE, 0);
+      MAP_ANONYMOUS | MAP_PRIVATE, 0);
   if( area->user_addr == 0 ) {
     EFHW_ERR("%s: ERROR: failed to allocate a page via vm_mmap()", func);
     return -ENOMEM;
@@ -109,26 +109,24 @@ static void* sys_call_area_ptr(struct sys_call_area* area)
   return page_address(area->page);
 }
 
-static unsigned long
-sys_call_area_user_addr(struct sys_call_area* area, void* ptr)
+static unsigned long sys_call_area_user_addr(
+    struct sys_call_area* area, void* ptr)
 {
   return area->user_addr +
-         ((uintptr_t)ptr - (uintptr_t)sys_call_area_ptr(area));
+         ((uintptr_t) ptr - (uintptr_t) sys_call_area_ptr(area));
 }
 
 
 #define UMEM_BLOCK (PAGE_SIZE / sizeof(void*))
-#define MAX_PDS 256
+#define MAX_PDS    256
 
 /* A block of addresses of user memory pages */
-struct umem_block
-{
+struct umem_block {
   void* addrs[UMEM_BLOCK];
 };
 
 /* A collection of all the user memory pages for a VI */
-struct umem_pages
-{
+struct umem_pages {
   long page_count;
   long block_count;
   long used_page_count;
@@ -137,8 +135,7 @@ struct umem_pages
 };
 
 /* Resources for waiting for and handling events */
-struct event_waiter
-{
+struct event_waiter {
   struct wait_queue_entry wait;
 
   struct efhw_nic* nic;
@@ -147,8 +144,7 @@ struct event_waiter
 };
 
 /* Per-VI AF_XDP resources */
-struct efhw_af_xdp_vi
-{
+struct efhw_af_xdp_vi {
   struct socket* sock;
   int owner_id;
   int rxq_capacity;
@@ -160,16 +156,14 @@ struct efhw_af_xdp_vi
   struct event_waiter waiter;
 };
 
-struct protection_domain
-{
+struct protection_domain {
   struct umem_pages umem;
   long buffer_table_count;
   long freed_buffer_table_count;
 };
 
 /* Per-NIC AF_XDP resources */
-struct efhw_nic_af_xdp
-{
+struct efhw_nic_af_xdp {
   struct file* map;
   struct efhw_af_xdp_vi* vi;
   struct protection_domain* pd;
@@ -182,7 +176,8 @@ struct efhw_nic_af_xdp
  *
  *---------------------------------------------------------------------------*/
 
-/* Free the collection of page addresses. Does not free the pages themselves. */
+/* Free the collection of page addresses. Does not free the pages themselves.
+ */
 static void umem_pages_free(struct umem_pages* pages)
 {
   long block;
@@ -226,7 +221,8 @@ static void** umem_pages_addr_ptr(struct umem_pages* pages, long index)
   return &pages->blocks[index / UMEM_BLOCK]->addrs[index % UMEM_BLOCK];
 }
 
-static void umem_pages_set_addr(struct umem_pages* pages, long page, void* addr)
+static void umem_pages_set_addr(
+    struct umem_pages* pages, long page, void* addr)
 {
   *umem_pages_addr_ptr(pages, page) = addr;
   if( page > pages->used_page_count )
@@ -245,7 +241,8 @@ static void* umem_pages_get_addr(struct umem_pages* pages, long page)
  *---------------------------------------------------------------------------*/
 
 /* Get the VI with the given instance number */
-static struct efhw_af_xdp_vi* vi_by_instance(struct efhw_nic* nic, int instance)
+static struct efhw_af_xdp_vi* vi_by_instance(
+    struct efhw_nic* nic, int instance)
 {
   struct efhw_nic_af_xdp* xdp = nic->arch_extra;
 
@@ -256,7 +253,8 @@ static struct efhw_af_xdp_vi* vi_by_instance(struct efhw_nic* nic, int instance)
 }
 
 /* Get the VI with the given owner ID */
-static struct protection_domain* pd_by_owner(struct efhw_nic* nic, int owner_id)
+static struct protection_domain* pd_by_owner(
+    struct efhw_nic* nic, int owner_id)
 {
   struct efhw_nic_af_xdp* xdp = nic->arch_extra;
 
@@ -274,11 +272,10 @@ static struct protection_domain* pd_by_owner(struct efhw_nic* nic, int owner_id)
 
 
 /* Invoke the bpf() syscall args is assumed to be kernel memory */
-noinline
-static int xdp_sys_bpf(int cmd, unsigned long user_addr)
+noinline static int xdp_sys_bpf(int cmd, unsigned long user_addr)
 {
-  int rc = SYSCALL_DISPATCHn(3, bpf, (int, unsigned long, size_t),
-                             cmd, user_addr, sizeof(union bpf_attr));
+  int rc = SYSCALL_DISPATCHn(3, bpf, (int, unsigned long, size_t), cmd,
+      user_addr, sizeof(union bpf_attr));
   if( rc < 0 )
     EFHW_ERR("%s: sys_bpf(%d) failed: %d", __func__, cmd, rc);
   return rc;
@@ -321,47 +318,7 @@ static int xdp_map_create(struct sys_call_area* area, int max_entries)
  * See af_xdp_bpf.c for the program's source and compilation guidelines. */
 static int xdp_prog_load(struct sys_call_area* area, int map_fd)
 {
-  const uint64_t const_prog[] = {
-    0x00000002000000b7, 0x0000000000041361,
-    0x0000000000001261, 0x00000000000024bf,
-    0x0000002600000407, 0x000000000012342d,
-    0x0000000000002379, 0xffffffff00000418,
-    0x0000ffff00000000, 0x000000000000435f,
-    0x00000000000d431d, 0x00000000000c2369,
-    0x0000008100020355, 0x0000000000102369,
-    0x0000000400000207, 0x0000000800080355,
-    0x0000000000172271, 0x0000001100010215,
-    0x0000000600050255, 0x0000000000101261,
-    0x0000000000000118, /* <-- insert map_fd here */
-                        0x0000000000000000,
-    0x00000002000003b7, 0x0000003300000085,
-    0x0000000000000095,
-  };
-
-  uint64_t* prog;
-  char* license;
-  union bpf_attr* attr;
-
-  attr = sys_call_area_ptr(area);
-  memset(attr, 0, sizeof(*attr));
-
-  license = (void*)(attr + 1);
-#define LICENSE "GPL"
-  strncpy(license, LICENSE, strlen(LICENSE) + 1);
-
-  prog = (void*)(license + strlen(LICENSE) + 1);
-#undef LICENSE
-  memcpy(prog, const_prog, sizeof(const_prog));
-  prog[20] |= 0x1000; /* "immediate" flag */
-  prog[20] |= (uint64_t) map_fd << 32; /* immediate value */
-
-  attr->prog_type = BPF_PROG_TYPE_XDP;
-  attr->insn_cnt = sizeof(const_prog) / sizeof(struct bpf_insn);
-  attr->insns = sys_call_area_user_addr(area, prog);
-  attr->license = sys_call_area_user_addr(area, license);
-  strncpy(attr->prog_name, "xdpsock", strlen("xdpsock"));
-
-  return xdp_sys_bpf(BPF_PROG_LOAD, sys_call_area_user_addr(area, attr));
+  return 0;
 }
 
 /* Update an element in the XDP socket map (using fds) */
@@ -379,8 +336,8 @@ static int xdp_map_update_fd(int map_fd, int key, int sock_fd)
 
   attr = sys_call_area_ptr(&area);
   memset(attr, 0, sizeof(*attr));
-  key_user = (void*)(attr + 1);
-  sock_user = (void*)(key_user + 1);
+  key_user = (void*) (attr + 1);
+  sock_user = (void*) (key_user + 1);
 
   *key_user = key;
   *sock_user = sock_fd;
@@ -395,8 +352,8 @@ static int xdp_map_update_fd(int map_fd, int key, int sock_fd)
 }
 
 /* Update an element in the XDP socket map (using file pointers) */
-static int xdp_map_update(struct efhw_nic_af_xdp* af_xdp, int key,
-                          struct file* sock)
+static int xdp_map_update(
+    struct efhw_nic_af_xdp* af_xdp, int key, struct file* sock)
 {
   int rc, map_fd, sock_fd;
 
@@ -424,36 +381,21 @@ fail_sock:
 }
 
 /* Bind an AF_XDP socket to an interface */
-static int xdp_bind(struct socket* sock, int ifindex, unsigned queue, unsigned flags)
+static int xdp_bind(
+    struct socket* sock, int ifindex, unsigned queue, unsigned flags)
 {
-  struct sockaddr_xdp sxdp = {};
-
-  sxdp.sxdp_family = PF_XDP;
-  sxdp.sxdp_ifindex = ifindex;
-  sxdp.sxdp_queue_id = queue;
-  sxdp.sxdp_flags = flags;
-
-  return kernel_bind(sock, (struct sockaddr*)&sxdp, sizeof(sxdp));
+  return 0;
 }
 
 /* Link an XDP program to an interface */
 static int xdp_set_link(struct net_device* dev, struct bpf_prog* prog)
 {
-  struct netdev_bpf bpf = {
-    .command = XDP_SETUP_PROG,
-    .prog = prog
-  };
-
-  if( !dev->netdev_ops->ndo_bpf ) {
-    EFHW_ERR("%s: %s does not support XDP", __FUNCTION__, dev->name);
-    return -ENOSYS;
-  }
-
-  return dev->netdev_ops->ndo_bpf(dev, &bpf);
+  return 0;
 }
 
 /* Fault handler to provide buffer memory pages for our user mapping */
-static vm_fault_t xdp_umem_fault(struct vm_fault* vmf) {
+static vm_fault_t xdp_umem_fault(struct vm_fault* vmf)
+{
   struct umem_pages* pages = vmf->vma->vm_private_data;
   struct page* page;
 
@@ -479,13 +421,11 @@ static vm_fault_t xdp_umem_fault(struct vm_fault* vmf) {
   return 0;
 }
 
-static struct vm_operations_struct vm_ops = {
-  .fault = xdp_umem_fault
-};
+static struct vm_operations_struct vm_ops = { .fault = xdp_umem_fault };
 
 /* Register user memory with an XDP socket */
 static int xdp_register_umem(struct socket* sock, struct umem_pages* pages,
-                             int chunk_size, int headroom)
+    int chunk_size, int headroom)
 {
   struct vm_area_struct* vma;
   int rc = -EFAULT;
@@ -494,11 +434,9 @@ static int xdp_register_umem(struct socket* sock, struct umem_pages* pages,
    * a flags fields added in 5.4. We don't currently need to set any flags,
    * so just zero everything we don't use.
    */
-  struct xdp_umem_reg mr = {
-    .len = pages->used_page_count << PAGE_SHIFT,
+  struct xdp_umem_reg mr = { .len = pages->used_page_count << PAGE_SHIFT,
     .chunk_size = chunk_size,
-    .headroom = headroom
-  };
+    .headroom = headroom };
 
   mr.addr = vm_mmap(NULL, 0, mr.len, PROT_READ | PROT_WRITE, MAP_SHARED, 0);
   if( offset_in_page(mr.addr) )
@@ -515,20 +453,19 @@ static int xdp_register_umem(struct socket* sock, struct umem_pages* pages,
   vma->vm_private_data = pages;
   vma->vm_ops = &vm_ops;
 
-  rc = sock_ops_setsockopt(sock, SOL_XDP, XDP_UMEM_REG,
-                           (char*)&mr, sizeof(mr));
+  rc = sock_ops_setsockopt(
+      sock, SOL_XDP, XDP_UMEM_REG, (char*) &mr, sizeof(mr));
 
   vm_munmap(mr.addr, mr.len);
   return rc;
 }
 
 /* Create the rings for an AF_XDP socket and associated umem */
-static int xdp_create_ring(struct socket* sock,
-                           struct efhw_page_map* page_map, void* kern_mem_base,
-                           int capacity, int desc_size, int sockopt, long pgoff,
-                           const struct xdp_ring_offset* xdp_offset,
-                           struct efab_af_xdp_offsets_ring* kern_offset,
-                           struct efab_af_xdp_offsets_ring* user_offset)
+static int xdp_create_ring(struct socket* sock, struct efhw_page_map* page_map,
+    void* kern_mem_base, int capacity, int desc_size, int sockopt, long pgoff,
+    const struct xdp_ring_offset* xdp_offset,
+    struct efab_af_xdp_offsets_ring* kern_offset,
+    struct efab_af_xdp_offsets_ring* user_offset)
 {
   int rc;
   unsigned long map_size, addr, pfn, pages;
@@ -538,24 +475,23 @@ static int xdp_create_ring(struct socket* sock,
 
   user_base = page_map->n_pages << PAGE_SHIFT;
 
-  rc = sock_ops_setsockopt(sock, SOL_XDP, sockopt,
-                           (char*)&capacity, sizeof(int));
+  rc = sock_ops_setsockopt(
+      sock, SOL_XDP, sockopt, (char*) &capacity, sizeof(int));
   if( rc < 0 )
     return rc;
 
   map_size = xdp_offset->desc + (capacity + 1) * desc_size;
   addr = vm_mmap(sock->file, 0, map_size, PROT_READ | PROT_WRITE,
-                 MAP_SHARED | MAP_POPULATE, pgoff);
+      MAP_SHARED | MAP_POPULATE, pgoff);
   if( IS_ERR_VALUE(addr) )
-      return addr;
+    return addr;
 
   mmap_write_lock(current->mm);
 
   vma = find_vma(current->mm, addr);
   if( vma == NULL ) {
     rc = -EFAULT;
-  }
-  else {
+  } else {
     rc = follow_pfn(vma, addr, &pfn);
     pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
   }
@@ -574,20 +510,19 @@ static int xdp_create_ring(struct socket* sock,
   kern_base = ring_base - kern_mem_base;
   kern_offset->producer = kern_base + xdp_offset->producer;
   kern_offset->consumer = kern_base + xdp_offset->consumer;
-  kern_offset->desc     = kern_base + xdp_offset->desc;
+  kern_offset->desc = kern_base + xdp_offset->desc;
 
   user_offset->producer = user_base + xdp_offset->producer;
   user_offset->consumer = user_base + xdp_offset->consumer;
-  user_offset->desc     = user_base + xdp_offset->desc;
+  user_offset->desc = user_base + xdp_offset->desc;
 
   return 0;
 }
 
 static int xdp_create_rings(struct socket* sock,
-                            struct efhw_page_map* page_map, void* kern_mem_base,
-                            long rxq_capacity, long txq_capacity,
-                            struct efab_af_xdp_offsets_rings* kern_offsets,
-                            struct efab_af_xdp_offsets_rings* user_offsets)
+    struct efhw_page_map* page_map, void* kern_mem_base, long rxq_capacity,
+    long txq_capacity, struct efab_af_xdp_offsets_rings* kern_offsets,
+    struct efab_af_xdp_offsets_rings* user_offsets)
 {
   int rc;
   struct sys_call_area rw_area;
@@ -603,16 +538,15 @@ static int xdp_create_rings(struct socket* sock,
     return rc;
 
   mmap_offsets = sys_call_area_ptr(&rw_area);
-  optlen = (void*)(mmap_offsets + 1);
+  optlen = (void*) (mmap_offsets + 1);
   *optlen = sizeof(*mmap_offsets);
 
   /* For linux<=5.7 you can use kernel_getsockopt(),
    * but newer versions does not have this function, so we have all that
    * sys_call_area_*() calls. */
   rc = sock->ops->getsockopt(sock, SOL_XDP, XDP_MMAP_OFFSETS,
-                             (void*)sys_call_area_user_addr(&rw_area,
-                                                            mmap_offsets),
-                             (void*)sys_call_area_user_addr(&rw_area, optlen));
+      (void*) sys_call_area_user_addr(&rw_area, mmap_offsets),
+      (void*) sys_call_area_user_addr(&rw_area, optlen));
 
   /* Security consideration: mmap_offsets is located in untrusted user
    * memory.  I.e. the process can overwrite all this data.
@@ -629,35 +563,32 @@ static int xdp_create_rings(struct socket* sock,
   }
   EFHW_ASSERT(*optlen == sizeof(*mmap_offsets));
 
-  rc = xdp_create_ring(sock, page_map, kern_mem_base,
-                       rxq_capacity, sizeof(struct xdp_desc),
-                       XDP_RX_RING, XDP_PGOFF_RX_RING,
-                       &mmap_offsets->rx, &kern_offsets->rx, &user_offsets->rx);
+  rc = xdp_create_ring(sock, page_map, kern_mem_base, rxq_capacity,
+      sizeof(struct xdp_desc), XDP_RX_RING, XDP_PGOFF_RX_RING,
+      &mmap_offsets->rx, &kern_offsets->rx, &user_offsets->rx);
   if( rc < 0 )
     goto out;
 
-  rc = xdp_create_ring(sock, page_map, kern_mem_base,
-                       txq_capacity, sizeof(struct xdp_desc),
-                       XDP_TX_RING, XDP_PGOFF_TX_RING,
-                       &mmap_offsets->tx, &kern_offsets->tx, &user_offsets->tx);
+  rc = xdp_create_ring(sock, page_map, kern_mem_base, txq_capacity,
+      sizeof(struct xdp_desc), XDP_TX_RING, XDP_PGOFF_TX_RING,
+      &mmap_offsets->tx, &kern_offsets->tx, &user_offsets->tx);
   if( rc < 0 )
     goto out;
 
-  rc = xdp_create_ring(sock, page_map, kern_mem_base,
-                       rxq_capacity, sizeof(uint64_t),
-                       XDP_UMEM_FILL_RING, XDP_UMEM_PGOFF_FILL_RING,
-                       &mmap_offsets->fr, &kern_offsets->fr, &user_offsets->fr);
+  rc = xdp_create_ring(sock, page_map, kern_mem_base, rxq_capacity,
+      sizeof(uint64_t), XDP_UMEM_FILL_RING, XDP_UMEM_PGOFF_FILL_RING,
+      &mmap_offsets->fr, &kern_offsets->fr, &user_offsets->fr);
   if( rc < 0 )
     goto out;
 
-  rc = xdp_create_ring(sock, page_map, kern_mem_base,
-                       txq_capacity, sizeof(uint64_t),
-                       XDP_UMEM_COMPLETION_RING, XDP_UMEM_PGOFF_COMPLETION_RING,
-                       &mmap_offsets->cr, &kern_offsets->cr, &user_offsets->cr);
+  rc = xdp_create_ring(sock, page_map, kern_mem_base, txq_capacity,
+      sizeof(uint64_t), XDP_UMEM_COMPLETION_RING,
+      XDP_UMEM_PGOFF_COMPLETION_RING, &mmap_offsets->cr, &kern_offsets->cr,
+      &user_offsets->cr);
   if( rc < 0 )
     goto out;
 
- out:
+out:
   sys_call_area_unpin(&rw_area);
   return rc;
 }
@@ -677,7 +608,7 @@ static void xdp_release_pd(struct efhw_nic* nic, int owner)
 
 static void xdp_release_vi(struct efhw_nic* nic, struct efhw_af_xdp_vi* vi)
 {
-  if( !vi->sock )
+  if( ! vi->sock )
     /* We expect uninitialized vi in cases where af_xdp_init()
      * has not been called after enabling evq.
      * This can happen on cleanup from failure of stack allocation */
@@ -717,9 +648,8 @@ static void* af_xdp_mem(struct efhw_nic* nic, int instance)
   return vi ? &vi->kernel_offsets : NULL;
 }
 
-static int af_xdp_init(struct efhw_nic* nic, int instance,
-                       int chunk_size, int headroom,
-                       struct efhw_page_map* page_map)
+static int af_xdp_init(struct efhw_nic* nic, int instance, int chunk_size,
+    int headroom, struct efhw_page_map* page_map)
 {
   int rc;
   struct efhw_af_xdp_vi* vi;
@@ -729,9 +659,7 @@ static int af_xdp_init(struct efhw_nic* nic, int instance,
   struct file* file;
   struct efab_af_xdp_offsets* user_offsets;
 
-  if( chunk_size == 0 ||
-      chunk_size < headroom ||
-      chunk_size > PAGE_SIZE ||
+  if( chunk_size == 0 || chunk_size < headroom || chunk_size > PAGE_SIZE ||
       PAGE_SIZE % chunk_size != 0 )
     return -EINVAL;
 
@@ -764,7 +692,7 @@ static int af_xdp_init(struct efhw_nic* nic, int instance,
   rc = efhw_page_alloc_zeroed(&vi->user_offsets_page);
   if( rc < 0 )
     goto out_free_sock;
-  user_offsets = (void*)efhw_page_ptr(&vi->user_offsets_page);
+  user_offsets = (void*) efhw_page_ptr(&vi->user_offsets_page);
 
   rc = efhw_page_map_add_page(page_map, &vi->user_offsets_page);
   if( rc < 0 )
@@ -774,9 +702,8 @@ static int af_xdp_init(struct efhw_nic* nic, int instance,
   if( rc < 0 )
     goto out_free_user_offsets;
 
-  rc = xdp_create_rings(sock, page_map, &vi->kernel_offsets,
-                        vi->rxq_capacity, vi->txq_capacity,
-                        &vi->kernel_offsets.rings, &user_offsets->rings);
+  rc = xdp_create_rings(sock, page_map, &vi->kernel_offsets, vi->rxq_capacity,
+      vi->txq_capacity, &vi->kernel_offsets.rings, &user_offsets->rings);
   if( rc < 0 )
     goto out_free_user_offsets;
 
@@ -807,19 +734,19 @@ static int af_xdp_init(struct efhw_nic* nic, int instance,
   user_offsets->mmap_bytes = efhw_page_map_bytes(page_map);
   return 0;
 
- xdp_bind_failed:
- out_free_user_offsets:
+xdp_bind_failed:
+out_free_user_offsets:
   efhw_page_free(&vi->user_offsets_page);
- out_free_sock:
+out_free_sock:
   fput(file);
   memset(vi, 0, sizeof(*vi));
   return rc;
 }
 
-static int af_xdp_dmaq_kick(struct efhw_nic *nic, int instance)
+static int af_xdp_dmaq_kick(struct efhw_nic* nic, int instance)
 {
   struct efhw_af_xdp_vi* vi;
-  struct msghdr msg = {.msg_flags = MSG_DONTWAIT};
+  struct msghdr msg = { .msg_flags = MSG_DONTWAIT };
   vi = vi_by_instance(nic, instance);
   if( vi == NULL )
     return -ENODEV;
@@ -832,146 +759,130 @@ static int af_xdp_dmaq_kick(struct efhw_nic *nic, int instance)
  * Initialisation and configuration discovery
  *
  *---------------------------------------------------------------------------*/
-static int
-af_xdp_nic_license_check(struct efhw_nic *nic, const uint32_t feature,
-		       int* licensed)
+static int af_xdp_nic_license_check(
+    struct efhw_nic* nic, const uint32_t feature, int* licensed)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return 0;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return 0;
 }
 
 
-static int
-af_xdp_nic_v3_license_check(struct efhw_nic *nic, const uint64_t app_id,
-		       int* licensed)
+static int af_xdp_nic_v3_license_check(
+    struct efhw_nic* nic, const uint64_t app_id, int* licensed)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return 0;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return 0;
 }
 
 
-static int
-af_xdp_nic_license_challenge(struct efhw_nic *nic,
-			   const uint32_t feature,
-			   const uint8_t* challenge,
-			   uint32_t* expiry,
-			   uint8_t* signature)
+static int af_xdp_nic_license_challenge(struct efhw_nic* nic,
+    const uint32_t feature, const uint8_t* challenge, uint32_t* expiry,
+    uint8_t* signature)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return 0;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return 0;
 }
 
 
-static int
-af_xdp_nic_v3_license_challenge(struct efhw_nic *nic,
-			   const uint64_t app_id,
-			   const uint8_t* challenge,
-			   uint32_t* expiry,
-			   uint32_t* days,
-			   uint8_t* signature,
-                           uint8_t* base_mac,
-                           uint8_t* vadaptor_mac)
+static int af_xdp_nic_v3_license_challenge(struct efhw_nic* nic,
+    const uint64_t app_id, const uint8_t* challenge, uint32_t* expiry,
+    uint32_t* days, uint8_t* signature, uint8_t* base_mac,
+    uint8_t* vadaptor_mac)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return 0;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return 0;
 }
 
 
-static void
-af_xdp_nic_tweak_hardware(struct efhw_nic *nic)
+static void af_xdp_nic_tweak_hardware(struct efhw_nic* nic)
 {
-	nic->pio_num = 0;
-	nic->pio_size = 0;
-	nic->tx_alts_vfifos = 0;
-	nic->tx_alts_cp_bufs = 0;
-	nic->tx_alts_cp_buf_size = 0;
-        nic->rx_variant = 0;
-        nic->tx_variant = 0;
-        nic->rx_prefix_len = 0;
-	nic->flags = NIC_FLAG_RX_ZEROCOPY /* TODO AFXDP: hardcoded for now */
-		   | NIC_FLAG_RX_FILTER_TYPE_IP_LOCAL /* only wild filters */
-	     | NIC_FLAG_USERSPACE_PRIME  /* no explicit priming needed */
-		   ;
+  nic->pio_num = 0;
+  nic->pio_size = 0;
+  nic->tx_alts_vfifos = 0;
+  nic->tx_alts_cp_bufs = 0;
+  nic->tx_alts_cp_buf_size = 0;
+  nic->rx_variant = 0;
+  nic->tx_variant = 0;
+  nic->rx_prefix_len = 0;
+  nic->flags = NIC_FLAG_RX_ZEROCOPY /* TODO AFXDP: hardcoded for now */
+               | NIC_FLAG_RX_FILTER_TYPE_IP_LOCAL /* only wild filters */
+               | NIC_FLAG_USERSPACE_PRIME /* no explicit priming needed */
+      ;
 }
 
 
-
-static int
-__af_xdp_nic_init_hardware(struct efhw_nic *nic,
-			   struct efhw_ev_handler *ev_handlers,
-			   const uint8_t *mac_addr,
-			   struct sys_call_area* sys_call_area)
+static int __af_xdp_nic_init_hardware(struct efhw_nic* nic,
+    struct efhw_ev_handler* ev_handlers, const uint8_t* mac_addr,
+    struct sys_call_area* sys_call_area)
 {
-	int map_fd, rc;
-	struct bpf_prog* prog;
-	struct efhw_nic_af_xdp* xdp;
+  int map_fd, rc;
+  struct bpf_prog* prog;
+  struct efhw_nic_af_xdp* xdp;
 
-	xdp = kzalloc(sizeof(*xdp) +
-		      nic->vi_lim * sizeof(struct efhw_af_xdp_vi) +
-		      MAX_PDS * sizeof(struct protection_domain),
-		      GFP_KERNEL);
-	if( xdp == NULL )
-		return -ENOMEM;
+  xdp = kzalloc(sizeof(*xdp) + nic->vi_lim * sizeof(struct efhw_af_xdp_vi) +
+                    MAX_PDS * sizeof(struct protection_domain),
+      GFP_KERNEL);
+  if( xdp == NULL )
+    return -ENOMEM;
 
-	nic->ev_handlers = ev_handlers;
-	xdp->vi = (struct efhw_af_xdp_vi*) (xdp + 1);
-	xdp->pd = (struct protection_domain*) (xdp->vi + nic->vi_lim);
+  nic->ev_handlers = ev_handlers;
+  xdp->vi = (struct efhw_af_xdp_vi*) (xdp + 1);
+  xdp->pd = (struct protection_domain*) (xdp->vi + nic->vi_lim);
 
-	rc = map_fd = xdp_map_create(sys_call_area, nic->vi_lim);
-	if( rc < 0 )
-		goto fail_map;
+  rc = map_fd = xdp_map_create(sys_call_area, nic->vi_lim);
+  if( rc < 0 )
+    goto fail_map;
 
-	rc = xdp_prog_load(sys_call_area, map_fd);
-	if( rc < 0 )
-		goto fail;
+  rc = xdp_prog_load(sys_call_area, map_fd);
+  if( rc < 0 )
+    goto fail;
+  ci_close_fd(rc);
 
-	prog = bpf_prog_get_type_dev(rc, BPF_PROG_TYPE_XDP, 1);
-	ci_close_fd(rc);
-	if( IS_ERR(prog) ) {
-		rc = PTR_ERR(prog);
-		goto fail;
-	}
+  /*
+    prog = bpf_prog_get_type_dev(rc, BPF_PROG_TYPE_XDP, 1);
+    if( IS_ERR(prog) ) {
+      rc = PTR_ERR(prog);
+      goto fail;
+    }
+    */
 
-	rc = xdp_set_link(nic->net_dev, prog);
-	if( rc < 0 )
-		goto fail;
+  rc = xdp_set_link(nic->net_dev, prog);
+  if( rc < 0 )
+    goto fail;
 
-	xdp->map = fget(map_fd);
-	ci_close_fd(map_fd);
+  xdp->map = fget(map_fd);
+  ci_close_fd(map_fd);
 
-	nic->arch_extra = xdp;
-	memcpy(nic->mac_addr, mac_addr, ETH_ALEN);
+  nic->arch_extra = xdp;
+  memcpy(nic->mac_addr, mac_addr, ETH_ALEN);
 
-	af_xdp_nic_tweak_hardware(nic);
-	return 0;
+  af_xdp_nic_tweak_hardware(nic);
+  return 0;
 
 fail:
-	ci_close_fd(map_fd);
+  ci_close_fd(map_fd);
 fail_map:
-	kfree(xdp);
-	return rc;
+  kfree(xdp);
+  return rc;
 }
 
-static int
-af_xdp_nic_init_hardware(struct efhw_nic *nic,
-			 struct efhw_ev_handler *ev_handlers,
-			 const uint8_t *mac_addr)
+static int af_xdp_nic_init_hardware(struct efhw_nic* nic,
+    struct efhw_ev_handler* ev_handlers, const uint8_t* mac_addr)
 {
-	int rc;
-	struct sys_call_area area;
+  int rc;
+  struct sys_call_area area;
 
-	rc = sys_call_area_alloc(&area);
-	if( rc < 0 )
-		return rc;
+  rc = sys_call_area_alloc(&area);
+  if( rc < 0 )
+    return rc;
 
-	rc = __af_xdp_nic_init_hardware(nic, ev_handlers, mac_addr, &area);
+  rc = __af_xdp_nic_init_hardware(nic, ev_handlers, mac_addr, &area);
 
-	sys_call_area_free(&area);
+  sys_call_area_free(&area);
 
-	return rc;
+  return rc;
 }
-static void
-af_xdp_nic_release_hardware(struct efhw_nic* nic)
+static void af_xdp_nic_release_hardware(struct efhw_nic* nic)
 {
   struct efhw_nic_af_xdp* xdp = nic->arch_extra;
   xdp_set_link(nic->net_dev, NULL);
@@ -987,8 +898,8 @@ af_xdp_nic_release_hardware(struct efhw_nic* nic)
  *
  *--------------------------------------------------------------------*/
 
-static int wait_callback(struct wait_queue_entry* wait, unsigned mode,
-                         int flags, void* key)
+static int wait_callback(
+    struct wait_queue_entry* wait, unsigned mode, int flags, void* key)
 {
   struct event_waiter* w = container_of(wait, struct event_waiter, wait);
   efhw_handle_wakeup_event(w->nic, w->evq, w->budget);
@@ -998,9 +909,8 @@ static int wait_callback(struct wait_queue_entry* wait, unsigned mode,
 /* This function will enable the given event queue with the requested
  * properties.
  */
-static int
-af_xdp_nic_event_queue_enable(struct efhw_nic *nic, uint32_t client_id,
-			      struct efhw_evq_params *params)
+static int af_xdp_nic_event_queue_enable(
+    struct efhw_nic* nic, uint32_t client_id, struct efhw_evq_params* params)
 {
   struct efhw_af_xdp_vi* vi = vi_by_instance(nic, params->evq);
 
@@ -1021,24 +931,22 @@ af_xdp_nic_event_queue_enable(struct efhw_nic *nic, uint32_t client_id,
   return 0;
 }
 
-static void
-af_xdp_nic_event_queue_disable(struct efhw_nic *nic, uint32_t client_id,
-			     uint evq, int time_sync_events_enabled)
+static void af_xdp_nic_event_queue_disable(struct efhw_nic* nic,
+    uint32_t client_id, uint evq, int time_sync_events_enabled)
 {
-	struct efhw_af_xdp_vi* vi = vi_by_instance(nic, evq);
-	if( vi != NULL )
-		xdp_release_vi(nic, vi);
+  struct efhw_af_xdp_vi* vi = vi_by_instance(nic, evq);
+  if( vi != NULL )
+    xdp_release_vi(nic, vi);
 }
 
-static void
-af_xdp_nic_wakeup_request(struct efhw_nic *nic, volatile void __iomem* io_page,
-			int vi_id, int rptr)
+static void af_xdp_nic_wakeup_request(
+    struct efhw_nic* nic, volatile void __iomem* io_page, int vi_id, int rptr)
 {
 }
 
-static void af_xdp_nic_sw_event(struct efhw_nic *nic, int data, int evq)
+static void af_xdp_nic_sw_event(struct efhw_nic* nic, int data, int evq)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
 }
 
 /*--------------------------------------------------------------------
@@ -1047,12 +955,12 @@ static void af_xdp_nic_sw_event(struct efhw_nic *nic, int data, int evq)
  *
  *--------------------------------------------------------------------*/
 
-static int
-af_xdp_handle_event(struct efhw_nic *nic, efhw_event_t *ev, int budget)
+static int af_xdp_handle_event(
+    struct efhw_nic* nic, efhw_event_t* ev, int budget)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	EFHW_ASSERT(0);
-	return -EOPNOTSUPP;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  EFHW_ASSERT(0);
+  return -EOPNOTSUPP;
 }
 
 
@@ -1063,21 +971,19 @@ af_xdp_handle_event(struct efhw_nic *nic, efhw_event_t *ev, int budget)
  *---------------------------------------------------------------------------*/
 
 
-static int
-af_xdp_tx_alt_alloc(struct efhw_nic *nic, int tx_q_id, int num_alt,
-		  int num_32b_words, unsigned *cp_id_out, unsigned *alt_ids_out)
+static int af_xdp_tx_alt_alloc(struct efhw_nic* nic, int tx_q_id, int num_alt,
+    int num_32b_words, unsigned* cp_id_out, unsigned* alt_ids_out)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return -EOPNOTSUPP;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return -EOPNOTSUPP;
 }
 
 
-static int
-af_xdp_tx_alt_free(struct efhw_nic *nic, int num_alt, unsigned cp_id,
-		 const unsigned *alt_ids)
+static int af_xdp_tx_alt_free(
+    struct efhw_nic* nic, int num_alt, unsigned cp_id, const unsigned* alt_ids)
 {
-	EFHW_ASSERT(0);
-	return -EOPNOTSUPP;
+  EFHW_ASSERT(0);
+  return -EOPNOTSUPP;
 }
 
 
@@ -1088,9 +994,8 @@ af_xdp_tx_alt_free(struct efhw_nic *nic, int num_alt, unsigned cp_id,
  *---------------------------------------------------------------------------*/
 
 
-static int
-af_xdp_dmaq_tx_q_init(struct efhw_nic *nic, uint32_t client_id,
-		      struct efhw_dmaq_params *params)
+static int af_xdp_dmaq_tx_q_init(
+    struct efhw_nic* nic, uint32_t client_id, struct efhw_dmaq_params* params)
 {
   struct efhw_af_xdp_vi* vi = vi_by_instance(nic, params->evq);
   if( vi == NULL )
@@ -1104,9 +1009,8 @@ af_xdp_dmaq_tx_q_init(struct efhw_nic *nic, uint32_t client_id,
 }
 
 
-static int
-af_xdp_dmaq_rx_q_init(struct efhw_nic *nic, uint32_t client_id,
-		      struct efhw_dmaq_params *params)
+static int af_xdp_dmaq_rx_q_init(
+    struct efhw_nic* nic, uint32_t client_id, struct efhw_dmaq_params* params)
 {
   struct efhw_af_xdp_vi* vi = vi_by_instance(nic, params->evq);
   if( vi == NULL )
@@ -1120,7 +1024,7 @@ af_xdp_dmaq_rx_q_init(struct efhw_nic *nic, uint32_t client_id,
 }
 
 
-static size_t af_xdp_max_shared_rxqs(struct efhw_nic *nic)
+static size_t af_xdp_max_shared_rxqs(struct efhw_nic* nic)
 {
   return 0;
 }
@@ -1132,27 +1036,26 @@ static size_t af_xdp_max_shared_rxqs(struct efhw_nic *nic)
  *--------------------------------------------------------------------*/
 
 
-static int af_xdp_flush_tx_dma_channel(struct efhw_nic *nic,
-		    uint32_t client_id, uint dmaq, uint evq)
+static int af_xdp_flush_tx_dma_channel(
+    struct efhw_nic* nic, uint32_t client_id, uint dmaq, uint evq)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return -EOPNOTSUPP;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return -EOPNOTSUPP;
 }
 
 
-static int af_xdp_flush_rx_dma_channel(struct efhw_nic *nic,
-		    uint32_t client_id, uint dmaq)
+static int af_xdp_flush_rx_dma_channel(
+    struct efhw_nic* nic, uint32_t client_id, uint dmaq)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return -EOPNOTSUPP;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return -EOPNOTSUPP;
 }
 
 
-static int af_xdp_translate_dma_addrs(struct efhw_nic* nic,
-				      const dma_addr_t *src, dma_addr_t *dst,
-				      int n)
+static int af_xdp_translate_dma_addrs(
+    struct efhw_nic* nic, const dma_addr_t* src, dma_addr_t* dst, int n)
 {
-	return -EOPNOTSUPP;
+  return -EOPNOTSUPP;
 }
 
 /*--------------------------------------------------------------------
@@ -1161,13 +1064,12 @@ static int af_xdp_translate_dma_addrs(struct efhw_nic* nic,
  *
  *--------------------------------------------------------------------*/
 
-static const int __af_xdp_nic_buffer_table_get_orders[] = {0,1,2,3,4,5,6,7,8,9,10};
+static const int __af_xdp_nic_buffer_table_get_orders[] = { 0, 1, 2, 3, 4, 5,
+  6, 7, 8, 9, 10 };
 
 
-static int
-af_xdp_nic_buffer_table_alloc(struct efhw_nic *nic, int owner, int order,
-                              struct efhw_buffer_table_block **block_out,
-                              int reset_pending)
+static int af_xdp_nic_buffer_table_alloc(struct efhw_nic* nic, int owner,
+    int order, struct efhw_buffer_table_block** block_out, int reset_pending)
 {
   struct efhw_buffer_table_block* block;
   struct protection_domain* pd = pd_by_owner(nic, owner);
@@ -1204,19 +1106,16 @@ af_xdp_nic_buffer_table_alloc(struct efhw_nic *nic, int owner, int order,
 }
 
 
-static int
-af_xdp_nic_buffer_table_realloc(struct efhw_nic *nic, int owner, int order,
-                                struct efhw_buffer_table_block *block)
+static int af_xdp_nic_buffer_table_realloc(struct efhw_nic* nic, int owner,
+    int order, struct efhw_buffer_table_block* block)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return -EOPNOTSUPP;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return -EOPNOTSUPP;
 }
 
 
-static void
-af_xdp_nic_buffer_table_free(struct efhw_nic *nic,
-                             struct efhw_buffer_table_block *block,
-                             int reset_pending)
+static void af_xdp_nic_buffer_table_free(struct efhw_nic* nic,
+    struct efhw_buffer_table_block* block, int reset_pending)
 {
   int owner = block->btb_hw.ef10.handle >> 8;
   kfree(block);
@@ -1224,11 +1123,9 @@ af_xdp_nic_buffer_table_free(struct efhw_nic *nic,
 }
 
 
-static int
-af_xdp_nic_buffer_table_set(struct efhw_nic *nic,
-                            struct efhw_buffer_table_block *block,
-                            int first_entry, int n_entries,
-                            dma_addr_t *dma_addrs)
+static int af_xdp_nic_buffer_table_set(struct efhw_nic* nic,
+    struct efhw_buffer_table_block* block, int first_entry, int n_entries,
+    dma_addr_t* dma_addrs)
 {
   int i, j, owner, order;
   long page;
@@ -1242,26 +1139,27 @@ af_xdp_nic_buffer_table_set(struct efhw_nic *nic,
 
   /* We are mapping between two address types.
    *
-   * block->btb_vaddr stores the byte offset within the umem block, suitable for
-   * use with AF_XDP descriptor queues. This is eventually used to provide the
-   * "user" addresses returned from efrm_pd_dma_map, which in turn provide the
-   * packet "dma" addresses posted to ef_vi, which are passed on to AF_XDP.
+   * block->btb_vaddr stores the byte offset within the umem block, suitable
+   * for use with AF_XDP descriptor queues. This is eventually used to provide
+   * the "user" addresses returned from efrm_pd_dma_map, which in turn provide
+   * the packet "dma" addresses posted to ef_vi, which are passed on to AF_XDP.
    * (Note: "user" and "dma" don't mean userland and DMA in this context).
    *
-   * dma_addr is the corresponding kernel address, which we use to calculate the
-   * addresses to store in vi->addrs, and later map into userland. This comes
-   * from the "dma" (or "pci") addresses obtained by efrm_pd_dma_map which, for
-   * a non-PCI device, are copied from the provided kernel addresses.
-   * (Note: "dma" and "pci" don't mean DMA and PCI in this context either).
+   * dma_addr is the corresponding kernel address, which we use to calculate
+   * the addresses to store in vi->addrs, and later map into userland. This
+   * comes from the "dma" (or "pci") addresses obtained by efrm_pd_dma_map
+   * which, for a non-PCI device, are copied from the provided kernel
+   * addresses. (Note: "dma" and "pci" don't mean DMA and PCI in this context
+   * either).
    *
    * We get one umem address giving the start of each buffer table block. The
    * block might contain several consecutive pages, which might be compound
    * (but all with the same order).
    *
-   * We store one kernel address for each single page in the umem block. This is
-   * somewhat profligate with memory; we could store one per buffer table block,
-   * or one per compound page, with a slightly more complicated lookup when
-   * finding each page during mmap.
+   * We store one kernel address for each single page in the umem block. This
+   * is somewhat profligate with memory; we could store one per buffer table
+   * block, or one per compound page, with a slightly more complicated lookup
+   * when finding each page during mmap.
    */
 
   page = (block->btb_vaddr >> PAGE_SHIFT) + (first_entry << order);
@@ -1269,7 +1167,7 @@ af_xdp_nic_buffer_table_set(struct efhw_nic *nic,
     return -EINVAL;
 
   for( i = 0; i < n_entries; ++i ) {
-    char* dma_addr = (char*)dma_addrs[i];
+    char* dma_addr = (char*) dma_addrs[i];
     for( j = 0; j < (1 << order); ++j, ++page, dma_addr += PAGE_SIZE )
       umem_pages_set_addr(&pd->umem, page, dma_addr);
   }
@@ -1278,10 +1176,8 @@ af_xdp_nic_buffer_table_set(struct efhw_nic *nic,
 }
 
 
-static void
-af_xdp_nic_buffer_table_clear(struct efhw_nic *nic,
-                              struct efhw_buffer_table_block *block,
-                              int first_entry, int n_entries)
+static void af_xdp_nic_buffer_table_clear(struct efhw_nic* nic,
+    struct efhw_buffer_table_block* block, int first_entry, int n_entries)
 {
 }
 
@@ -1292,21 +1188,19 @@ af_xdp_nic_buffer_table_clear(struct efhw_nic *nic,
  *
  *--------------------------------------------------------------------*/
 
-static int
-af_xdp_nic_set_tx_port_sniff(struct efhw_nic *nic, int instance, int enable,
-			   int rss_context)
+static int af_xdp_nic_set_tx_port_sniff(
+    struct efhw_nic* nic, int instance, int enable, int rss_context)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return -EOPNOTSUPP;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return -EOPNOTSUPP;
 }
 
 
-static int
-af_xdp_nic_set_port_sniff(struct efhw_nic *nic, int instance, int enable,
-			int promiscuous, int rss_context)
+static int af_xdp_nic_set_port_sniff(struct efhw_nic* nic, int instance,
+    int enable, int promiscuous, int rss_context)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return -EOPNOTSUPP;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return -EOPNOTSUPP;
 }
 
 /*--------------------------------------------------------------------
@@ -1315,12 +1209,11 @@ af_xdp_nic_set_port_sniff(struct efhw_nic *nic, int instance, int enable,
  *
  *--------------------------------------------------------------------*/
 
-static int
-af_xdp_get_rx_error_stats(struct efhw_nic *nic, int instance,
-			void *data, int data_len, int do_reset)
+static int af_xdp_get_rx_error_stats(
+    struct efhw_nic* nic, int instance, void* data, int data_len, int do_reset)
 {
-	EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
-	return -EOPNOTSUPP;
+  EFHW_ERR("%s: FIXME AF_XDP", __FUNCTION__);
+  return -EOPNOTSUPP;
 }
 
 /*--------------------------------------------------------------------
@@ -1329,24 +1222,23 @@ af_xdp_get_rx_error_stats(struct efhw_nic *nic, int instance,
  *
  *--------------------------------------------------------------------*/
 
-static int
-af_xdp_client_alloc(struct efhw_nic *nic, uint32_t parent, uint32_t *id)
+static int af_xdp_client_alloc(
+    struct efhw_nic* nic, uint32_t parent, uint32_t* id)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
 
-static int
-af_xdp_client_free(struct efhw_nic *nic, uint32_t id)
+static int af_xdp_client_free(struct efhw_nic* nic, uint32_t id)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
 
-static int
-af_xdp_vi_set_user(struct efhw_nic *nic, uint32_t vi_instance, uint32_t user)
+static int af_xdp_vi_set_user(
+    struct efhw_nic* nic, uint32_t vi_instance, uint32_t user)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
 /*--------------------------------------------------------------------
@@ -1354,172 +1246,164 @@ af_xdp_vi_set_user(struct efhw_nic *nic, uint32_t vi_instance, uint32_t user)
  * Filtering
  *
  *--------------------------------------------------------------------*/
-static int
-af_xdp_rss_alloc(struct efhw_nic *nic, const u32 *indir, const u8 *key,
-		 u32 nic_rss_flags, int num_qs, u32 *rss_context_out)
+static int af_xdp_rss_alloc(struct efhw_nic* nic, const u32* indir,
+    const u8* key, u32 nic_rss_flags, int num_qs, u32* rss_context_out)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
-static int
-af_xdp_rss_update(struct efhw_nic *nic, const u32 *indir, const u8 *key,
-		  u32 nic_rss_flags, u32 rss_context)
+static int af_xdp_rss_update(struct efhw_nic* nic, const u32* indir,
+    const u8* key, u32 nic_rss_flags, u32 rss_context)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
-static int
-af_xdp_rss_free(struct efhw_nic *nic, u32 rss_context)
+static int af_xdp_rss_free(struct efhw_nic* nic, u32 rss_context)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
-static int
-af_xdp_rss_flags(struct efhw_nic *nic, u32 *flags_out)
+static int af_xdp_rss_flags(struct efhw_nic* nic, u32* flags_out)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
-static int af_xdp_efx_spec_to_ethtool_flow(struct efx_filter_spec* efx_spec,
-					   struct ethtool_rx_flow_spec* fs)
+static int af_xdp_efx_spec_to_ethtool_flow(
+    struct efx_filter_spec* efx_spec, struct ethtool_rx_flow_spec* fs)
 {
-	/* In order to support different driver capabilities we need to
-	 * always install the same filter type. This means that we will
-	 * always use a 3-tuple IP filter, even if a 5-tuple was requested.
-	 * Although this can in theory match traffic not destined for us, in
-	 * practice common usage means that it's sufficiently specific.
-	 *
-	 * The ethtool interface does not complain if a duplicate filter is
-	 * inserted, and does not reference count such filters. That causes
-	 * issues for the case where onload tries to replace a wild match
-	 * filter with a full match filter, as it will add the new full match
-	 * before removing the original wild. However, we treat both of these
-	 * as the same 3-tuple and so the net result is that we remove the
-	 * filter entirely. This occurs in two circumstances:
-	 * - closing a listening socket with accepted sockets still open
-	 * - connecting an already bound UDP socket
-	 * We can avoid the first by setting oof_shared_keep_thresh=0 when
-	 * using AF_XDP.
-	 * The second is a rare case, and the failure mode here is to fall
-	 * back to traffic via the kernel, so I'm living with it for now.
-	 */
+  /* In order to support different driver capabilities we need to
+   * always install the same filter type. This means that we will
+   * always use a 3-tuple IP filter, even if a 5-tuple was requested.
+   * Although this can in theory match traffic not destined for us, in
+   * practice common usage means that it's sufficiently specific.
+   *
+   * The ethtool interface does not complain if a duplicate filter is
+   * inserted, and does not reference count such filters. That causes
+   * issues for the case where onload tries to replace a wild match
+   * filter with a full match filter, as it will add the new full match
+   * before removing the original wild. However, we treat both of these
+   * as the same 3-tuple and so the net result is that we remove the
+   * filter entirely. This occurs in two circumstances:
+   * - closing a listening socket with accepted sockets still open
+   * - connecting an already bound UDP socket
+   * We can avoid the first by setting oof_shared_keep_thresh=0 when
+   * using AF_XDP.
+   * The second is a rare case, and the failure mode here is to fall
+   * back to traffic via the kernel, so I'm living with it for now.
+   */
 
-	int rc = efx_spec_to_ethtool_flow(efx_spec, fs);
-	if (rc < 0)
-		return rc;
+  int rc = efx_spec_to_ethtool_flow(efx_spec, fs);
+  if( rc < 0 )
+    return rc;
 
-	switch (fs->flow_type) {
-	case UDP_V4_FLOW:
-		if (fs->m_u.udp_ip4_spec.tos)
-			return -EOPNOTSUPP;
-		fs->h_u.udp_ip4_spec.ip4src = 0;
-		fs->h_u.udp_ip4_spec.psrc = 0;
-		fs->m_u.udp_ip4_spec.ip4src = 0;
-		fs->m_u.udp_ip4_spec.psrc = 0;
-		break;
-	case TCP_V4_FLOW:
-		if (fs->m_u.tcp_ip4_spec.tos)
-			return -EOPNOTSUPP;
-		fs->h_u.tcp_ip4_spec.ip4src = 0;
-		fs->h_u.tcp_ip4_spec.psrc = 0;
-		fs->m_u.tcp_ip4_spec.ip4src = 0;
-		fs->m_u.tcp_ip4_spec.psrc = 0;
-		break;
-	default:
-		/* FIXME AF_XDP need to check whether we can install both IPv6
-		 * and IPv4 filters. For now just support IPv4.
-		 */
-		return -EOPNOTSUPP;
-	}
+  switch( fs->flow_type ) {
+    case UDP_V4_FLOW:
+      if( fs->m_u.udp_ip4_spec.tos )
+        return -EOPNOTSUPP;
+      fs->h_u.udp_ip4_spec.ip4src = 0;
+      fs->h_u.udp_ip4_spec.psrc = 0;
+      fs->m_u.udp_ip4_spec.ip4src = 0;
+      fs->m_u.udp_ip4_spec.psrc = 0;
+      break;
+    case TCP_V4_FLOW:
+      if( fs->m_u.tcp_ip4_spec.tos )
+        return -EOPNOTSUPP;
+      fs->h_u.tcp_ip4_spec.ip4src = 0;
+      fs->h_u.tcp_ip4_spec.psrc = 0;
+      fs->m_u.tcp_ip4_spec.ip4src = 0;
+      fs->m_u.tcp_ip4_spec.psrc = 0;
+      break;
+    default:
+      /* FIXME AF_XDP need to check whether we can install both IPv6
+       * and IPv4 filters. For now just support IPv4.
+       */
+      return -EOPNOTSUPP;
+  }
 
-	/* TODO AF_XDP: for now assume dmaq_id matches NIC channel
-	 * based on insight into efhw/af_xdp.c */
-	fs->ring_cookie = efx_spec->dmaq_id;
+  /* TODO AF_XDP: for now assume dmaq_id matches NIC channel
+   * based on insight into efhw/af_xdp.c */
+  fs->ring_cookie = efx_spec->dmaq_id;
 
-	return 0;
+  return 0;
 }
 
-static int
-af_xdp_filter_insert(struct efhw_nic *nic, struct efx_filter_spec *spec,
-		     int *rxq, const struct cpumask *mask, unsigned flags)
+static int af_xdp_filter_insert(struct efhw_nic* nic,
+    struct efx_filter_spec* spec, int* rxq, const struct cpumask* mask,
+    unsigned flags)
 {
-	struct net_device *dev = nic->net_dev;
-	int rc;
-	struct ethtool_rxnfc info;
-	const struct ethtool_ops *ops;
-	struct cmd_context ctx;
+  struct net_device* dev = nic->net_dev;
+  int rc;
+  struct ethtool_rxnfc info;
+  const struct ethtool_ops* ops;
+  struct cmd_context ctx;
 
-	if (!enable_af_xdp_flow_filters)
-		return AF_XDP_NO_FILTER_MAGIC_ID; /* pretend a filter is installed */
-	memset(&info, 0, sizeof(info));
-	info.cmd = ETHTOOL_SRXCLSRLINS;
-	rc = af_xdp_efx_spec_to_ethtool_flow(spec, &info.fs);
-	if ( rc < 0 )
-		return rc;
+  if( ! enable_af_xdp_flow_filters )
+    return AF_XDP_NO_FILTER_MAGIC_ID; /* pretend a filter is installed */
+  memset(&info, 0, sizeof(info));
+  info.cmd = ETHTOOL_SRXCLSRLINS;
+  rc = af_xdp_efx_spec_to_ethtool_flow(spec, &info.fs);
+  if( rc < 0 )
+    return rc;
 
-	rtnl_lock();
+  rtnl_lock();
 
-	ops = dev->ethtool_ops;
-	if (!ops->set_rxnfc) {
-		rc = -EOPNOTSUPP;
-		goto unlock_out;
-	}
+  ops = dev->ethtool_ops;
+  if( ! ops->set_rxnfc ) {
+    rc = -EOPNOTSUPP;
+    goto unlock_out;
+  }
 
-	ctx.netdev = dev;
-	rc = rmgr_set_location(&ctx, &info.fs);
-	if ( rc < 0 )
-		goto unlock_out;
+  ctx.netdev = dev;
+  rc = rmgr_set_location(&ctx, &info.fs);
+  if( rc < 0 )
+    goto unlock_out;
 
-	rc = ops->set_rxnfc(dev, &info);
-	if ( rc >= 0 )
-		rc = info.fs.location;
+  rc = ops->set_rxnfc(dev, &info);
+  if( rc >= 0 )
+    rc = info.fs.location;
 
 unlock_out:
-	rtnl_unlock();
-	return rc;
+  rtnl_unlock();
+  return rc;
 }
 
-static void
-af_xdp_filter_remove(struct efhw_nic *nic, int filter_id)
+static void af_xdp_filter_remove(struct efhw_nic* nic, int filter_id)
 {
-	struct net_device *dev = nic->net_dev;
-	struct ethtool_rxnfc info;
-	const struct ethtool_ops *ops;
+  struct net_device* dev = nic->net_dev;
+  struct ethtool_rxnfc info;
+  const struct ethtool_ops* ops;
 
-	if (filter_id == AF_XDP_NO_FILTER_MAGIC_ID)
-		return;
+  if( filter_id == AF_XDP_NO_FILTER_MAGIC_ID )
+    return;
 
-	memset(&info, 0, sizeof(info));
-	info.cmd = ETHTOOL_SRXCLSRLDEL;
-	info.fs.location = filter_id;
+  memset(&info, 0, sizeof(info));
+  info.cmd = ETHTOOL_SRXCLSRLDEL;
+  info.fs.location = filter_id;
 
-	rtnl_lock();
-	ops = dev->ethtool_ops;
-	if (ops->set_rxnfc)
-		ops->set_rxnfc(dev, &info);
-	rtnl_unlock();
+  rtnl_lock();
+  ops = dev->ethtool_ops;
+  if( ops->set_rxnfc )
+    ops->set_rxnfc(dev, &info);
+  rtnl_unlock();
 }
 
-static int
-af_xdp_filter_redirect(struct efhw_nic *nic, int filter_id,
-		       struct efx_filter_spec *spec)
+static int af_xdp_filter_redirect(
+    struct efhw_nic* nic, int filter_id, struct efx_filter_spec* spec)
 {
-	/* This error code is proxied by efrm_filter_redirect() and goes to
-	 * oo_hw_filter_set_hwport().  Do not change this value without
-	 * looking in there. */
-	return -ENODEV;
+  /* This error code is proxied by efrm_filter_redirect() and goes to
+   * oo_hw_filter_set_hwport().  Do not change this value without
+   * looking in there. */
+  return -ENODEV;
 }
 
-static int
-af_xdp_multicast_block(struct efhw_nic *nic, bool block)
+static int af_xdp_multicast_block(struct efhw_nic* nic, bool block)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
-static int
-af_xdp_unicast_block(struct efhw_nic *nic, bool block)
+static int af_xdp_unicast_block(struct efhw_nic* nic, bool block)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
 /*--------------------------------------------------------------------
@@ -1527,16 +1411,15 @@ af_xdp_unicast_block(struct efhw_nic *nic, bool block)
  * vports
  *
  *--------------------------------------------------------------------*/
-static int
-af_xdp_vport_alloc(struct efhw_nic *nic, u16 vlan_id, u16 *vport_handle_out)
+static int af_xdp_vport_alloc(
+    struct efhw_nic* nic, u16 vlan_id, u16* vport_handle_out)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
-static int
-af_xdp_vport_free(struct efhw_nic *nic, u16 vport_handle)
+static int af_xdp_vport_free(struct efhw_nic* nic, u16 vport_handle)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
 /*--------------------------------------------------------------------
@@ -1544,25 +1427,22 @@ af_xdp_vport_free(struct efhw_nic *nic, u16 vport_handle)
  * Device
  *
  *--------------------------------------------------------------------*/
-static struct pci_dev*
-af_xdp_get_pci_dev(struct efhw_nic *nic)
+static struct pci_dev* af_xdp_get_pci_dev(struct efhw_nic* nic)
 {
-	return NULL;
+  return NULL;
 }
 
-static int
-af_xdp_vi_io_region(struct efhw_nic *nic, int instance, size_t* size_out,
-		    resource_size_t* addr_out)
+static int af_xdp_vi_io_region(struct efhw_nic* nic, int instance,
+    size_t* size_out, resource_size_t* addr_out)
 {
-	*size_out = 0;
-	return 0;
+  *size_out = 0;
+  return 0;
 }
 
-static int
-af_xdp_inject_reset_ev(struct efhw_nic* nic, void* base, unsigned capacity,
-                       const volatile uint32_t* evq_ptr)
+static int af_xdp_inject_reset_ev(struct efhw_nic* nic, void* base,
+    unsigned capacity, const volatile uint32_t* evq_ptr)
 {
-	return -EOPNOTSUPP;
+  return -EOPNOTSUPP;
 }
 
 /*--------------------------------------------------------------------
@@ -1570,10 +1450,10 @@ af_xdp_inject_reset_ev(struct efhw_nic* nic, void* base, unsigned capacity,
  * CTPIO
  *
  *--------------------------------------------------------------------*/
-static int
-af_xdp_ctpio_addr(struct efhw_nic* nic, int instance, resource_size_t* addr)
+static int af_xdp_ctpio_addr(
+    struct efhw_nic* nic, int instance, resource_size_t* addr)
 {
-	return -ENOSYS;
+  return -ENOSYS;
 }
 
 /*--------------------------------------------------------------------
@@ -1583,58 +1463,58 @@ af_xdp_ctpio_addr(struct efhw_nic* nic, int instance, resource_size_t* addr)
  *--------------------------------------------------------------------*/
 
 struct efhw_func_ops af_xdp_char_functional_units = {
-	af_xdp_nic_init_hardware,
-	af_xdp_nic_tweak_hardware,
-	af_xdp_nic_release_hardware,
-	af_xdp_nic_event_queue_enable,
-	af_xdp_nic_event_queue_disable,
-	af_xdp_nic_wakeup_request,
-	af_xdp_nic_sw_event,
-	af_xdp_handle_event,
-	af_xdp_dmaq_tx_q_init,
-	af_xdp_dmaq_rx_q_init,
-	af_xdp_flush_tx_dma_channel,
-	af_xdp_flush_rx_dma_channel,
-	af_xdp_translate_dma_addrs,
-	__af_xdp_nic_buffer_table_get_orders,
-	sizeof(__af_xdp_nic_buffer_table_get_orders) /
-		sizeof(__af_xdp_nic_buffer_table_get_orders[0]),
-	af_xdp_nic_buffer_table_alloc,
-	af_xdp_nic_buffer_table_realloc,
-	af_xdp_nic_buffer_table_free,
-	af_xdp_nic_buffer_table_set,
-	af_xdp_nic_buffer_table_clear,
-	af_xdp_nic_set_port_sniff,
-	af_xdp_nic_set_tx_port_sniff,
-	af_xdp_nic_license_challenge,
-	af_xdp_nic_license_check,
-	af_xdp_nic_v3_license_challenge,
-	af_xdp_nic_v3_license_check,
-	af_xdp_get_rx_error_stats,
-	af_xdp_tx_alt_alloc,
-	af_xdp_tx_alt_free,
-	af_xdp_client_alloc,
-	af_xdp_client_free,
-	af_xdp_vi_set_user,
-	af_xdp_rss_alloc,
-	af_xdp_rss_update,
-	af_xdp_rss_free,
-	af_xdp_rss_flags,
-	af_xdp_filter_insert,
-	af_xdp_filter_remove,
-	af_xdp_filter_redirect,
-	af_xdp_multicast_block,
-	af_xdp_unicast_block,
-	af_xdp_vport_alloc,
-	af_xdp_vport_free,
-	af_xdp_dmaq_kick,
-	af_xdp_mem,
-	af_xdp_init,
-	af_xdp_get_pci_dev,
-	af_xdp_vi_io_region,
-	af_xdp_inject_reset_ev,
-	af_xdp_ctpio_addr,
-	af_xdp_max_shared_rxqs,
+  af_xdp_nic_init_hardware,
+  af_xdp_nic_tweak_hardware,
+  af_xdp_nic_release_hardware,
+  af_xdp_nic_event_queue_enable,
+  af_xdp_nic_event_queue_disable,
+  af_xdp_nic_wakeup_request,
+  af_xdp_nic_sw_event,
+  af_xdp_handle_event,
+  af_xdp_dmaq_tx_q_init,
+  af_xdp_dmaq_rx_q_init,
+  af_xdp_flush_tx_dma_channel,
+  af_xdp_flush_rx_dma_channel,
+  af_xdp_translate_dma_addrs,
+  __af_xdp_nic_buffer_table_get_orders,
+  sizeof(__af_xdp_nic_buffer_table_get_orders) /
+      sizeof(__af_xdp_nic_buffer_table_get_orders[0]),
+  af_xdp_nic_buffer_table_alloc,
+  af_xdp_nic_buffer_table_realloc,
+  af_xdp_nic_buffer_table_free,
+  af_xdp_nic_buffer_table_set,
+  af_xdp_nic_buffer_table_clear,
+  af_xdp_nic_set_port_sniff,
+  af_xdp_nic_set_tx_port_sniff,
+  af_xdp_nic_license_challenge,
+  af_xdp_nic_license_check,
+  af_xdp_nic_v3_license_challenge,
+  af_xdp_nic_v3_license_check,
+  af_xdp_get_rx_error_stats,
+  af_xdp_tx_alt_alloc,
+  af_xdp_tx_alt_free,
+  af_xdp_client_alloc,
+  af_xdp_client_free,
+  af_xdp_vi_set_user,
+  af_xdp_rss_alloc,
+  af_xdp_rss_update,
+  af_xdp_rss_free,
+  af_xdp_rss_flags,
+  af_xdp_filter_insert,
+  af_xdp_filter_remove,
+  af_xdp_filter_redirect,
+  af_xdp_multicast_block,
+  af_xdp_unicast_block,
+  af_xdp_vport_alloc,
+  af_xdp_vport_free,
+  af_xdp_dmaq_kick,
+  af_xdp_mem,
+  af_xdp_init,
+  af_xdp_get_pci_dev,
+  af_xdp_vi_io_region,
+  af_xdp_inject_reset_ev,
+  af_xdp_ctpio_addr,
+  af_xdp_max_shared_rxqs,
 };
 
 #endif /* EFHW_HAS_AF_XDP */
