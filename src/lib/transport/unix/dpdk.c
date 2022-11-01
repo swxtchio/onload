@@ -1,7 +1,7 @@
 #include <rte_eal.h>
 #include "internal.h"
 
-static const char *__dpdk_eal_argv[] = { "-l", "1", "--proc-type=secondary",
+static char *__dpdk_eal_argv[] = { "-l", "1", "--proc-type=secondary",
   "--log-level", "0" };
 
 /* These values should be kept in sync with the argv list above. The last two

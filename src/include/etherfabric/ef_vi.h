@@ -1068,6 +1068,7 @@ typedef struct ef_vi {
         struct ef_vi* vi, char* output_buffer, int event_index);
     void (*tx_fill_pkt)(
         struct ef_vi* vi, const char* output_buffer, const unsigned len);
+    int (*refill_rx)(struct ef_vi* vi);
   } ops; /**< Driver-dependent operations. */
   /* Doxygen comment above is documentation for the ops member of ef_vi */
 
@@ -2465,6 +2466,9 @@ ef_vi_inline int ef_eventq_has_many_events(const ef_vi* evq, int n_events)
   (evq)->ops.rx_fill_pkt((evq), (pkt), (index))
 #define ef_fill_tx_data(evq, pkt, len) \
   (evq)->ops.tx_fill_pkt((evq), (pkt), (len))
+
+/* This will refil the rx fill queue to the level indicated by the netif */
+#define ef_resume_rx(evq) (evq)->ops.refill_rx((evq))
 
 /*! \brief Returns the capacity of an event queue
 **

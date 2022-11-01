@@ -24,6 +24,7 @@
 #include <rte_debug.h>
 #include <rte_mempool.h>
 #include <rte_string_fns.h>
+#include <rte_ethdev.h>
 
 #include <cmdline_rdline.h>
 #include <cmdline_parse.h>
@@ -93,9 +94,46 @@ cmdline_parse_inst_t cmd_help = {
 	},
 };
 
+static void dump_rings(__attribute__((unused)) void *parsed_result,
+    struct cmdline *cl, __attribute__((unused)) void *data)
+{
+  rte_mempool_dump(stdout, mbuf_pool);
+  cmdline_printf(cl,
+      "TX Ring Count: %d:%d\n"
+      "TX Comp Ring Count: %d:%d\n"
+      "RX Fill Ring Count: %d:%d\n"
+      "RX Ring Count: %d:%d\n"
+      "RX Prep Ring Count: %d:%d\n"
+      "TX Prep Ring Count: %d:%d\n"
+      "RX Pending Ring Count: %d:%d\n",
+      rte_ring_count(tx_ring), rte_ring_get_capacity(tx_ring),
+      rte_ring_count(tx_completion_ring),
+      rte_ring_get_capacity(tx_completion_ring), rte_ring_count(rx_fill_ring),
+      rte_ring_get_capacity(rx_fill_ring), rte_ring_count(rx_ring),
+      rte_ring_get_capacity(rx_ring), rte_ring_count(rx_prep_ring),
+      rte_ring_get_capacity(rx_prep_ring), rte_ring_count(tx_prep_ring),
+      rte_ring_get_capacity(tx_prep_ring), rte_ring_count(rx_pending_ring),
+      rte_ring_get_capacity(rx_pending_ring));
+}
+
+cmdline_parse_token_string_t cmd_dump_rings_help =
+    TOKEN_STRING_INITIALIZER(struct cmd_help_result, help, "dump");
+
+cmdline_parse_inst_t cmd_dump_rings= {
+	.f = dump_rings, /* function to call */
+	.data = NULL,		  /* 2nd arg of func */
+	.help_str = "show ring state",
+	.tokens = {
+		/* token list, NULL terminated */
+		(void *)&cmd_dump_rings_help,
+		NULL,
+	},
+};
+
 /****** CONTEXT (list of instruction) */
 cmdline_parse_ctx_t simple_mp_ctx[] = {
   (cmdline_parse_inst_t *) &cmd_quit,
   (cmdline_parse_inst_t *) &cmd_help,
+  (cmdline_parse_inst_t *) &cmd_dump_rings,
   NULL,
 };

@@ -46,8 +46,8 @@
 #ifndef __KERNEL__
 enum {
   FUTURE_DROP = 0x01,
-  FUTURE_IP4  = 0x02,
-  FUTURE_TCP  = 0x04, /* else UDP */
+  FUTURE_IP4 = 0x02,
+  FUTURE_TCP = 0x04, /* else UDP */
 
   FUTURE_NONE = 0,
   FUTURE_UDP4 = FUTURE_IP4,
@@ -73,14 +73,14 @@ struct oo_rx_state {
   /* Without RX Merge: A running total of bytes received for this packet
    * With RX Merge: The full length of this packet
    */
-  int            frag_bytes;
+  int frag_bytes;
 };
 
 
 static int ci_ip_csum_correct(ci_ip4_hdr* ip, int max_ip_len)
 {
   unsigned csum;
-  int      ip_len;
+  int ip_len;
 
   if( max_ip_len < CI_IP4_IHL(ip) )
     return 0;
@@ -96,10 +96,10 @@ static int ci_ip_csum_correct(ci_ip4_hdr* ip, int max_ip_len)
 
 static int ci_tcp_csum_correct(ci_ip_pkt_fmt* pkt, int ip_paylen)
 {
-  int           af       = oo_pkt_af(pkt);
-  ci_ipx_hdr_t* ipx      = oo_ipx_hdr(pkt);
-  ci_tcp_hdr*   tcp      = ipx_hdr_data(af, ipx);
-  int           tcp_hlen = CI_TCP_HDR_LEN(tcp);
+  int af = oo_pkt_af(pkt);
+  ci_ipx_hdr_t* ipx = oo_ipx_hdr(pkt);
+  ci_tcp_hdr* tcp = ipx_hdr_data(af, ipx);
+  int tcp_hlen = CI_TCP_HDR_LEN(tcp);
 
   if( tcp_hlen < sizeof(ci_tcp_hdr) )
     return 0;
@@ -121,17 +121,17 @@ static void ci_parse_rx_vlan(ci_ip_pkt_fmt* pkt)
   p_ether_type = &(oo_ether_hdr(pkt)->ether_type);
   if( *p_ether_type != CI_ETHERTYPE_8021Q ) {
     pkt->pkt_eth_payload_off = pkt->pkt_start_off + ETH_HLEN;
-    pkt->vlan                = 0;
+    pkt->vlan = 0;
   } else {
     pkt->pkt_eth_payload_off = pkt->pkt_start_off + ETH_HLEN + ETH_VLAN_HLEN;
-    pkt->vlan                = CI_BSWAP_BE16(p_ether_type[1]) & 0xfff;
+    pkt->vlan = CI_BSWAP_BE16(p_ether_type[1]) & 0xfff;
   }
 }
 
 
 int ci_ip_options_parse(ci_netif* netif, ci_ip4_hdr* ip, const int hdr_size)
 {
-  int   error   = 0;
+  int error = 0;
 
   char* options = (char*) ip + sizeof(ci_ip4_hdr);
   char* opt_end = (char*) ip + hdr_size;
@@ -186,16 +186,16 @@ int ci_ip_options_parse(ci_netif* netif, ci_ip4_hdr* ip, const int hdr_size)
 static void record_rx_timestamp(ci_netif* netif, ci_netif_state_nic_t* nsn,
     ci_ip_pkt_fmt* pkt, ef_timespec stamp, unsigned sync_flags)
 {
-  int tsf               = (NI_OPTS(netif).timestamping_reporting &
+  int tsf = (NI_OPTS(netif).timestamping_reporting &
                 CITP_TIMESTAMPING_RECORDING_FLAG_CHECK_SYNC)
-                              ? EF_VI_SYNC_FLAG_CLOCK_IN_SYNC
-                              : EF_VI_SYNC_FLAG_CLOCK_SET;
-  pkt->hw_stamp.tv_sec  = stamp.tv_sec;
+                ? EF_VI_SYNC_FLAG_CLOCK_IN_SYNC
+                : EF_VI_SYNC_FLAG_CLOCK_SET;
+  pkt->hw_stamp.tv_sec = stamp.tv_sec;
   pkt->hw_stamp.tv_nsec = stamp.tv_nsec =
       (stamp.tv_nsec & ~CI_IP_PKT_HW_STAMP_FLAG_IN_SYNC) |
       ((sync_flags & tsf) ? CI_IP_PKT_HW_STAMP_FLAG_IN_SYNC : 0);
   nsn->last_rx_timestamp = pkt->hw_stamp;
-  nsn->last_sync_flags   = sync_flags;
+  nsn->last_sync_flags = sync_flags;
 
   LOG_NR(log(LPF "RX id=%d timestamp: %lu.%09lu sync %d", OO_PKT_FMT(pkt),
       (long) stamp.tv_sec, stamp.tv_nsec, sync_flags));
@@ -205,14 +205,14 @@ static void get_rx_timestamp(ci_netif* netif, ci_ip_pkt_fmt* pkt)
 {
 #if CI_CFG_TIMESTAMPING
   ci_netif_state_nic_t* nsn = &netif->state->nic[pkt->intf_i];
-  ef_vi*                vi  = ci_netif_vi(netif, pkt->intf_i);
+  ef_vi* vi = ci_netif_vi(netif, pkt->intf_i);
 
   if( (vi->nic_type.arch != EF_VI_ARCH_EFCT) &&
       (nsn->oo_vi_flags & OO_VI_FLAGS_RX_HW_TS_EN) ) {
-    unsigned    sync_flags;
+    unsigned sync_flags;
     ef_timespec stamp;
-    int         rc = ef_vi_receive_get_timestamp_with_sync_flags(
-                vi, PKT_START(pkt) - nsn->rx_prefix_len, &stamp, &sync_flags);
+    int rc = ef_vi_receive_get_timestamp_with_sync_flags(
+        vi, PKT_START(pkt) - nsn->rx_prefix_len, &stamp, &sync_flags);
 
     if( rc == 0 )
       record_rx_timestamp(netif, nsn, pkt, stamp, sync_flags);
@@ -261,7 +261,7 @@ static void handle_rx_pkt(
    * length of the whole frame.  Each scatter fragment has its [buf] field
    * initialised with the delivered frame payload.
    */
-  int       not_fast, ip_paylen, hdr_size;
+  int not_fast, ip_paylen, hdr_size;
 
   ci_uint16 ether_type = *((ci_uint16*) oo_l3_hdr(pkt) - 1);
 
@@ -276,7 +276,7 @@ static void handle_rx_pkt(
 
   /* Is this an IP packet? */
   if( CI_LIKELY(ether_type == CI_ETHERTYPE_IP) ) {
-    int         ip_tot_len;
+    int ip_tot_len;
     ci_ip4_hdr* ip = oo_ip_hdr(pkt);
 #if CI_CFG_IPV6
     pkt->flags &= ~CI_PKT_FLAG_IS_IP6;
@@ -324,7 +324,7 @@ static void handle_rx_pkt(
     if( CI_LIKELY(not_fast == 0) ) {
       char* payload = (char*) ip + hdr_size;
 
-      ip_paylen     = ip_tot_len - hdr_size;
+      ip_paylen = ip_tot_len - hdr_size;
       /* This will go negative if the ip_tot_len was too small even
       ** for the IP header.  The ULP is expected to notice...
       */
@@ -386,7 +386,7 @@ static void handle_rx_pkt(
 #if CI_CFG_IPV6
   else if( CI_LIKELY(ether_type == CI_ETHERTYPE_IP6) ) {
     ci_ip6_hdr* ip6_hdr = oo_ip6_hdr(pkt);
-    void*       payload = ip6_hdr + 1;
+    void* payload = ip6_hdr + 1;
 
     LOG_NR(log(
         LPF "RX id=%d ip6_proto=0x%x", OO_PKT_FMT(pkt), ip6_hdr->next_hdr));
@@ -468,13 +468,13 @@ static ci_ip_pkt_fmt* alloc_rx_efct_pkt(ci_netif* ni, int intf_i, int pay_len)
   if( CI_UNLIKELY(! pkt) )
     return NULL;
   pkt->pkt_start_off = 0;
-  pkt->intf_i        = intf_i;
+  pkt->intf_i = intf_i;
   pkt->flags |= CI_PKT_FLAG_RX;
   ci_assert_equal(pkt->rx_flags, 0);
   ci_assert_flags(ni->state->nic[intf_i].oo_vi_flags, OO_VI_FLAGS_RX_SHARED);
   pkt->rx_flags = CI_PKT_RX_FLAG_RX_SHARED;
   pkt->refcount = 1;
-  pkt->pay_len  = pay_len;
+  pkt->pay_len = pay_len;
   ++ni->state->n_rx_pkts;
   return pkt;
 }
@@ -486,7 +486,7 @@ static void get_efct_timestamp(
   ci_netif_state_nic_t* nsn = &netif->state->nic[pkt->intf_i];
 
   if( nsn->oo_vi_flags & OO_VI_FLAGS_RX_HW_TS_EN ) {
-    unsigned    sync_flags;
+    unsigned sync_flags;
     ef_timespec stamp;
     int rc = efct_vi_rxpkt_get_timestamp(vi, pkt_id, &stamp, &sync_flags);
 
@@ -536,11 +536,11 @@ static unsigned convert_discard_flags_efct_ef10(unsigned flags)
 static int convert_efct_to_pkts(
     ci_netif* ni, int intf_i, ef_event* evs, int n_evs)
 {
-  int    i;
+  int i;
   ef_vi* evq = ci_netif_vi(ni, intf_i);
 
   for( i = 0; i < n_evs; ++i ) {
-    ef_event       new_ev;
+    ef_event new_ev;
     ci_ip_pkt_fmt* pkt;
 
     if( EF_EVENT_TYPE(evs[i]) == EF_EVENT_TYPE_RX_REF ) {
@@ -566,12 +566,12 @@ static int convert_efct_to_pkts(
     copy_efct_to_pkt(ni, evq, evs[i].rx_ref.pkt_id, pkt);
     efct_vi_rxpkt_release(evq, evs[i].rx_ref.pkt_id);
 
-    new_ev.rx.q_id  = evs[i].rx_ref.q_id;
+    new_ev.rx.q_id = evs[i].rx_ref.q_id;
     new_ev.rx.rq_id = OO_PKT_ID(pkt);
-    new_ev.rx.len   = evs[i].rx_ref.len;
+    new_ev.rx.len = evs[i].rx_ref.len;
     new_ev.rx.flags = EF_EVENT_FLAG_SOP;
-    new_ev.rx.ofs   = 0;
-    evs[i]          = new_ev;
+    new_ev.rx.ofs = 0;
+    evs[i] = new_ev;
   }
   return n_evs;
 }
@@ -580,7 +580,7 @@ static int convert_efct_to_pkts(
 int ci_netif_evq_poll(ci_netif* ni, int intf_i)
 {
   ef_vi* evq = ci_netif_vi(ni, intf_i);
-  int    n_evs;
+  int n_evs;
   size_t evs_per_poll = ef_vi_flags(evq) & EF_VI_RX_EVENT_MERGE
                             ? NI_OPTS(ni).evs_per_poll / 4
                             : NI_OPTS(ni).evs_per_poll;
@@ -624,13 +624,13 @@ int ci_netif_evq_poll(ci_netif* ni, int intf_i)
 
   {
     struct ef_vi_rvq_rx_iter ri;
-    uint32_t                 id;
-    size_t                   len = 0; /* placate compiler */
+    uint32_t id;
+    size_t len = 0; /* placate compiler */
 
     ef_vi_evq_rx_iter_set(&ri, evq, ev, n_evs);
 
     while( (id = ef_vi_evq_rx_iter_next(&ri, &id, &len)) != 0 ) {
-      oo_pkt_p       pp;
+      oo_pkt_p pp;
       ci_ip_pkt_fmt* pkt;
 
       OO_PP_INIT(ni, pp, id);
@@ -733,7 +733,7 @@ ci_inline int handle_rx_pre_future(
    * [pkt->frag_next] and [pkt->pay_len] may be invalid.
    */
   ci_uint16 ether_type;
-  int       valid_bytes = CI_CACHE_LINE_SIZE - pkt->pkt_start_off;
+  int valid_bytes = CI_CACHE_LINE_SIZE - pkt->pkt_start_off;
 
 #if CI_CFG_RANDOM_DROP && ! defined(__KERNEL__)
   if( CI_UNLIKELY(rand() < NI_OPTS(ni).rx_drop_rate) ) {
@@ -747,16 +747,16 @@ ci_inline int handle_rx_pre_future(
   ci_parse_rx_vlan(pkt);
   ci_assert_le(pkt->pkt_eth_payload_off, valid_bytes);
 
-  ether_type      = *((ci_uint16*) oo_l3_hdr(pkt) - 1);
+  ether_type = *((ci_uint16*) oo_l3_hdr(pkt) - 1);
   pkt->tstamp_frc = IPTIMER_STATE(ni)->frc;
 
   if( ether_type == CI_ETHERTYPE_IP ) {
-    ci_ip4_hdr* ip                = oo_ip_hdr(pkt);
-    int         hdr_size          = CI_IP4_IHL(ip);
-    int         ip_tot_len        = CI_BSWAP_BE16(ip->ip_tot_len_be16);
-    int         ip_paylen         = ip_tot_len - hdr_size;
-    int         ip_payload_offset = pkt->pkt_eth_payload_off + hdr_size;
-    void*       payload           = (char*) ip + hdr_size;
+    ci_ip4_hdr* ip = oo_ip_hdr(pkt);
+    int hdr_size = CI_IP4_IHL(ip);
+    int ip_tot_len = CI_BSWAP_BE16(ip->ip_tot_len_be16);
+    int ip_paylen = ip_tot_len - hdr_size;
+    int ip_payload_offset = pkt->pkt_eth_payload_off + hdr_size;
+    void* payload = (char*) ip + hdr_size;
 
     if( ip_payload_offset > valid_bytes ||
         (hdr_size > sizeof(ci_ip4_hdr) &&
@@ -830,7 +830,7 @@ ci_inline void handle_rx_post_future(ci_netif* ni,
   ci_assert_nequal(status, FUTURE_NONE);
 
   if( CI_LIKELY(status & FUTURE_IP4) ) {
-    int         ip_tot_len;
+    int ip_tot_len;
     ci_ip4_hdr* ip = oo_ip_hdr(pkt);
 
     LOG_NR(log(LPF "RX id=%d ip_proto=0x%x", OO_PKT_FMT(pkt),
@@ -857,9 +857,9 @@ ci_inline void handle_rx_post_future(ci_netif* ni,
     ** transport's responsibility to check these as necessary.
     */
     if( CI_LIKELY(ip_tot_len <= pkt->pay_len - oo_pre_l3_len(pkt)) ) {
-      int   hdr_size = CI_IP4_IHL(ip);
-      void* payload  = (char*) ip + hdr_size;
-      int   len      = ip_tot_len - hdr_size;
+      int hdr_size = CI_IP4_IHL(ip);
+      void* payload = (char*) ip + hdr_size;
+      int len = ip_tot_len - hdr_size;
       /* This will go negative if the ip_tot_len was too small even
       ** for the IP header.  The ULP is expected to notice...
       */
@@ -917,17 +917,17 @@ static void handle_rx_scatter_last_frag(
 
   pkt->n_buffers = 1;
   while( 1 ) { /* reverse the chain of fragments */
-    next_p                 = s->frag_pkt->frag_next;
+    next_p = s->frag_pkt->frag_next;
     s->frag_pkt->frag_next = OO_PKT_P(pkt);
     s->frag_pkt->n_buffers = pkt->n_buffers + 1;
     if( OO_PP_IS_NULL(next_p) )
       break;
-    pkt         = s->frag_pkt;
+    pkt = s->frag_pkt;
     s->frag_pkt = PKT(ni, next_p);
   }
-  s->rx_pkt          = s->frag_pkt;
+  s->rx_pkt = s->frag_pkt;
   s->rx_pkt->pay_len = s->frag_bytes;
-  s->frag_pkt        = NULL;
+  s->frag_pkt = NULL;
   ASSERT_VALID_PKT(ni, s->rx_pkt);
 }
 
@@ -949,7 +949,7 @@ static void handle_rx_scatter(ci_netif* ni, struct oo_rx_state* s,
     ci_assert_le(
         frame_bytes, (int) (CI_CFG_PKT_BUF_SIZE -
                             CI_MEMBER_OFFSET(ci_ip_pkt_fmt, dma_start)));
-    s->frag_pkt  = pkt;
+    s->frag_pkt = pkt;
     pkt->buf_len = s->frag_bytes = frame_bytes;
     oo_offbuf_init(&pkt->buf, PKT_START(pkt), s->frag_bytes);
   } else {
@@ -963,7 +963,7 @@ static void handle_rx_scatter(ci_netif* ni, struct oo_rx_state* s,
     if( flags & EF_EVENT_FLAG_CONT ) {
       /* Middle fragment. */
       pkt->frag_next = OO_PKT_P(s->frag_pkt);
-      s->frag_pkt    = pkt;
+      s->frag_pkt = pkt;
     } else {
       /* Last fragment. */
       handle_rx_scatter_last_frag(ni, s, pkt);
@@ -982,7 +982,7 @@ static void handle_rx_scatter(ci_netif* ni, struct oo_rx_state* s,
 static void handle_rx_scatter_merge(ci_netif* ni, struct oo_rx_state* s,
     ci_ip_pkt_fmt* pkt, int prefix_bytes, ef_vi* vi, unsigned flags)
 {
-  int      full_buffer = ef_vi_receive_buffer_len(vi);
+  int full_buffer = ef_vi_receive_buffer_len(vi);
   uint16_t pkt_bytes;
 
   s->rx_pkt = NULL;
@@ -996,7 +996,7 @@ static void handle_rx_scatter_merge(ci_netif* ni, struct oo_rx_state* s,
     /* The packet prefix is present in the first buffer */
     pkt->buf_len = full_buffer - prefix_bytes;
     oo_offbuf_init(&pkt->buf, PKT_START(pkt), pkt->buf_len);
-    s->frag_pkt   = pkt;
+    s->frag_pkt = pkt;
     s->frag_bytes = pkt_bytes;
   } else {
     ci_assert(s->frag_pkt != NULL);
@@ -1010,7 +1010,7 @@ static void handle_rx_scatter_merge(ci_netif* ni, struct oo_rx_state* s,
       CI_DEBUG(pkt->pay_len = -1);
 
       pkt->frag_next = OO_PKT_P(s->frag_pkt);
-      s->frag_pkt    = pkt;
+      s->frag_pkt = pkt;
     } else {
       /* Last fragment. */
       /* The first buffer contains a prefix, but all intervening buffers are
@@ -1029,8 +1029,8 @@ static void handle_rx_scatter_merge(ci_netif* ni, struct oo_rx_state* s,
 static int handle_rx_csum_bad(ci_netif* ni, struct ci_netif_poll_state* ps,
     ci_ip_pkt_fmt* pkt, int frame_len)
 {
-  int       ip_paylen;
-  int       ip_proto;
+  int ip_paylen;
+  int ip_proto;
   ci_uint16 ether_type;
 
   /* Packet reached onload -- so must be IP and must at least reach the TCP
@@ -1050,10 +1050,10 @@ static int handle_rx_csum_bad(ci_netif* ni, struct ci_netif_poll_state* ps,
   ether_type = *((ci_uint16*) oo_l3_hdr(pkt) - 1);
 
   if( CI_LIKELY(ether_type == CI_ETHERTYPE_IP) ) {
-    ci_ip4_hdr* ip     = oo_ip_hdr(pkt);
-    int         ip_len = CI_BSWAP_BE16(ip->ip_tot_len_be16);
-    ip_paylen          = ip_len - CI_IP4_IHL(ip);
-    ip_proto           = ip->ip_protocol;
+    ci_ip4_hdr* ip = oo_ip_hdr(pkt);
+    int ip_len = CI_BSWAP_BE16(ip->ip_tot_len_be16);
+    ip_paylen = ip_len - CI_IP4_IHL(ip);
+    ip_proto = ip->ip_protocol;
 #if CI_CFG_IPV6
     pkt->flags &= ~CI_PKT_FLAG_IS_IP6;
 #endif
@@ -1074,8 +1074,8 @@ static int handle_rx_csum_bad(ci_netif* ni, struct ci_netif_poll_state* ps,
 #if CI_CFG_IPV6
   else if( ether_type == CI_ETHERTYPE_IP6 ) {
     ci_ip6_hdr* ip = oo_ip6_hdr(pkt);
-    ip_paylen      = CI_BSWAP_BE16(ip->payload_len);
-    ip_proto       = ip->next_hdr;
+    ip_paylen = CI_BSWAP_BE16(ip->payload_len);
+    ip_proto = ip->next_hdr;
     pkt->flags |= CI_PKT_FLAG_IS_IP6;
 
     if( ip_paylen <= 0 ||
@@ -1185,8 +1185,8 @@ static void discard_rx_multi_pkts(ci_netif* ni, struct ci_netif_poll_state* ps,
 static ci_ip_pkt_fmt* rx_multi_get_next_desc(
     ci_netif* ni, ef_vi* vi, int intf_i)
 {
-  ef_request_id  di;
-  oo_pkt_p       pp;
+  ef_request_id di;
+  oo_pkt_p pp;
   ci_ip_pkt_fmt* pkt;
 
   di = ef_vi_rxq_next_desc_id(vi);
@@ -1201,10 +1201,10 @@ static void handle_rx_multi_pkts(ci_netif* ni, struct oo_rx_state* s,
     int prefix_bytes, ef_vi* vi, int intf_i, struct ci_netif_poll_state* ps,
     int q_id)
 {
-  int            full_buffer = ef_vi_receive_buffer_len(vi);
-  uint16_t       pkt_bytes, total_bytes, cur_bytes;
+  int full_buffer = ef_vi_receive_buffer_len(vi);
+  uint16_t pkt_bytes, total_bytes, cur_bytes;
   ci_ip_pkt_fmt* pkt;
-  unsigned       discard_flags;
+  unsigned discard_flags;
 
 
   pkt = rx_multi_get_next_desc(ni, vi, intf_i);
@@ -1215,7 +1215,7 @@ static void handle_rx_multi_pkts(ci_netif* ni, struct oo_rx_state* s,
   pkt->q_id = q_id;
   {
     uint32_t mark;
-    uint8_t  flag;
+    uint8_t flag;
     ef_vi_receive_get_user_data(vi, pkt->dma_start, &mark, &flag);
     pkt->pf.tcp_rx.lo.rx_sock = mark;
     /* Asserting this solely so that a more efficient assignment can be done.
@@ -1253,25 +1253,25 @@ static void handle_rx_multi_pkts(ci_netif* ni, struct oo_rx_state* s,
   /* The packet prefix is present in the first buffer */
   pkt->buf_len = full_buffer - prefix_bytes;
   oo_offbuf_init(&pkt->buf, PKT_START(pkt), pkt->buf_len);
-  s->frag_pkt   = pkt;
+  s->frag_pkt = pkt;
   s->frag_bytes = pkt_bytes;
-  cur_bytes     = full_buffer;
+  cur_bytes = full_buffer;
 
   while( total_bytes - cur_bytes > full_buffer ) {
     /* - Middle fragments - */
-    pkt          = rx_multi_get_next_desc(ni, vi, intf_i);
+    pkt = rx_multi_get_next_desc(ni, vi, intf_i);
     /* Middle fragments are completely filled, and don't contain a prefix */
     pkt->buf_len = full_buffer;
     oo_offbuf_init(&pkt->buf, pkt->dma_start, pkt->buf_len);
     CI_DEBUG(pkt->pay_len = -1);
 
     pkt->frag_next = OO_PKT_P(s->frag_pkt);
-    s->frag_pkt    = pkt;
+    s->frag_pkt = pkt;
     cur_bytes += full_buffer;
   }
 
   /* - Last fragment - */
-  pkt          = rx_multi_get_next_desc(ni, vi, intf_i);
+  pkt = rx_multi_get_next_desc(ni, vi, intf_i);
   /* The first buffer contains a prefix, but all intervening buffers are
    * are filled, so this contains whatever's leftover.
    */
@@ -1311,9 +1311,9 @@ static void __handle_rx_discard(ci_netif* ni, struct ci_netif_poll_state* ps,
     int intf_i, struct oo_rx_state* s, ef_event ev, int frame_len,
     int discard_type, oo_pkt_p pp)
 {
-  int            is_frag;
+  int is_frag;
   ci_ip_pkt_fmt* pkt;
-  int            handled = 0;
+  int handled = 0;
 
   LOG_U(log(LPF "[%d] intf %d RX_DISCARD %d " EF_EVENT_FMT, NI_ID(ni), intf_i,
       (int) discard_type, EF_EVENT_PRI_ARG(ev)));
@@ -1398,9 +1398,9 @@ static void handle_rx_multi_discard(ci_netif* ni,
     struct ci_netif_poll_state* ps, int intf_i, struct oo_rx_state* s,
     ef_event ev, ef_request_id id, ef_vi* vi)
 {
-  int            discard_type = EF_EVENT_RX_MULTI_DISCARD_TYPE(ev);
-  uint16_t       frame_len;
-  oo_pkt_p       pp;
+  int discard_type = EF_EVENT_RX_MULTI_DISCARD_TYPE(ev);
+  uint16_t frame_len;
+  oo_pkt_p pp;
   ci_ip_pkt_fmt* pkt;
 
   OO_PP_INIT(ni, pp, id);
@@ -1426,7 +1426,7 @@ static void process_post_poll_list(ci_netif* ni)
   struct oo_p_dllink_state tmp_lnk;
   struct oo_p_dllink_state post_poll_list =
       oo_p_dllink_ptr(ni, &ni->state->post_poll_list);
-  int            need_wake = 0;
+  int need_wake = 0;
   citp_waitable* sb;
 #if CI_CFG_EPOLL3
   int lists_need_wake = 0;
@@ -1551,7 +1551,7 @@ static void ci_netif_tx_pkt_complete_udp(
     ci_netif* netif, struct ci_netif_poll_state* ps, ci_ip_pkt_fmt* pkt)
 {
   ci_udp_state* us;
-  oo_pkt_p      frag_next;
+  oo_pkt_p frag_next;
 
 #ifndef NDEBUG
   {
@@ -1618,11 +1618,11 @@ static void ci_netif_rx_pkt_complete_tcp(
      * ci_tcp_poll_timestamp_q_nonempty() to have changed. If so, we need to
      * wake. The above if() is technically lax, but it's a very quick way of
      * detecting when we can avoid the rest of this code. */
-    oo_sp              sp = pkt->pf.tcp_tx.sock_id;
+    oo_sp sp = pkt->pf.tcp_tx.sock_id;
     citp_waitable_obj* wo = SP_TO_WAITABLE_OBJ(ni, sp);
     if( wo->waitable.state & CI_TCP_STATE_TCP_CONN ) {
-      ci_tcp_state*  ts     = &wo->tcp;
-      unsigned       n_bufs = 0;
+      ci_tcp_state* ts = &wo->tcp;
+      unsigned n_bufs = 0;
       ci_ip_pkt_fmt* pp;
 
       /* The socket may have been closed (and even reopened) by the time we
@@ -1666,11 +1666,11 @@ ci_inline void __ci_netif_tx_pkt_complete(ci_netif* ni,
 #if CI_CFG_TIMESTAMPING
   if( pkt->flags & CI_PKT_FLAG_TX_TIMESTAMPED ) {
     if( ev != NULL && EF_EVENT_TYPE(*ev) == EF_EVENT_TYPE_TX_WITH_TIMESTAMP ) {
-      int opt_tsf          = ((NI_OPTS(ni).timestamping_reporting) &
+      int opt_tsf = ((NI_OPTS(ni).timestamping_reporting) &
                         CITP_TIMESTAMPING_RECORDING_FLAG_CHECK_SYNC)
-                                 ? EF_VI_SYNC_FLAG_CLOCK_IN_SYNC
-                                 : EF_VI_SYNC_FLAG_CLOCK_SET;
-      int pkt_tsf          = EF_EVENT_TX_WITH_TIMESTAMP_SYNC_FLAGS(*ev);
+                        ? EF_VI_SYNC_FLAG_CLOCK_IN_SYNC
+                        : EF_VI_SYNC_FLAG_CLOCK_SET;
+      int pkt_tsf = EF_EVENT_TX_WITH_TIMESTAMP_SYNC_FLAGS(*ev);
 
       pkt->hw_stamp.tv_sec = EF_EVENT_TX_WITH_TIMESTAMP_SEC(*ev);
       pkt->hw_stamp.tv_nsec =
@@ -1682,7 +1682,7 @@ ci_inline void __ci_netif_tx_pkt_complete(ci_netif* ni,
        * to ensure client is notified of missing timestamp -
        * important to keep TCP timestamps in sync with
        * TCP stream */
-      pkt->hw_stamp.tv_sec  = 0;
+      pkt->hw_stamp.tv_sec = 0;
       pkt->hw_stamp.tv_nsec = 0;
     } else {
       if( CI_NETIF_TX_VI(ni, pkt->intf_i, ev->tx_timestamp.q_id)->vi_flags &
@@ -1730,24 +1730,24 @@ static int ci_netif_poll_evq(
     ci_netif* ni, struct ci_netif_poll_state* ps, int intf_i, int n_evs)
 {
   struct oo_rx_state s;
-  ef_vi*             evq       = ci_netif_vi(ni, intf_i);
-  unsigned           total_evs = 0;
-  ci_ip_pkt_fmt*     pkt;
-  ef_event*          ev = ni->state->events;
-  int                i;
-  oo_pkt_p           pp;
-  int                completed_tx = 0;
+  ef_vi* evq = ci_netif_vi(ni, intf_i);
+  unsigned total_evs = 0;
+  ci_ip_pkt_fmt* pkt;
+  ef_event* ev = ni->state->events;
+  int i;
+  oo_pkt_p pp;
+  int completed_tx = 0;
 #ifdef OO_HAS_POLL_IN_KERNEL
   int poll_in_kernel;
 #endif
-  s.frag_pkt   = NULL;
+  s.frag_pkt = NULL;
   s.frag_bytes = 0; /*??*/
 
   if( OO_PP_NOT_NULL(ni->state->nic[intf_i].rx_frags) ) {
     pkt = PKT_CHK(ni, ni->state->nic[intf_i].rx_frags);
     ni->state->nic[intf_i].rx_frags = OO_PP_NULL;
-    s.frag_pkt                      = pkt;
-    s.frag_bytes                    = pkt->pay_len;
+    s.frag_pkt = pkt;
+    s.frag_bytes = pkt->pay_len;
     CI_DEBUG(pkt->pay_len = -1);
   }
 
@@ -1831,8 +1831,8 @@ static int ci_netif_poll_evq(
 
       else if( CI_LIKELY(EF_EVENT_TYPE(ev[i]) == EF_EVENT_TYPE_TX) ) {
         ef_request_id* ids = ni->tx_events;
-        int            n_ids, j;
-        ef_vi*         vi = CI_NETIF_TX_VI(ni, intf_i, ev[i].tx.q_id);
+        int n_ids, j;
+        ef_vi* vi = CI_NETIF_TX_VI(ni, intf_i, ev[i].tx.q_id);
         CITP_STATS_NETIF_INC(ni, tx_evs);
         n_ids = ef_vi_transmit_unbundle(vi, &ev[i], ids);
         ci_assert_ge(n_ids, 0);
@@ -1848,8 +1848,8 @@ static int ci_netif_poll_evq(
 
       else if( EF_EVENT_TYPE(ev[i]) == EF_EVENT_TYPE_RX_MULTI ) {
         ef_request_id* ids = ni->rx_events;
-        int            n_ids, j;
-        ef_vi*         vi = CI_NETIF_RX_VI(ni, intf_i, ev[i].rx.q_id);
+        int n_ids, j;
+        ef_vi* vi = CI_NETIF_RX_VI(ni, intf_i, ev[i].rx.q_id);
         CITP_STATS_NETIF_INC(ni, rx_evs);
         n_ids = ef_vi_receive_unbundle(vi, &ev[i], ids);
         ci_assert_ge(n_ids, 0);
@@ -1879,9 +1879,9 @@ static int ci_netif_poll_evq(
       }
 
       else if( EF_EVENT_TYPE(ev[i]) == EF_EVENT_TYPE_RX_MULTI_PKTS ) {
-        int    j, n_pkts;
-        int    q_id = ev[i].rx_multi_pkts.q_id;
-        ef_vi* vi   = CI_NETIF_RX_VI(ni, intf_i, q_id);
+        int j, n_pkts;
+        int q_id = ev[i].rx_multi_pkts.q_id;
+        ef_vi* vi = CI_NETIF_RX_VI(ni, intf_i, q_id);
         CITP_STATS_NETIF_INC(ni, rx_evs);
         n_pkts = ev[i].rx_multi_pkts.n_pkts;
         for( j = 0; j < n_pkts; ++j ) {
@@ -1910,9 +1910,9 @@ static int ci_netif_poll_evq(
 
       else if( EF_EVENT_TYPE(ev[i]) == EF_EVENT_TYPE_RX_MULTI_DISCARD ) {
         ef_request_id* ids = ni->rx_events;
-        int            n_ids, j;
-        ef_vi*         vi = CI_NETIF_RX_VI(ni, intf_i, ev[i].rx.q_id);
-        n_ids             = ef_vi_receive_unbundle(vi, &ev[i], ids);
+        int n_ids, j;
+        ef_vi* vi = CI_NETIF_RX_VI(ni, intf_i, ev[i].rx.q_id);
+        n_ids = ef_vi_receive_unbundle(vi, &ev[i], ids);
         ci_assert_ge(n_ids, 0);
         ci_assert_le(n_ids, sizeof(ni->rx_events) / sizeof(ids[0]));
         total_evs += n_ids - 1;
@@ -1923,7 +1923,7 @@ static int ci_netif_poll_evq(
 
       else if( EF_EVENT_TYPE(ev[i]) == EF_EVENT_TYPE_RX_REF_DISCARD ) {
         int pay_len = ev[i].rx_ref_discard.len;
-        pkt         = alloc_rx_efct_pkt(ni, intf_i, pay_len);
+        pkt = alloc_rx_efct_pkt(ni, intf_i, pay_len);
         if( pkt ) {
           __handle_rx_pkt(ni, ps, &s.rx_pkt);
           copy_efct_to_pkt(ni, evq, ev[i].rx_ref.pkt_id, pkt);
@@ -1958,7 +1958,9 @@ static int ci_netif_poll_evq(
     }
 
 #ifndef NDEBUG
-    if( CI_NETIF_TX_VI(ni, intf_i, 0)->nic_type.arch != EF_VI_ARCH_AF_XDP ) {
+    if( ! (CI_NETIF_TX_VI(ni, intf_i, 0)->nic_type.arch == EF_VI_ARCH_AF_XDP ||
+            CI_NETIF_TX_VI(ni, intf_i, 0)->nic_type.arch ==
+                EF_VI_ARCH_SWXTCH) ) {
       int vi_i;
       int txq_level = 0;
       for( vi_i = 0; vi_i < ci_netif_num_vis(ni); ++vi_i )
@@ -1980,7 +1982,7 @@ static int ci_netif_poll_evq(
     ci_netif_ctpio_resume(ni, intf_i);
 
   if( s.frag_pkt != NULL ) {
-    s.frag_pkt->pay_len             = s.frag_bytes;
+    s.frag_pkt->pay_len = s.frag_bytes;
     ni->state->nic[intf_i].rx_frags = OO_PKT_P(s.frag_pkt);
   }
 
@@ -1991,8 +1993,8 @@ static int ci_netif_poll_evq(
 static int ci_netif_poll_intf(ci_netif* ni, int intf_i, int max_evs)
 {
   struct ci_netif_poll_state ps;
-  int                        total_evs = 0;
-  int                        rc;
+  int total_evs = 0;
+  int rc;
 
 #if defined(__KERNEL__) || ! defined(NDEBUG)
   if( ! ci_netif_may_poll_in_kernel(ni, intf_i) )
@@ -2001,7 +2003,7 @@ static int ci_netif_poll_intf(ci_netif* ni, int intf_i, int max_evs)
 
   ci_assert(ci_netif_is_locked(ni));
   ps.tx_pkt_free_list_insert = &ps.tx_pkt_free_list;
-  ps.tx_pkt_free_list_n      = 0;
+  ps.tx_pkt_free_list_n = 0;
 
   do {
     rc = ci_netif_poll_evq(ni, &ps, intf_i, 0);
@@ -2038,15 +2040,15 @@ static int ci_netif_poll_intf(ci_netif* ni, int intf_i, int max_evs)
 #ifndef __KERNEL__
 int ci_netif_poll_intf_future(ci_netif* ni, int intf_i, ci_uint64 start_frc)
 {
-  int                        i, rc = 0, status;
-  bool                       handle_future = false;
-  struct oo_rx_future        future;
-  ci_uint64                  now_frc, max_spin;
-  ef_vi*                     evq = ci_netif_vi(ni, intf_i);
-  ef_event*                  ev  = ni->state->events;
+  int i, rc = 0, status;
+  bool handle_future = false;
+  struct oo_rx_future future;
+  ci_uint64 now_frc, max_spin;
+  ef_vi* evq = ci_netif_vi(ni, intf_i);
+  ef_event* ev = ni->state->events;
   struct ci_netif_poll_state ps;
-  ci_ip_pkt_fmt*             pkt;
-  const uint8_t*             dma;
+  ci_ip_pkt_fmt* pkt;
+  const uint8_t* dma;
   int (*future_poll)(ef_vi * vi, ef_event * evs, int evs_len) =
       evq->ops.eventq_poll;
 
@@ -2103,13 +2105,13 @@ int ci_netif_poll_intf_future(ci_netif* ni, int intf_i, ci_uint64 start_frc)
   CITP_STATS_NETIF_INC(ni, rx_evs);
 
   ps.tx_pkt_free_list_insert = &ps.tx_pkt_free_list;
-  ps.tx_pkt_free_list_n      = 0;
+  ps.tx_pkt_free_list_n = 0;
 
   /* We expect the completion event within a microsecond or so. The timeout
    * of 100us is to avoid wedging the stack in the case of hardware
    * failure/removal or a bug which prevents us getting the event.
    */
-  max_spin                   = IPTIMER_STATE(ni)->khz / 10000;
+  max_spin = IPTIMER_STATE(ni)->khz / 10000;
   ci_prefetch(pkt->dma_start + CI_CACHE_LINE_SIZE);
   while( (rc = future_poll(evq, ev, EF_VI_EVENT_POLL_MIN_EVS)) == 0 ) {
     ci_frc64(&now_frc);
@@ -2124,14 +2126,15 @@ int ci_netif_poll_intf_future(ci_netif* ni, int intf_i, ci_uint64 start_frc)
    * platforms, there seems to be a small advantage to prefetching a couple
    * more at this point, ahead of copying the packet data.
    */
-  for( i = 2; i < 5; ++i ) ci_prefetch(dma + i * CI_CACHE_LINE_SIZE);
+  for( i = 2; i < 5; ++i )
+    ci_prefetch(dma + i * CI_CACHE_LINE_SIZE);
 
   ++ni->state->in_poll;
   if( EF_EVENT_TYPE(ev[0]) == EF_EVENT_TYPE_RX ) {
     ci_assert_equal(OO_PP_ID(OO_PKT_P(pkt)), EF_EVENT_RX_RQ_ID(ev[0]));
     if( (ev[0].rx.flags & (EF_EVENT_FLAG_SOP | EF_EVENT_FLAG_CONT)) ==
         EF_EVENT_FLAG_SOP ) {
-      pkt->pay_len  = EF_EVENT_RX_BYTES(ev[0]) - evq->rx_prefix_len;
+      pkt->pay_len = EF_EVENT_RX_BYTES(ev[0]) - evq->rx_prefix_len;
       handle_future = true;
     }
   } else if( EF_EVENT_TYPE(ev[0]) == EF_EVENT_TYPE_RX_REF ) {
@@ -2160,7 +2163,8 @@ int ci_netif_poll_intf_future(ci_netif* ni, int intf_i, ci_uint64 start_frc)
        * handle the rest normally. Add one to the returned count to include
        * the one handled here.
        */
-      for( i = 1; i < rc; ++i ) ev[i - 1] = ev[i];
+      for( i = 1; i < rc; ++i )
+        ev[i - 1] = ev[i];
       rc = 1 + ci_netif_poll_evq(ni, &ps, intf_i, rc - 1);
     }
   } else {
@@ -2191,9 +2195,9 @@ free_out:
 void ci_netif_loopback_pkts_send(ci_netif* ni)
 {
   ci_ip_pkt_fmt* pkt;
-  oo_pkt_p       send_list = OO_PP_ID_NULL;
-  ci_ipx_hdr_t*  ip;
-  int            af;
+  oo_pkt_p send_list = OO_PP_ID_NULL;
+  ci_ipx_hdr_t* ip;
+  int af;
 #ifdef __KERNEL__
   int i = 0;
 #endif
@@ -2210,14 +2214,14 @@ void ci_netif_loopback_pkts_send(ci_netif* ni)
       return;
     }
 #endif
-    pkt                 = PKT_CHK(ni, ni->state->looppkts);
+    pkt = PKT_CHK(ni, ni->state->looppkts);
     ni->state->looppkts = pkt->next;
-    pkt->next           = send_list;
-    send_list           = OO_PKT_ID(pkt);
+    pkt->next = send_list;
+    send_list = OO_PKT_ID(pkt);
   }
 
   while( OO_PP_NOT_NULL(send_list) ) {
-    pkt       = PKT_CHK(ni, send_list);
+    pkt = PKT_CHK(ni, send_list);
     send_list = pkt->next;
     ni->state->n_looppkts--;
 
