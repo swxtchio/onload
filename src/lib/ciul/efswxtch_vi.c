@@ -15,6 +15,7 @@ static const char *_RX_MBUF_POOL = "RX_MBUF_POOL";
 static const char *_TX_PREP_RING = "TX_PREP_RING";
 static const char *_RX_PREP_RING = "RX_PREP_RING";
 static const char *_RX_PENDING_RING = "RX_PENDING_RING";
+static const unsigned RECEIVE_PUSH_SIZE = 16;
 
 typedef struct swxtch_rings {
   struct rte_mempool *mempool;       // basic mempool to pull mbufs from
@@ -33,31 +34,35 @@ typedef struct swxtch_rings {
 
 static swxtch_rings m_rings;
 
+// testing using this as our "fill pkt"
+static int fake_fill_pkt = 1;
+
 // drain a ring on startup to free any stuck mbufs
-void efswxtch_drain_ring(struct rte_ring *ring)
+void efswxtch_drain_ring(struct rte_ring *ring, int should_free)
 {
   unsigned available = 0;
   int count = 0;
   int burst_size = 32;
-  struct rte_mbuf *bufs[burst_size];
+  void *bufs[burst_size];
 
   do {
-    count = rte_ring_dequeue_burst(
-        ring, (void **) &bufs[0], burst_size, &available);
+    count = rte_ring_dequeue_burst(ring, &bufs[0], burst_size, &available);
 
-    rte_pktmbuf_free_bulk(bufs, count);
+    if( should_free ) {
+      rte_pktmbuf_free_bulk((struct rte_mbuf **) bufs, count);
+    }
   } while( available != 0 );
 }
 
 void efswxtch_drain_rings(void)
 {
-  efswxtch_drain_ring(m_rings.rx_fill_ring);
-  efswxtch_drain_ring(m_rings.tx_ring);
-  efswxtch_drain_ring(m_rings.rx_ring);
-  efswxtch_drain_ring(m_rings.rx_prep_ring);
-  efswxtch_drain_ring(m_rings.tx_prep_ring);
-  efswxtch_drain_ring(m_rings.tx_comp_ring);
-  efswxtch_drain_ring(m_rings.rx_pending_ring);
+  efswxtch_drain_ring(m_rings.rx_fill_ring, 0);
+  efswxtch_drain_ring(m_rings.tx_ring, 1);
+  efswxtch_drain_ring(m_rings.rx_ring, 1);
+  efswxtch_drain_ring(m_rings.rx_prep_ring, 0);
+  efswxtch_drain_ring(m_rings.tx_prep_ring, 1);
+  efswxtch_drain_ring(m_rings.tx_comp_ring, 1);
+  efswxtch_drain_ring(m_rings.rx_pending_ring, 1);
 }
 
 int efswxtch_init_rings(void)
@@ -296,7 +301,6 @@ static int efswxtch_ef_vi_receive_init(
 {
   ef_vi_rxq *q = &vi->vi_rxq;
   ef_vi_rxq_state *qs = &vi->ep_state->rxq;
-  struct rte_mbuf *mbufs[1];
   int i;
   if( qs->added - qs->removed >= q->mask )
     return -EAGAIN;
@@ -304,32 +308,43 @@ static int efswxtch_ef_vi_receive_init(
   i = qs->added++ & q->mask;
   q->ids[i] = dma_id;
 
-  if( rte_mempool_get(m_rings.mempool, (void **) &mbufs[0]) == 0 ) {
-    if( ! efswxtch_ef_vi_safe_enqueue(m_rings.rx_prep_ring, mbufs, 1) ) {
-      return -2;
-    }
-  } else {
-    ef_log("Unable to get mbuf to enqueue on the rx prep ring: %d left",
-        rte_mempool_avail_count(m_rings.mempool));
-    return -1;
+  if( rte_ring_enqueue(m_rings.rx_prep_ring, &fake_fill_pkt) != 0 ) {
+    ef_log("Unable to initalize the receive queue");
+    return -EAGAIN;
   }
+
+  /*
+    if( rte_mempool_get(m_rings.mempool, (void **) &mbufs[0]) == 0 ) {
+      if( ! efswxtch_ef_vi_safe_enqueue(m_rings.rx_prep_ring, mbufs, 1) ) {
+        return -2;
+      }
+    } else {
+      ef_log("Unable to get mbuf to enqueue on the rx prep ring: %d left",
+          rte_mempool_avail_count(m_rings.mempool));
+      return -1;
+    }
+    */
 
   return 0;
 }
 
 static void efswxtch_ef_vi_receive_push(ef_vi *vi)
 {
-  int size = rte_ring_count(m_rings.rx_prep_ring);
-  struct rte_mbuf *mbufs[size];
-  int dequeued = rte_ring_dequeue_burst(
-      m_rings.rx_prep_ring, (void **) &mbufs[0], size, NULL);
-  if( dequeued == 0 ) {
-    ef_log("failed to get rx prep ring buffs");
-    return;
-  }
+  unsigned available = 0;
+  void *fake_pkts[RECEIVE_PUSH_SIZE];
+  do {
+    int dequeued = rte_ring_dequeue_burst(
+        m_rings.rx_prep_ring, fake_pkts, RECEIVE_PUSH_SIZE, &available);
 
-  efswxtch_ef_vi_safe_enqueue(
-      m_rings.rx_fill_ring, (struct rte_mbuf **) &mbufs[0], dequeued);
+    if( dequeued == 0 ) {
+      ef_log("failed to get rx prep ring buffs");
+      return;
+    }
+    if( rte_ring_enqueue_bulk(
+            m_rings.rx_fill_ring, fake_pkts, dequeued, NULL) == 0 ) {
+      ef_log("Unable to enqueue the fake pkts onto the fill ring");
+    }
+  } while( available != 0 );
 }
 
 

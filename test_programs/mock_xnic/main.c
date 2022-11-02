@@ -74,10 +74,11 @@ static const unsigned MAX_MESSAGE_SIZE = 2048;
 #define BURST_SIZE      32
 
 struct rte_mempool *mbuf_pool;
+unsigned long idle_count = 0;
 volatile int quit = 0;
 
 struct rte_mbuf *tx_bufs[BURST_SIZE];
-struct rte_mbuf *temp_rx_bufs[BURST_SIZE];
+void *rx_fill_pkts[BURST_SIZE];
 struct rte_mbuf *rx_bufs[BURST_SIZE];
 struct rte_mbuf *rx_final_bufs[BURST_SIZE];
 
@@ -241,10 +242,10 @@ static void bulk_free(struct rte_mbuf **mbufs, unsigned length)
 
 static int receive(uint16_t port)
 {
-  int allowed = rte_ring_dequeue_burst(
-      rx_fill_ring, (void **) &temp_rx_bufs[0], BURST_SIZE, NULL);
+  int allowed =
+      rte_ring_dequeue_burst(rx_fill_ring, rx_fill_pkts, BURST_SIZE, NULL);
 
-  if( allowed == 0 ) {
+  if( unlikely(allowed == 0) ) {
     return 0;
   }
 
@@ -254,7 +255,7 @@ static int receive(uint16_t port)
   // recycle any unused packets
   if( unlikely(recv != allowed) ) {
     rte_ring_enqueue_bulk(
-        rx_fill_ring, (void **) &temp_rx_bufs[recv], allowed - recv, NULL);
+        rx_fill_ring, &rx_fill_pkts[recv], allowed - recv, NULL);
   }
 
 
@@ -266,8 +267,10 @@ static int receive(uint16_t port)
     // drop this because it's breaking everything for now
     if( ntohs(eth_h->ether_type) == RTE_ETHER_TYPE_IPV6 ) {
       // recycle unused buffers
-      rte_ring_enqueue(rx_fill_ring, temp_rx_bufs[i]);
+      rte_ring_enqueue(rx_fill_ring, rx_fill_pkts[i]);
     } else if( ntohs(eth_h->ether_type) == RTE_ETHER_TYPE_ARP ) {
+      rte_ring_enqueue(rx_fill_ring, rx_fill_pkts[i]);
+      /*
       struct rte_arp_hdr *arp = (struct rte_arp_hdr *) (eth_h + 1);
       if( ntohs(arp->arp_opcode) == RTE_ARP_OP_REPLY ) {
         char ethStr[50];
@@ -282,10 +285,9 @@ static int receive(uint16_t port)
           printf("Failed to add neighbor\n");
         }
 
-        rte_ring_enqueue(rx_fill_ring, temp_rx_bufs[i]);
       }
+      */
     } else {
-      rte_pktmbuf_free(temp_rx_bufs[i]);
       rx_final_bufs[enqueueCount++] = rx_bufs[i];
     }
   }
@@ -328,7 +330,6 @@ static int transmit(uint16_t port)
     if( likely(end == 0) ) {
       break;
     }
-    usleep(10);
   }
 
   if( unlikely(start != allowed) ) {
@@ -340,20 +341,19 @@ static int transmit(uint16_t port)
     return start;
   }
 
+  struct rte_mbuf *comp_count[allowed];
 
-  struct rte_mbuf *comp_count[start];
-
-  if( unlikely(rte_mempool_get_bulk(mbuf_pool, (void **) comp_count, start) !=
-               0) ) {
+  if( unlikely(rte_mempool_get_bulk(
+                   mbuf_pool, (void **) comp_count, allowed) != 0) ) {
     printf("Unable to get pkts to marks as completed\n");
 
     return start;
   }
 
   if( unlikely(rte_ring_enqueue_bulk(tx_completion_ring, (void **) comp_count,
-                   start, NULL) == 0) ) {
+                   allowed, NULL) == 0) ) {
     printf("FAILED to mark tx completed\n");
-    bulk_free(tx_bufs, start);
+    bulk_free(comp_count, allowed);
   }
   return start;
 }
@@ -398,7 +398,7 @@ static int lcore_run(__attribute__((unused)) void *arg)
       int recved = receive(port);
       int sent = transmit(port);
       if( recved == 0 && sent == 0 ) {
-        usleep(10);
+        idle_count++;
       }
     }
   }

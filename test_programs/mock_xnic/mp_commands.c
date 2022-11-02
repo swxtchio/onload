@@ -99,6 +99,7 @@ static void dump_rings(__attribute__((unused)) void *parsed_result,
 {
   rte_mempool_dump(stdout, mbuf_pool);
   cmdline_printf(cl,
+      "Idle Count: %ld\n"
       "TX Ring Count: %d:%d\n"
       "TX Comp Ring Count: %d:%d\n"
       "RX Fill Ring Count: %d:%d\n"
@@ -106,7 +107,7 @@ static void dump_rings(__attribute__((unused)) void *parsed_result,
       "RX Prep Ring Count: %d:%d\n"
       "TX Prep Ring Count: %d:%d\n"
       "RX Pending Ring Count: %d:%d\n",
-      rte_ring_count(tx_ring), rte_ring_get_capacity(tx_ring),
+      idle_count, rte_ring_count(tx_ring), rte_ring_get_capacity(tx_ring),
       rte_ring_count(tx_completion_ring),
       rte_ring_get_capacity(tx_completion_ring), rte_ring_count(rx_fill_ring),
       rte_ring_get_capacity(rx_fill_ring), rte_ring_count(rx_ring),

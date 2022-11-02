@@ -8,6 +8,7 @@
 extern struct rte_ring *tx_ring, *tx_completion_ring, *rx_ring, *rx_fill_ring,
     *rx_prep_ring, *tx_prep_ring, *rx_pending_ring;
 extern struct rte_mempool *mbuf_pool;
+extern unsigned long idle_count;
 extern volatile int quit;
 
 extern cmdline_parse_ctx_t simple_mp_ctx[];
