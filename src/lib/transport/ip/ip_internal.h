@@ -63,7 +63,7 @@
 **************************** Logging etc. *****************************
 **********************************************************************/
 
-extern unsigned ci_tp_log      CI_HV;
+extern unsigned ci_tp_log CI_HV;
 extern unsigned ci_tp_max_dump CI_HV;
 
 
@@ -130,8 +130,8 @@ ci_inline void ci_tcp_update_rtt(ci_netif* netif, ci_tcp_state* ts, int m)
     ts->rto = tcp_srtt(ts) + ts->sv; /* RTO <- SRTT + 4*RTTVAR */
   } else {
     /* first rtt estimate so follow (2.2) of RFC2988 */
-    ts->sa  = (m << 3u);
-    ts->sv  = (m << 1u);
+    ts->sa = (m << 3u);
+    ts->sv = (m << 1u);
     ts->rto = m + ts->sv;
   }
 
@@ -163,7 +163,7 @@ void ip_cmsg_recv_timestamping(ci_netif* ni, const ci_ip_pkt_fmt* pkt,
   do {                                                                 \
     ci_uint64 __sleep_seq;                                             \
     ci_uint32 t = (timeout);                                           \
-    *(prc)      = 0;                                                   \
+    *(prc) = 0;                                                        \
     while( 1 ) {                                                       \
       __sleep_seq = (w)->sleep_seq.all;                                \
       ci_rmb();                                                        \
@@ -227,7 +227,7 @@ ci_inline int ci_tcp_ep_set_filters(
         ci_netif_get_driver_handle(ni), sock_id, bindto_ifindex, from_tcp_id);
 #endif
 
-  LOG_U(if( rc < 0 ) ci_log(" ---> %s (rc=%d)", __FUNCTION__, rc));
+  LOG_TC(if( rc < 0 ) ci_log(" ---> %s (rc=%d)", __FUNCTION__, rc));
   return rc;
 }
 
@@ -400,10 +400,10 @@ ci_inline int ci_tcp_ep_mcast_add_del(ci_netif* ni, oo_sp sock_id,
  * the headers in use. */
 struct oo_sock_extended_err {
   ci_uint32 ee_errno;
-  ci_uint8  ee_origin;
-  ci_uint8  ee_type;
-  ci_uint8  ee_code;
-  ci_uint8  ee_pad;
+  ci_uint8 ee_origin;
+  ci_uint8 ee_type;
+  ci_uint8 ee_code;
+  ci_uint8 ee_pad;
   ci_uint32 ee_info;
   ci_uint32 ee_data;
 };
@@ -451,7 +451,7 @@ ci_inline int ci_getsockopt_final(
 {
   if( (level == SOL_SOCKET || level == SOL_IP) && val_size == sizeof(int) &&
       *optlen >= sizeof(char) && *optlen < sizeof(int) ) {
-    int           ival  = *((int*) val);
+    int ival = *((int*) val);
     unsigned char ucval = (unsigned char) ival;
     if( ival >= 0 && ival <= 255 )
       return ci_getsockopt_final_pre(
@@ -566,7 +566,7 @@ extern int ci_set_sol_socket_nolock(ci_netif*, ci_sock_cmn* s, int optname,
 #ifdef __KERNEL__
 #define CI_IOCTL_ARG_OK(t, a)         \
   ({                                  \
-    t   _v;                           \
+    t _v;                             \
     int _rc = get_user(_v, (t*) (a)); \
     (void) _v;                        \
     _rc == 0;                         \
@@ -628,8 +628,8 @@ extern int ci_set_sol_socket_nolock(ci_netif*, ci_sock_cmn* s, int optname,
  * \param  os_socket_exists Non-zero if OS socket extsts
  * \return          As for ioctl()
  */
-extern int  ci_cmn_ioctl(ci_netif* netif, ci_sock_cmn* s, int request,
-     void* arg, int os_rc, int os_socket_exists);
+extern int ci_cmn_ioctl(ci_netif* netif, ci_sock_cmn* s, int request,
+    void* arg, int os_rc, int os_socket_exists);
 
 /*! Compute the time stamp delta for the given packet time stamp and
  *  return in in ts
@@ -743,7 +743,7 @@ ci_inline int oo_spinloop_pause_check_signals(ci_netif* ni,
 
 #ifndef __KERNEL__
 extern citp_init_thread_callback init_thread_callback CI_HV;
-extern oo_signal_terminate_fn signal_terminate_fn     CI_HV;
+extern oo_signal_terminate_fn signal_terminate_fn CI_HV;
 #endif
 
 
@@ -787,7 +787,7 @@ ci_netif_pkt_release_in_poll(
       ci_netif_pkt_put(netif, pkt);
     } else if( ps != NULL ) {
       *ps->tx_pkt_free_list_insert = OO_PKT_P(pkt);
-      ps->tx_pkt_free_list_insert  = &pkt->next;
+      ps->tx_pkt_free_list_insert = &pkt->next;
       ++ps->tx_pkt_free_list_n;
     } else {
       ci_netif_pkt_free_nonb_list(netif, OO_PKT_P(pkt), pkt);
@@ -843,8 +843,8 @@ ci_inline void ci_pkt_zc_free_clean(
  ****************************** ZC send offloads *********************
  *********************************************************************/
 
-ci_int8  ci_tcp_offload_zc_send_accum_crc(ci_netif* ni, ci_ip_pkt_fmt* pkt,
-     struct ci_pkt_zc_payload* zcp, unsigned payload_offset, void* prefix);
+ci_int8 ci_tcp_offload_zc_send_accum_crc(ci_netif* ni, ci_ip_pkt_fmt* pkt,
+    struct ci_pkt_zc_payload* zcp, unsigned payload_offset, void* prefix);
 ci_uint8 ci_tcp_offload_zc_send_insert_crc(ci_netif* ni, ci_ip_pkt_fmt* pkt,
     struct ci_pkt_zc_payload* zcp, unsigned payload_offset, void* prefix);
 

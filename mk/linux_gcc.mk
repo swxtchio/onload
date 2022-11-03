@@ -194,7 +194,7 @@ endef
 
 define MMakeLinkCApp
 set -x; \
-$(CLINK) $(MMAKE_CARCH) $(CFLAGS) $(MMAKE_DPDK) -Wl,-E $(MMAKE_DIR_LINKFLAGS) $(filter %.o,$^) \
+$(CLINK) $(MMAKE_CARCH) $(CFLAGS) -Wl,-E $(MMAKE_DIR_LINKFLAGS) $(filter %.o,$^) \
 	$$libs -lm -lpthread -lrt -lresolv -lanl $(MMAKE_DPDK_LIBS) -o $@
 endef
 

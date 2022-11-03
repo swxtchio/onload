@@ -8,8 +8,12 @@ ifeq ($(ISA),i386)
 BUILD_TREE_COPY	:= mapfile.ilp32
 endif
 
-MMAKE_DPDK_LIBS :=-lrte_bpf -lrte_flow_classify -lrte_pipeline -lrte_table -lrte_port -lrte_fib -lrte_ipsec -lrte_vhost -lrte_stack -lrte_security -lrte_sched -lrte_reorder -lrte_rib -lrte_rcu -lrte_rawdev -lrte_pdump -lrte_power -lrte_member -lrte_lpm -lrte_latencystats -lrte_kni -lrte_jobstats -lrte_ip_frag -lrte_gso -lrte_gro -lrte_eventdev -lrte_efd -lrte_distributor -lrte_cryptodev -lrte_compressdev -lrte_cfgfile -lrte_bitratestats -lrte_bbdev -lrte_acl -lrte_timer -lrte_hash -lrte_metrics -lrte_cmdline -lrte_pci -lrte_ethdev -lrte_meter -lrte_net -lrte_mbuf -lrte_mempool -lrte_ring -lrte_eal -lrte_kvargs
-MMAKE_DPDK := -L/usr/local/lib/x86_64-linux-gnu
+ifeq ($(RTE_SDK),)
+$(error "Please define RTE_SDK environment variable")
+endif
+
+MMAKE_DPDK := $(DEFAULT_DPDK)
+MMAKE_INCLUDE += -I$(RTE_SDK)/build/install/include
 
 TARGET		:= libcitransport0.so
 MMAKE_TYPE	:= DLL
@@ -18,7 +22,7 @@ LDEP	:= $(CITPCOMMON_LIB_DEPEND) $(CIIP_LIB_DEPEND) $(CPLANE_LIB_DEPEND) \
 	$(CITOOLS_LIB_DEPEND) $(CIUL_LIB_DEPEND)
 
 LLNK	:= $(LINK_CITPCOMMON_LIB) $(LINK_CIIP_LIB) $(LINK_CPLANE_LIB) \
-	$(LINK_CITOOLS_LIB) $(LINK_CIUL_LIB) $(MMAKE_DPDK_LIBS)
+	$(LINK_CITOOLS_LIB) $(LINK_CIUL_LIB) $(MMAKE_DPDK) 
 
 LIB_SRCS	:=			\
 		startup.c		\

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2004-2020 Xilinx, Inc. */
 /**************************************************************************\
-*//*! \file
+ *//*! \file
 ** <L5_PRIVATE L5_SOURCE>
 ** \author Andrew Rybchenko <Andrew.Rybchenko@oktetlabs.ru>
 **  \brief Kernel-private endpoints routines
@@ -29,10 +29,8 @@
 \**************************************************************************/
 
 /* See description in include/driver/efab/tcp_helper_endpoint.h */
-void
-tcp_helper_endpoint_ctor(tcp_helper_endpoint_t *ep,
-                         tcp_helper_resource_t * thr,
-                         int id)
+void tcp_helper_endpoint_ctor(
+    tcp_helper_endpoint_t* ep, tcp_helper_resource_t* thr, int id)
 {
   int i;
 
@@ -74,31 +72,31 @@ tcp_helper_endpoint_ctor(tcp_helper_endpoint_t *ep,
 
 /*--------------------------------------------------------------------*/
 
-static void
-clear_plugin_state(tcp_helper_endpoint_t * ep)
+static void clear_plugin_state(tcp_helper_endpoint_t* ep)
 {
 #if CI_CFG_TCP_OFFLOAD_RECYCLER
   ci_netif* ni = &ep->thr->netif;
   int intf_i;
 
-  ci_assert( ! in_atomic() );
-  OO_STACK_FOR_EACH_INTF_I(ni, intf_i) {
+  ci_assert(! in_atomic());
+  OO_STACK_FOR_EACH_INTF_I(ni, intf_i)
+  {
     struct xsn_ceph_destroy_stream param = {};
     int rc;
     ci_uint32 conn_id;
 
     /* This function can be called from tcp_helper_endpoint_clear_filters()
      * without the stack lock */
-    conn_id = ci_xchg32(&ep->plugin_stream_id[intf_i],
-                        INVALID_PLUGIN_HANDLE);
+    conn_id = ci_xchg32(&ep->plugin_stream_id[intf_i], INVALID_PLUGIN_HANDLE);
     if( conn_id == INVALID_PLUGIN_HANDLE )
       continue;
-    param.in_conn_id = cpu_to_le32(conn_id);;
-    rc = efrm_ext_msg(ni->nic_hw[intf_i].plugin_rx,
-                      XSN_CEPH_DESTROY_STREAM, &param, sizeof(param));
+    param.in_conn_id = cpu_to_le32(conn_id);
+    ;
+    rc = efrm_ext_msg(ni->nic_hw[intf_i].plugin_rx, XSN_CEPH_DESTROY_STREAM,
+        &param, sizeof(param));
     if( rc )
-      OO_DEBUG_ERR(ci_log("%s: ERROR: Destroy Ceph stream failed (%d)",
-                          __FUNCTION__, rc));
+      OO_DEBUG_ERR(ci_log(
+          "%s: ERROR: Destroy Ceph stream failed (%d)", __FUNCTION__, rc));
   }
 #endif
 }
@@ -112,8 +110,7 @@ clear_plugin_state(tcp_helper_endpoint_t * ep)
 #endif
 
 /* See description in include/onload/tcp_helper_endpoint.h */
-void
-tcp_helper_endpoint_dtor(tcp_helper_endpoint_t * ep)
+void tcp_helper_endpoint_dtor(tcp_helper_endpoint_t* ep)
 {
   unsigned long lock_flags;
 #ifndef BREAK_SCALABLE_FILTERS
@@ -133,20 +130,20 @@ tcp_helper_endpoint_dtor(tcp_helper_endpoint_t * ep)
   clear_plugin_state(ep);
 #ifndef BREAK_SCALABLE_FILTERS
   if( s->s_flags & CI_SOCK_FLAG_STACK_FILTER )
-    ci_tcp_sock_clear_stack_filter(&ep->thr->netif,
-                                   SP_TO_TCP(&ep->thr->netif, ep->id));
+    ci_tcp_sock_clear_stack_filter(
+        &ep->thr->netif, SP_TO_TCP(&ep->thr->netif, ep->id));
 #endif
   oof_socket_del(oo_filter_ns_to_manager(ep->thr->filter_ns), &ep->oofilter);
-  oof_socket_mcast_del_all(oo_filter_ns_to_manager(ep->thr->filter_ns),
-                           &ep->oofilter);
+  oof_socket_mcast_del_all(
+      oo_filter_ns_to_manager(ep->thr->filter_ns), &ep->oofilter);
   oof_socket_dtor(&ep->oofilter);
 
   spin_lock_irqsave(&ep->lock, lock_flags);
   if( ep->os_socket != NULL ) {
     if( ID_TO_WAITABLE_OBJ(&ep->thr->netif, ep->id)->waitable.state !=
         CI_TCP_STATE_ACTIVE_WILD ) {
-      OO_DEBUG_ERR(ci_log(FEP_FMT "ERROR: O/S socket still referenced",
-                          FEP_PRI_ARGS(ep)));
+      OO_DEBUG_ERR(ci_log(
+          FEP_FMT "ERROR: O/S socket still referenced", FEP_PRI_ARGS(ep)));
     }
     files_to_drop[num_files_to_drop++] = ep->os_socket;
     ep->os_socket = NULL;
@@ -161,8 +158,8 @@ tcp_helper_endpoint_dtor(tcp_helper_endpoint_t * ep)
     fput(files_to_drop[i]);
 
   if( ep->alien_ref != NULL ) {
-    OO_DEBUG_ERR(ci_log(FEP_FMT "ERROR: alien socket still referenced",
-                        FEP_PRI_ARGS(ep)));
+    OO_DEBUG_ERR(ci_log(
+        FEP_FMT "ERROR: alien socket still referenced", FEP_PRI_ARGS(ep)));
     fput(ep->alien_ref->_filp);
     ep->alien_ref = NULL;
   }
@@ -176,17 +173,16 @@ tcp_helper_endpoint_dtor(tcp_helper_endpoint_t * ep)
 
 
 #if CI_CFG_ENDPOINT_MOVE
-static int
-tcp_helper_endpoint_reuseaddr_cleanup(ci_netif* ni, ci_sock_cmn* s)
+static int tcp_helper_endpoint_reuseaddr_cleanup(ci_netif* ni, ci_sock_cmn* s)
 {
   int i;
 
   if( (~s->b.state & CI_TCP_STATE_TCP) || s->b.state == CI_TCP_LISTEN )
     return 0;
 
-  for( i = 0; i < (int)ni->state->n_ep_bufs; ++i ) {
+  for( i = 0; i < (int) ni->state->n_ep_bufs; ++i ) {
     citp_waitable_obj* wo = ID_TO_WAITABLE_OBJ(ni, i);
-    
+
     if( wo->waitable.state != CI_TCP_TIME_WAIT )
       continue;
 
@@ -231,8 +227,8 @@ tcp_helper_endpoint_reuseaddr_cleanup(ci_netif* ni, ci_sock_cmn* s)
  *      lIP/lp        rIP/rp     from_tcp_id=n  TCP connection passively opened
  *                                              (use filter from this TCP ep)
  *      aIP/ap        rIP/rp     s_flags & TPROXY
- *                               && phys_port=n TCP connection using transparent
- *                                              shared filter
+ *                               && phys_port=n TCP connection using
+ *transparent shared filter
  *
  *
  *--------------------------------------------------------------------*/
@@ -242,13 +238,12 @@ tcp_helper_endpoint_reuseaddr_cleanup(ci_netif* ni, ci_sock_cmn* s)
  * normally scheduled to be done asnychronously by tcp_helper_do_non_atomic()
  * in workqueue context.
  * Flushing is required before setting new filter. */
-static int
-tcp_helper_flush_clear_filters(tcp_helper_endpoint_t* ep)
+static int tcp_helper_flush_clear_filters(tcp_helper_endpoint_t* ep)
 {
 #if ! CI_CFG_UL_INTERRUPT_HELPER
   /* Avoid racing with tcp_helper_do_non_atomic(). */
   unsigned ep_aflags;
-  ci_assert( ci_netif_is_locked(&ep->thr->netif) );
+  ci_assert(ci_netif_is_locked(&ep->thr->netif));
 again:
   if( (ep_aflags = ep->ep_aflags) & OO_THR_EP_AFLAG_NON_ATOMIC ) {
     if( in_atomic() )
@@ -258,29 +253,28 @@ again:
        * retransmission. */
       return -EAGAIN;
     /* do not expect this endpoint to be going to be freed */
-    ci_assert(!(ep_aflags & OO_THR_EP_AFLAG_NEED_FREE));
+    ci_assert(! (ep_aflags & OO_THR_EP_AFLAG_NEED_FREE));
     if( (ep_aflags = ep->ep_aflags) & OO_THR_EP_AFLAG_CLEAR_FILTERS ) {
       /* let us try to steal the flag, so we can do the operation ourselves */
       if( ci_cas32_fail(&ep->ep_aflags, ep_aflags,
-                        ep_aflags & ~ OO_THR_EP_AFLAG_CLEAR_FILTERS) )
+              ep_aflags & ~OO_THR_EP_AFLAG_CLEAR_FILTERS) )
         goto again;
       /* we have stolen the flag, clearing the filters */
       tcp_helper_endpoint_clear_filters(ep, 0);
       return 0;
     }
-    /* Looks we clashed with the tcp_helper_do_non_atomic() while it is running,
-     * let us wait till it finishes */
+    /* Looks we clashed with the tcp_helper_do_non_atomic() while it is
+     * running, let us wait till it finishes */
     flush_work(&ep->thr->non_atomic_work);
-    ci_assert(!(ep->ep_aflags & OO_THR_EP_AFLAG_NON_ATOMIC));
+    ci_assert(! (ep->ep_aflags & OO_THR_EP_AFLAG_NON_ATOMIC));
   }
 #endif
   return 0;
 }
 
 
-static int
-ci_tcp_use_mac_filter(ci_netif* ni, ci_sock_cmn* s, ci_ifid_t ifindex,
-                      oo_sp from_tcp_id)
+static int ci_tcp_use_mac_filter(
+    ci_netif* ni, ci_sock_cmn* s, ci_ifid_t ifindex, oo_sp from_tcp_id)
 {
   int use_mac_filter = 0;
   int mode;
@@ -300,8 +294,9 @@ ci_tcp_use_mac_filter(ci_netif* ni, ci_sock_cmn* s, ci_ifid_t ifindex,
     /* Passively opened sockets accepted from a listener using a MAC filter
      * also use the MAC filter.
      */
-    use_mac_filter |= OO_SP_NOT_NULL(from_tcp_id) &&
-             (SP_TO_SOCK(ni, from_tcp_id)->s_flags & CI_SOCK_FLAG_STACK_FILTER);
+    use_mac_filter |=
+        OO_SP_NOT_NULL(from_tcp_id) &&
+        (SP_TO_SOCK(ni, from_tcp_id)->s_flags & CI_SOCK_FLAG_STACK_FILTER);
 
 #ifndef BREAK_SCALABLE_FILTERS
     if( (use_mac_filter == 0) && (s->b.state == CI_TCP_LISTEN) &&
@@ -319,9 +314,8 @@ ci_tcp_use_mac_filter(ci_netif* ni, ci_sock_cmn* s, ci_ifid_t ifindex,
 }
 
 
-int
-tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
-                                ci_ifid_t bindto_ifindex, oo_sp from_tcp_id)
+int tcp_helper_endpoint_set_filters(
+    tcp_helper_endpoint_t* ep, ci_ifid_t bindto_ifindex, oo_sp from_tcp_id)
 {
   struct file* os_sock_ref;
   ci_netif* ni = &ep->thr->netif;
@@ -337,9 +331,9 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
                          ! CI_IPX_ADDR_IS_ANY(sock_raddr(s));
 #endif
 
-  OO_DEBUG_TCPH(ci_log("%s: [%d:%d] bindto_ifindex=%d from_tcp_id=%d",
-                       __FUNCTION__, ep->thr->id,
-                       OO_SP_FMT(ep->id), bindto_ifindex, from_tcp_id));
+  OO_DEBUG_TCPH(
+      ci_log("%s: [%d:%d] bindto_ifindex=%d from_tcp_id=%d", __FUNCTION__,
+          ep->thr->id, OO_SP_FMT(ep->id), bindto_ifindex, from_tcp_id));
 
   /* Make sure the endpoint is not subject to pending async filter operations.
    *
@@ -349,12 +343,12 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
    * Before proceeding with setting the filter a pending filter clear
    * operation needs to be flushed. */
   rc = tcp_helper_flush_clear_filters(ep);
-  if(CI_UNLIKELY( rc < 0 ))
+  if( CI_UNLIKELY(rc < 0) )
     return rc;
 
   /* The lock is needed for assertions with CI_NETIF_FLAG_IN_DL_CONTEXT
    * flag only. */
-  ci_assert( ci_netif_is_locked(&ep->thr->netif) );
+  ci_assert(ci_netif_is_locked(&ep->thr->netif));
 
 #if CI_CFG_FD_CACHING
   /* The special cases that allow active-wild sharers to be cacheable depend on
@@ -379,14 +373,11 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
    */
   spin_lock_irqsave(&ep->lock, lock_flags);
   if( OO_SP_NOT_NULL(from_tcp_id) &&
-      ! ( use_mac_filter &&
-          NI_OPTS(ni).scalable_listen ==
-          CITP_SCALABLE_LISTEN_ACCELERATED_ONLY ) ) {
-
+      ! (use_mac_filter && NI_OPTS(ni).scalable_listen ==
+                               CITP_SCALABLE_LISTEN_ACCELERATED_ONLY) ) {
     listen_ep = ci_trs_get_valid_ep(ep->thr, from_tcp_id);
     os_sock_ref = listen_ep->os_socket;
-  }
-  else {
+  } else {
     os_sock_ref = ep->os_socket;
   }
   if( os_sock_ref != NULL )
@@ -406,8 +397,8 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
      * However, the user can call OO_IOC_EP_FILTER_SET for any endpoint,
      * and we should not crash (at least in NDEBUG build). */
     ci_assert(ep->os_port_keeper);
-    ci_assert( ! in_atomic() );
-    ci_assert( ~ep->thr->netif.flags & CI_NETIF_FLAG_IN_DL_CONTEXT );
+    ci_assert(! in_atomic());
+    ci_assert(~ep->thr->netif.flags & CI_NETIF_FLAG_IN_DL_CONTEXT);
     ci_assert_equal(protocol, IPPROTO_UDP);
 
     /* Closing a listening socket without being able to get the stack
@@ -419,41 +410,40 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
     if( os_sock_ref != NULL ) {
       fput(os_sock_ref);
       os_sock_ref = NULL;
-    }
-    else {
-      OO_DEBUG_ERR(ci_log(
-        "ERROR: %s is changing the socket [%d:%d] filter to "
-        "%s " IPX_PORT_FMT " -> " IPX_PORT_FMT ", "
-        "the filter already exists and there is no backing socket.  "
-        "Something went awry.",
-        __func__, ep->thr->id, OO_SP_FMT(ep->id),
-        protocol == IPPROTO_UDP ? "UDP" : "TCP",
-        IPX_ARG(AF_IP(laddr)), lport, IPX_ARG(AF_IP(raddr)), rport));
+    } else {
+      OO_DEBUG_ERR(
+          ci_log("ERROR: %s is changing the socket [%d:%d] filter to "
+                 "%s " IPX_PORT_FMT " -> " IPX_PORT_FMT ", "
+                 "the filter already exists and there is no backing socket.  "
+                 "Something went awry.",
+              __func__, ep->thr->id, OO_SP_FMT(ep->id),
+              protocol == IPPROTO_UDP ? "UDP" : "TCP", IPX_ARG(AF_IP(laddr)),
+              lport, IPX_ARG(AF_IP(raddr)), rport));
       ci_assert(0);
     }
-    if( protocol == IPPROTO_UDP && !CI_IPX_ADDR_IS_ANY(raddr) &&
+    if( protocol == IPPROTO_UDP && ! CI_IPX_ADDR_IS_ANY(raddr) &&
         CI_IPX_ADDR_IS_ANY(ep->oofilter.sf_raddr) ) {
       return oof_udp_connect(oo_filter_ns_to_manager(ep->thr->filter_ns),
-                             &ep->oofilter, af_space, laddr, raddr, rport);
+          &ep->oofilter, af_space, laddr, raddr, rport);
     }
     if( protocol != IPPROTO_UDP ) {
       /* UDP re-connect is OK, but we do not expect anything else.
        * We've already crashed in DEBUG, but let's complain in NDEBUG. */
-      OO_DEBUG_ERR(ci_log(
-        "ERROR: %s is changing the socket [%d:%d] filter to "
-        "%s " IPX_PORT_FMT" -> " IPX_PORT_FMT ", "
-        "but some filter is already installed.  Something went awry.",
-        __func__, ep->thr->id, OO_SP_FMT(ep->id),
-        protocol == IPPROTO_UDP ? "UDP" : "TCP",
-        IPX_ARG(AF_IP(laddr)), lport, IPX_ARG(AF_IP(raddr)), rport));
+      OO_DEBUG_ERR(
+          ci_log("ERROR: %s is changing the socket [%d:%d] filter to "
+                 "%s " IPX_PORT_FMT " -> " IPX_PORT_FMT ", "
+                 "but some filter is already installed.  Something went awry.",
+              __func__, ep->thr->id, OO_SP_FMT(ep->id),
+              protocol == IPPROTO_UDP ? "UDP" : "TCP", IPX_ARG(AF_IP(laddr)),
+              lport, IPX_ARG(AF_IP(raddr)), rport));
       /* Filter is cleared so that endpoint comes back to consistent state:
        * tcp sockets after failed set filter operations have no filter.
        * However, as we are afraid that endpoint is compromised we
        * return error to prevent its use. */
-      tcp_helper_endpoint_clear_filters
-        (ep,
-         (ni->flags & CI_NETIF_FLAG_IN_DL_CONTEXT) ?
-            EP_CLEAR_FILTERS_FLAG_SUPRESS_HW : 0);
+      tcp_helper_endpoint_clear_filters(
+          ep, (ni->flags & CI_NETIF_FLAG_IN_DL_CONTEXT)
+                  ? EP_CLEAR_FILTERS_FLAG_SUPRESS_HW
+                  : 0);
       return -EALREADY;
     }
     oof_socket_del(oo_filter_ns_to_manager(ep->thr->filter_ns), &ep->oofilter);
@@ -468,19 +458,20 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
     rc = ci_tcp_sock_set_stack_filter(ni, SP_TO_SOCK(ni, ep->id));
   else
 #endif
-  if( OO_SP_NOT_NULL(from_tcp_id) )
+      if( OO_SP_NOT_NULL(from_tcp_id) )
     rc = oof_socket_share(oo_filter_ns_to_manager(ep->thr->filter_ns),
-                          &ep->oofilter, &listen_ep->oofilter,
-                          af_space, laddr, raddr, lport, rport);
+        &ep->oofilter, &listen_ep->oofilter, af_space, laddr, raddr, lport,
+        rport);
   else {
     int flags;
-    ci_assert( ! in_atomic() );
-    ci_assert( ~ep->thr->netif.flags & CI_NETIF_FLAG_IN_DL_CONTEXT );
+    ci_assert(! in_atomic());
+    ci_assert(~ep->thr->netif.flags & CI_NETIF_FLAG_IN_DL_CONTEXT);
 
     flags =
 #if CI_CFG_ENDPOINT_MOVE
-        (ep->thr->thc != NULL && (s->s_flags & CI_SOCK_FLAG_REUSEPORT) != 0) ?
-            OOF_SOCKET_ADD_FLAG_CLUSTERED :
+        (ep->thr->thc != NULL && (s->s_flags & CI_SOCK_FLAG_REUSEPORT) != 0)
+            ? OOF_SOCKET_ADD_FLAG_CLUSTERED
+            :
 #endif
             0;
 
@@ -500,22 +491,22 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
     }
 
     rc = oof_socket_add(oo_filter_ns_to_manager(ep->thr->filter_ns),
-                        &ep->oofilter, flags, protocol,
-                        af_space, laddr, lport, raddr, rport, NULL);
+        &ep->oofilter, flags, protocol, af_space, laddr, lport, raddr, rport,
+        NULL);
 #if CI_CFG_ENDPOINT_MOVE
     if( rc != 0 && rc != -EFILTERSSOME &&
         (s->s_flags & CI_SOCK_FLAG_REUSEADDR) &&
         tcp_helper_endpoint_reuseaddr_cleanup(&ep->thr->netif, s) ) {
       rc = oof_socket_add(oo_filter_ns_to_manager(ep->thr->filter_ns),
-                          &ep->oofilter, flags, protocol,
-                          af_space, laddr, lport, raddr, rport, NULL);
+          &ep->oofilter, flags, protocol, af_space, laddr, lport, raddr, rport,
+          NULL);
     }
 #endif
     if( rc == 0 || rc == -EFILTERSSOME )
       s->s_flags |= CI_SOCK_FLAG_FILTER;
   }
 
- set_os_port_keeper_and_out:
+set_os_port_keeper_and_out:
   if( os_sock_ref != NULL && (rc == 0 || rc == -EFILTERSSOME) )
     os_sock_ref = oo_file_xchg(&ep->os_port_keeper, os_sock_ref);
   if( os_sock_ref != NULL )
@@ -525,8 +516,9 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
   if( rc == 0 && enable_recycler ) {
     int intf_i;
     int stream_count = 0;
-    ci_assert( ! in_atomic() );
-    OO_STACK_FOR_EACH_INTF_I(ni, intf_i) {
+    ci_assert(! in_atomic());
+    OO_STACK_FOR_EACH_INTF_I(ni, intf_i)
+    {
       struct xsn_ceph_create_stream create;
       ci_netif_state_nic_t* nsn = &ni->state->nic[intf_i];
 
@@ -537,10 +529,10 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
       if( ! ci_netif_tcp_plugin_uses_p2h(ni, intf_i) &&
           intf_i != s->pkt.intf_i )
         continue;
-      create = (struct xsn_ceph_create_stream){
+      create = (struct xsn_ceph_create_stream) {
         .tcp.in_app_id = cpu_to_le32(ni->nic_hw[intf_i].plugin_rx_app_id),
         .tcp.in_user_mark = cpu_to_le32(ep->id),
-        .tcp.in_synchronised = false,   /* passive-open not supported */
+        .tcp.in_synchronised = false, /* passive-open not supported */
         .tcp.in_source_ip = raddr.ip4,
         .tcp.in_dest_ip = laddr.ip4,
         .tcp.in_source_port = rport,
@@ -548,7 +540,7 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
         .in_data_buf_capacity = NI_OPTS(ni).ceph_data_buf_bytes,
       };
       rc = efrm_ext_msg(ni->nic_hw[intf_i].plugin_rx, XSN_CEPH_CREATE_STREAM,
-                        &create, sizeof(create));
+          &create, sizeof(create));
       if( rc ) {
         OO_DEBUG_ERR(ci_log("ERROR: Can't create Ceph stream state (%d)", rc));
         continue;
@@ -564,13 +556,12 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
     }
     if( stream_count > 0 ) {
       rc = 0;
-    }
-    else {
+    } else {
       /* Current policy is to hand over, so choose an error code that will
        * cause this. We may add alternative options later. */
       rc = -EBUSY;
-      oof_socket_del(oo_filter_ns_to_manager(ep->thr->filter_ns),
-                     &ep->oofilter);
+      oof_socket_del(
+          oo_filter_ns_to_manager(ep->thr->filter_ns), &ep->oofilter);
     }
   }
 #endif
@@ -589,32 +580,28 @@ tcp_helper_endpoint_set_filters(tcp_helper_endpoint_t* ep,
  *
  *--------------------------------------------------------------------*/
 
-int
-tcp_helper_endpoint_clear_filters(tcp_helper_endpoint_t* ep,
-                                  int flags)
+int tcp_helper_endpoint_clear_filters(tcp_helper_endpoint_t* ep, int flags)
 {
   struct file* os_sock_ref;
   ci_sock_cmn* s = SP_TO_SOCK(&ep->thr->netif, ep->id);
   int rc = 0;
   int handled_flags = CI_SOCK_FLAG_FILTER | CI_SOCK_FLAG_STACK_FILTER;
 
-  OO_DEBUG_TCPH(
-    ci_log("%s: [%d:%d] %s%s%s", __FUNCTION__, ep->thr->id, OO_SP_FMT(ep->id),
-           in_atomic() ? "ATOMIC":"",
-           flags & EP_CLEAR_FILTERS_FLAG_SUPRESS_HW ? " SUPRESS_HW":"",
-           flags & EP_CLEAR_FILTERS_FLAG_NEED_UPDATE ? " NEED_UPDATE":"")
-  );
+  OO_DEBUG_TCPH(ci_log("%s: [%d:%d] %s%s%s", __FUNCTION__, ep->thr->id,
+      OO_SP_FMT(ep->id), in_atomic() ? "ATOMIC" : "",
+      flags & EP_CLEAR_FILTERS_FLAG_SUPRESS_HW ? " SUPRESS_HW" : "",
+      flags & EP_CLEAR_FILTERS_FLAG_NEED_UPDATE ? " NEED_UPDATE" : ""));
 
   /* Sockets have either FILTER or MAC_FILTER with exception of
    * scalable SO_REUSEPORT listen sockets, which can have both */
   ci_assert_impl(! (s->b.state == CI_TCP_LISTEN &&
-                    (s->s_flags & CI_SOCK_FLAG_REUSEPORT) != 0),
-                 (s->s_flags & CI_SOCK_FLAG_FILTER) == 0 ||
-                 (s->s_flags & CI_SOCK_FLAG_STACK_FILTER) == 0);
+                     (s->s_flags & CI_SOCK_FLAG_REUSEPORT) != 0),
+      (s->s_flags & CI_SOCK_FLAG_FILTER) == 0 ||
+          (s->s_flags & CI_SOCK_FLAG_STACK_FILTER) == 0);
 
 #if CI_CFG_FD_CACHING
   if( (flags & EP_CLEAR_FILTERS_FLAG_NEED_UPDATE) &&
-      !(s->s_flags & CI_SOCK_FLAGS_SCALABLE) )
+      ! (s->s_flags & CI_SOCK_FLAGS_SCALABLE) )
     tcp_helper_endpoint_update_filter_details(ep);
 #endif
 
@@ -622,11 +609,12 @@ tcp_helper_endpoint_clear_filters(tcp_helper_endpoint_t* ep,
     ci_assert_flags(flags, EP_CLEAR_FILTERS_FLAG_SUPRESS_HW);
   }
 
-  if( (s->s_flags & (CI_SOCK_FLAGS_SCALABLE | CI_SOCK_FLAG_STACK_FILTER)) != 0 ) {
+  if( (s->s_flags & (CI_SOCK_FLAGS_SCALABLE | CI_SOCK_FLAG_STACK_FILTER)) !=
+      0 ) {
 #ifndef BREAK_SCALABLE_FILTERS
     if( (s->s_flags & CI_SOCK_FLAG_STACK_FILTER) != 0 )
-      ci_tcp_sock_clear_stack_filter(&ep->thr->netif,
-                                     SP_TO_TCP(&ep->thr->netif,ep->id));
+      ci_tcp_sock_clear_stack_filter(
+          &ep->thr->netif, SP_TO_TCP(&ep->thr->netif, ep->id));
 #endif
 
     if( (s->s_flags & CI_SOCK_FLAG_FILTER) == 0 ) {
@@ -645,8 +633,8 @@ tcp_helper_endpoint_clear_filters(tcp_helper_endpoint_t* ep,
      * delivered to this endpoint.  Defer oof_socket_del() if needed
      * to non-atomic context.
      */
-    if( oof_socket_del_sw(oo_filter_ns_to_manager(ep->thr->filter_ns),
-                          &ep->oofilter) ) {
+    if( oof_socket_del_sw(
+            oo_filter_ns_to_manager(ep->thr->filter_ns), &ep->oofilter) ) {
       tcp_helper_endpoint_queue_non_atomic(ep, OO_THR_EP_AFLAG_CLEAR_FILTERS);
       /* If we have been called from atomic context, we sill might actually
        * have a hw filter. However in such a case there is a non-atomic work
@@ -654,20 +642,18 @@ tcp_helper_endpoint_clear_filters(tcp_helper_endpoint_t* ep,
        * socket filter flags */
       rc = -EAGAIN;
       handled_flags = CI_SOCK_FLAG_STACK_FILTER;
-    }
-    else {
+    } else {
       os_sock_ref = oo_file_xchg(&ep->os_port_keeper, NULL);
       if( os_sock_ref != NULL )
         fput(os_sock_ref);
     }
-  }
-  else
+  } else
 #endif
   {
     clear_plugin_state(ep);
     oof_socket_del(oo_filter_ns_to_manager(ep->thr->filter_ns), &ep->oofilter);
-    oof_socket_mcast_del_all(oo_filter_ns_to_manager(ep->thr->filter_ns),
-                             &ep->oofilter);
+    oof_socket_mcast_del_all(
+        oo_filter_ns_to_manager(ep->thr->filter_ns), &ep->oofilter);
     os_sock_ref = oo_file_xchg(&ep->os_port_keeper, NULL);
     if( os_sock_ref != NULL )
       fput(os_sock_ref);
@@ -697,16 +683,14 @@ bail_out:
  * This function MUST NOT clear software filters from ep_from,
  * because there might be handled packets for it in the stack rx queue.
  */
-int
-tcp_helper_endpoint_move_filters_pre(tcp_helper_endpoint_t* ep_from,
-                                     tcp_helper_endpoint_t* ep_to,
-                                     int drop_filter)
+int tcp_helper_endpoint_move_filters_pre(tcp_helper_endpoint_t* ep_from,
+    tcp_helper_endpoint_t* ep_to, int drop_filter)
 {
   struct file* os_sock_ref;
   int rc;
   ci_sock_cmn* s = SP_TO_SOCK(&ep_from->thr->netif, ep_from->id);
 
-  ci_assert(!in_atomic());
+  ci_assert(! in_atomic());
 
   if( ep_to->os_port_keeper != NULL ) {
     ci_log("%s: non-null target port keeper", __func__);
@@ -718,21 +702,20 @@ tcp_helper_endpoint_move_filters_pre(tcp_helper_endpoint_t* ep_from,
       ep_from->oofilter.sf_local_port != NULL ) {
     if( (s->s_flags & CI_SOCK_FLAG_REUSEPORT) != 0 &&
         (NI_OPTS(&ep_from->thr->netif).cluster_ignore == 0 ||
-         NI_OPTS(&ep_to->thr->netif).cluster_ignore == 0) ) {
-      LOG_E(ci_log("%s: ERROR: reuseport being set and socket not closed",
-                   __func__));
+            NI_OPTS(&ep_to->thr->netif).cluster_ignore == 0) ) {
+      LOG_E(ci_log(
+          "%s: ERROR: reuseport being set and socket not closed", __func__));
       return -EINVAL;
     }
     rc = tcp_helper_endpoint_set_filters(ep_to, CI_IFID_BAD, OO_SP_NULL);
     if( rc != 0 )
       return rc;
-  }
-  else {
+  } else {
     /* Before further operations we need to ensure no clear filter operations
      * is pending, typically tcp_helper_endpoint_set_filters() would do that
      * but we do not call it here */
     rc = tcp_helper_flush_clear_filters(ep_to);
-    if(CI_UNLIKELY( rc < 0 ))
+    if( CI_UNLIKELY(rc < 0) )
       return rc;
   }
 
@@ -757,9 +740,8 @@ tcp_helper_endpoint_move_filters_pre(tcp_helper_endpoint_t* ep_from,
  * All ep_from filters should be cleared;
  * ep_to should have properly-installed filters.
  */
-void
-tcp_helper_endpoint_move_filters_post(tcp_helper_endpoint_t* ep_from,
-                                      tcp_helper_endpoint_t* ep_to)
+void tcp_helper_endpoint_move_filters_post(
+    tcp_helper_endpoint_t* ep_from, tcp_helper_endpoint_t* ep_to)
 {
   tcp_helper_endpoint_clear_filters(ep_from, 0);
 }
@@ -768,9 +750,8 @@ tcp_helper_endpoint_move_filters_post(tcp_helper_endpoint_t* ep_from,
  * All ep_to filters should be cleared;
  * ep_from should have properly-installed filters.
  */
-void
-tcp_helper_endpoint_move_filters_undo(tcp_helper_endpoint_t* ep_from,
-                                      tcp_helper_endpoint_t* ep_to)
+void tcp_helper_endpoint_move_filters_undo(
+    tcp_helper_endpoint_t* ep_from, tcp_helper_endpoint_t* ep_to)
 {
   struct file* os_sock_ref;
 
@@ -786,42 +767,39 @@ tcp_helper_endpoint_move_filters_undo(tcp_helper_endpoint_t* ep_from,
   tcp_helper_endpoint_clear_filters(ep_to, 0);
 }
 
-void
-tcp_helper_endpoint_update_filter_details(tcp_helper_endpoint_t* ep)
+void tcp_helper_endpoint_update_filter_details(tcp_helper_endpoint_t* ep)
 {
   ci_netif* ni = &ep->thr->netif;
   ci_sock_cmn* s = SP_TO_SOCK(ni, ep->id);
   struct oof_manager* om = oo_filter_ns_to_manager(ep->thr->filter_ns);
 
-  if( !(s->s_flags & (CI_SOCK_FLAG_STACK_FILTER | CI_SOCK_FLAGS_SCALABLE)) )
-    oof_socket_update_sharer_details(om, &ep->oofilter,
-                                     sock_ipx_raddr(s), sock_rport_be16(s));
+  if( ! (s->s_flags & (CI_SOCK_FLAG_STACK_FILTER | CI_SOCK_FLAGS_SCALABLE)) )
+    oof_socket_update_sharer_details(
+        om, &ep->oofilter, sock_ipx_raddr(s), sock_rport_be16(s));
 }
 
 static void oof_socket_dump_fn(void* arg, oo_dump_log_fn_t log, void* log_arg)
 {
-/* FIXME SCJ OOF */
+  /* FIXME SCJ OOF */
   oof_onload_socket_dump(&efab_tcp_driver, arg, log, log_arg);
 }
 
 
 static void oof_manager_dump_fn(void* arg, oo_dump_log_fn_t log, void* log_arg)
 {
-/* FIXME SCJ OOF */
+  /* FIXME SCJ OOF */
   oof_onload_manager_dump(&efab_tcp_driver, log, log_arg);
 }
 
 
-int
-tcp_helper_endpoint_filter_dump(tcp_helper_resource_t* thr, oo_sp sockp,
-                                void* user_buf, int user_buf_len)
+int tcp_helper_endpoint_filter_dump(
+    tcp_helper_resource_t* thr, oo_sp sockp, void* user_buf, int user_buf_len)
 {
   if( OO_SP_NOT_NULL(sockp) ) {
     tcp_helper_endpoint_t* ep = ci_trs_get_valid_ep(thr, sockp);
-    return oo_dump_to_user(oof_socket_dump_fn, &ep->oofilter,
-                           user_buf, user_buf_len);
-  }
-  else {
+    return oo_dump_to_user(
+        oof_socket_dump_fn, &ep->oofilter, user_buf, user_buf_len);
+  } else {
     return oo_dump_to_user(oof_manager_dump_fn, NULL, user_buf, user_buf_len);
   }
 }
@@ -840,11 +818,10 @@ tcp_helper_endpoint_filter_dump(tcp_helper_resource_t* thr, oo_sp sockp,
  *
  *--------------------------------------------------------------------*/
 
-int
-tcp_helper_endpoint_shutdown(tcp_helper_resource_t* thr, oo_sp ep_id,
-                             int how, ci_uint32 old_state)
+int tcp_helper_endpoint_shutdown(
+    tcp_helper_resource_t* thr, oo_sp ep_id, int how, ci_uint32 old_state)
 {
-  tcp_helper_endpoint_t * ep = ci_trs_get_valid_ep(thr, ep_id);
+  tcp_helper_endpoint_t* ep = ci_trs_get_valid_ep(thr, ep_id);
   int rc, supress_hw_ops = thr->netif.flags & CI_NETIF_FLAG_IN_DL_CONTEXT;
 
   ci_assert_equal(old_state, CI_TCP_LISTEN);
@@ -852,27 +829,27 @@ tcp_helper_endpoint_shutdown(tcp_helper_resource_t* thr, oo_sp ep_id,
   /* This must be done before we remove filters, as the information must be
    * correct for sockets sharing our filter when we do the un-share fixup.
    */
-  ci_tcp_listen_update_cached(&thr->netif,
-                              SP_TO_TCP_LISTEN(&thr->netif, ep->id));
+  ci_tcp_listen_update_cached(
+      &thr->netif, SP_TO_TCP_LISTEN(&thr->netif, ep->id));
 #endif
 
   /* Calling shutdown on the socket unbinds it in most situations.
    * Since we must never have a filter configured for an unbound
    * socket, we clear the filters here. */
   tcp_helper_endpoint_clear_filters(
-                ep, supress_hw_ops ? EP_CLEAR_FILTERS_FLAG_SUPRESS_HW : 0);
+      ep, supress_hw_ops ? EP_CLEAR_FILTERS_FLAG_SUPRESS_HW : 0);
   /* Filter flags should have been cleared by
    * tcp_helper_endpoint_clear_filters.
    */
   ci_assert_nflags(SP_TO_SOCK(&thr->netif, ep_id)->s_flags,
-                   (CI_SOCK_FLAG_FILTER | CI_SOCK_FLAG_STACK_FILTER));
+      (CI_SOCK_FLAG_FILTER | CI_SOCK_FLAG_STACK_FILTER));
 
   rc = efab_tcp_helper_shutdown_os_sock(ep, how);
 
 #if ! CI_CFG_UL_INTERRUPT_HELPER
   ci_assert(ci_netif_is_locked(&thr->netif));
-  ci_tcp_listen_shutdown_queues(&thr->netif,
-                                SP_TO_TCP_LISTEN(&thr->netif, ep->id));
+  ci_tcp_listen_shutdown_queues(
+      &thr->netif, SP_TO_TCP_LISTEN(&thr->netif, ep->id));
 #endif
   return rc;
 }

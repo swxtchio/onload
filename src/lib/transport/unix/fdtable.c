@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2003-2020 Xilinx, Inc. */
 /**************************************************************************\
-*//*! \file
+ *//*! \file
 ** <L5_PRIVATE L5_SOURCE>
 ** \author  djr/ctk
 **  \brief  Table mapping [fd]s to userlevel state.
@@ -10,7 +10,7 @@
 ** </L5_PRIVATE>
 *//*
 \**************************************************************************/
-  
+
 /*! \cidoxg_lib_transport_unix */
 
 #include "internal.h"
@@ -32,20 +32,20 @@
 #include <ci/internal/banner.h>
 
 /* FIXME Yes, it is ugly. But we do not have any appropriate header */
-#define CI_ID_POOL_ID_NONE ((unsigned)(-1))
+#define CI_ID_POOL_ID_NONE ((unsigned) (-1))
 
 #define DEBUGPREINIT(x)
 
 
-citp_fdtable_globals	citp_fdtable;
+citp_fdtable_globals citp_fdtable;
 
 /* Initial seqno should differ from the seqno in special fdi, such as
  * citp_the_closed_fd */
 ci_uint64 fdtable_seq_no = 1;
 
 
-static void dup2_complete(citp_fdinfo* prev_newfdi,
-			  citp_fdinfo_p prev_newfdip, int fdt_locked);
+static void dup2_complete(
+    citp_fdinfo* prev_newfdi, citp_fdinfo_p prev_newfdip, int fdt_locked);
 
 
 static void exit_with_status(int status)
@@ -54,15 +54,15 @@ static void exit_with_status(int status)
   if( WIFEXITED(status) )
     ci_sys__exit(WEXITSTATUS(status));
   else if( WIFSIGNALED(status) )
-    ci_sys_syscall(__NR_tgkill, getpid(), ci_sys_syscall(__NR_gettid),
-                   WTERMSIG(status));
+    ci_sys_syscall(
+        __NR_tgkill, getpid(), ci_sys_syscall(__NR_gettid), WTERMSIG(status));
 
   return;
 }
 
 void oo_signal_terminate(int signum)
 {
-  struct sigaction act = { };
+  struct sigaction act = {};
 
   Log_CALL(ci_log("%s(%d)", __func__, signum));
 
@@ -78,7 +78,8 @@ void oo_signal_terminate(int signum)
 
 static void sighandler_sigonload(int sig, siginfo_t* info, void* context)
 {
-  /* The signal was sent solely in order to wake up the app, so nothing to do */
+  /* The signal was sent solely in order to wake up the app, so nothing to do
+   */
 }
 
 /* Hook to be called at gracious exit */
@@ -98,8 +99,8 @@ void oo_exit_hook(int status)
 
   do {
     old_status = exit_status;
-  } while( ci_cas32u_fail(&exit_status, old_status,
-                          status | OO_EXIT_STATUS_SET) );
+  } while(
+      ci_cas32u_fail(&exit_status, old_status, status | OO_EXIT_STATUS_SET) );
 
   if( old_status != 0 ) {
     if( status != 0 ) {
@@ -108,8 +109,7 @@ void oo_exit_hook(int status)
        */
       exit_with_status(status);
       return;
-    }
-    else {
+    } else {
       /* This hook have already been called, from either _exit() or signal.
        * Now we are in _fini(): return.
        */
@@ -140,24 +140,22 @@ static citp_fdinfo_p citp_fdtable_closing_wait(unsigned fd, int fdt_locked);
 
 #ifdef __x86_64__
 #if __GNUC__ >= 6
-__attribute__((force_align_arg_pointer))
-static long oo_close_nocancel_entry(long fd)
+__attribute__((force_align_arg_pointer)) static long oo_close_nocancel_entry(
+    long fd)
 #else
 extern long oo_close_nocancel_entry(long fd);
 __asm__(
-  ".globl oo_close_nocancel_entry;"
-  "oo_close_nocancel_entry:"
+    ".globl oo_close_nocancel_entry;"
+    "oo_close_nocancel_entry:"
     "push %rbp;"
     "mov  %rsp,%rbp;"
     "and  $0xfffffffffffffff0,%rsp;"
     "call close_nocancel_entry_fixed;"
     "mov  %rbp,%rsp;"
     "pop  %rbp;"
-    "ret;"
-);
+    "ret;");
 
-__attribute__((used))
-static long close_nocancel_entry_fixed(long fd)
+__attribute__((used)) static long close_nocancel_entry_fixed(long fd)
 #endif
 #else
 static long oo_close_nocancel_entry(long fd)
@@ -179,7 +177,7 @@ static long oo_close_nocancel_entry(long fd)
 
   Log_CALL(ci_log("%s: close_nocancel(%ld)", __func__, fd));
   citp_enter_lib(&lib_context);
-  rc = citp_ep_close((int)fd);
+  rc = citp_ep_close((int) fd);
   citp_exit_lib(&lib_context, false);
   Log_CALL_RESULT(rc);
   return rc;
@@ -190,7 +188,7 @@ static long oo_close_nocancel_entry(long fd)
 static void aarch64_write_ptr_insns(void* dst, const void* value)
 {
   unsigned* u = dst;
-  uintptr_t v = (uintptr_t)value;
+  uintptr_t v = (uintptr_t) value;
   u[0] |= ((v >> 0) & 0xffff) << 5;
   u[1] |= ((v >> 16) & 0xffff) << 5;
   u[2] |= ((v >> 32) & 0xffff) << 5;
@@ -208,8 +206,8 @@ static int modify_glibc_code(void* dst, const void* src, size_t n)
   /* This patching is thread-unsafe, but happens at process startup when
    * there's only one thread */
   patch_page_start = CI_PTR_ALIGN_BACK(dst, CI_PAGE_SIZE);
-  patch_page_size = (char*)CI_PTR_ALIGN_FWD((char*)dst + n, CI_PAGE_SIZE) -
-                    (char*)patch_page_start;
+  patch_page_size = (char*) CI_PTR_ALIGN_FWD((char*) dst + n, CI_PAGE_SIZE) -
+                    (char*) patch_page_start;
   rc = mprotect(patch_page_start, patch_page_size, PROT_READ | PROT_WRITE);
   if( rc != 0 ) {
     rc = -errno;
@@ -220,23 +218,25 @@ static int modify_glibc_code(void* dst, const void* src, size_t n)
   rc = mprotect(patch_page_start, patch_page_size, PROT_READ | PROT_EXEC);
   if( rc != 0 ) {
     rc = -errno;
-    ci_log("CRITICAL: mprotect(glibc exec) = %d. "
-            "Process will likely crash now", errno);
+    ci_log(
+        "CRITICAL: mprotect(glibc exec) = %d. "
+        "Process will likely crash now",
+        errno);
     return rc;
   }
   return 0;
 }
 
 #ifdef __x86_64__
-static const unsigned char x64_endbr[] = {0xf3, 0x0f, 0x1e, 0xfa};
-static const unsigned char x64_nop[] = {0x90};
+static const unsigned char x64_endbr[] = { 0xf3, 0x0f, 0x1e, 0xfa };
+static const unsigned char x64_nop[] = { 0x90 };
 
 /* Returns the length of the given instruction, if it's one of the
  * instructions that we expect to find in the implementation of libc's
  * _IO_file_close. Currently this is just some movs */
 static int is_io_file_close_insn(const unsigned char* insn)
 {
-  if( insn[0] == 0x8b ) {   /* mov r,r/m */
+  if( insn[0] == 0x8b ) { /* mov r,r/m */
     bool has_sib = (insn[1] & 7) == 4 && insn[1] < 0xc0;
     bool has_disp8 = (insn[1] >> 6) == 1;
     bool has_disp32 = (insn[1] >> 6) == 2 || (insn[1] & 0xc7) == 0x04;
@@ -273,9 +273,9 @@ static void* find_close_nocancel(void)
       io_file_close += sizeof(x64_nop);
     while( (n = is_io_file_close_insn(io_file_close)) != 0 )
       io_file_close += n;
-    if( *io_file_close != 0xe9 )  /* jmp rel32 */
+    if( *io_file_close != 0xe9 ) /* jmp rel32 */
       return NULL;
-    return io_file_close + 5 + *(uint32_t*)(io_file_close + 1);
+    return io_file_close + 5 + *(uint32_t*) (io_file_close + 1);
   }
 #else
   /* We do not do extra searching on aarch64, since we don't support old glibc
@@ -296,17 +296,17 @@ static int patch_libc_close_nocancel(void)
 #ifdef __x86_64__
   {
     static const unsigned char sysclose[] = {
-      0xb8, 0x03, 0x00, 0x00, 0x00,   /* mov $3, %eax */
-      0x0f, 0x05                      /* syscall */
+      0xb8, 0x03, 0x00, 0x00, 0x00, /* mov $3, %eax */
+      0x0f, 0x05                    /* syscall */
     };
     static const unsigned char call_rax[] = {
-      0xff, 0xd0                      /* call *%rax */
+      0xff, 0xd0 /* call *%rax */
     };
     static const unsigned char trampo_code[] = {
-      0xf3, 0x0f, 0x1e, 0xfa,         /* endbr64 */
-      0x48, 0xb8, 0xef, 0xcd, 0xab, 0x89, 0x67,
-      0x45, 0x23, 0x01,               /* movabs $0x123456789abcdef,%rax */
-      0xff, 0xe0,                     /* jmpq *%rax */
+      0xf3, 0x0f, 0x1e, 0xfa, /* endbr64 */
+      0x48, 0xb8, 0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23,
+      0x01,       /* movabs $0x123456789abcdef,%rax */
+      0xff, 0xe0, /* jmpq *%rax */
     };
     unsigned char new_glibc_bytes[6];
     unsigned char* trampoline;
@@ -328,13 +328,13 @@ static int patch_libc_close_nocancel(void)
       return -ESRCH;
     }
     trampoline = mmap(NULL, sizeof(trampo_code), PROT_READ | PROT_WRITE,
-                      MAP_32BIT | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        MAP_32BIT | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if( trampoline == MAP_FAILED ) {
       rc = -errno;
       LOG_S(ci_log("__close_nocancel mmap failed: %d", errno));
       return rc;
     }
-    ci_assert_le((uintptr_t)trampoline, 0xffffffff);
+    ci_assert_le((uintptr_t) trampoline, 0xffffffff);
     memcpy(trampoline, trampo_code, sizeof(trampo_code));
     memcpy(trampoline + 6, &target, sizeof(void*));
     rc = mprotect(trampoline, CI_PAGE_SIZE, PROT_READ | PROT_EXEC);
@@ -346,35 +346,35 @@ static int patch_libc_close_nocancel(void)
 
     memcpy(new_glibc_bytes, &trampoline, 4);
     memcpy(new_glibc_bytes + 4, call_rax, sizeof(call_rax));
-    return modify_glibc_code(close_nocancel + 1, new_glibc_bytes,
-                             sizeof(new_glibc_bytes));
+    return modify_glibc_code(
+        close_nocancel + 1, new_glibc_bytes, sizeof(new_glibc_bytes));
   }
 #elif defined __aarch64__
   {
     static const unsigned expected[] = {
-      0x93407c00,   /* sxtw x0, w0 */
-      0xd2800728,   /* mov  x8, #57 */
-      0xd4000001,   /* svc  #0 */
+      0x93407c00, /* sxtw x0, w0 */
+      0xd2800728, /* mov  x8, #57 */
+      0xd4000001, /* svc  #0 */
     };
     unsigned replacement[] = {
-      0xd2a00008,   /* mov	x8, #0xnnnn0000 */
-      0xf2c00008,   /* movk	x8, #0xnnnn, lsl #32 */
-      0xd61f0100,   /* br x8 */
+      0xd2a00008, /* mov	x8, #0xnnnn0000 */
+      0xf2c00008, /* movk	x8, #0xnnnn, lsl #32 */
+      0xd61f0100, /* br x8 */
     };
     static const unsigned trampo_code[] = {
-      0xa9bf7bfd,   /* stp  x29, x30, [sp, #-16]! */
-      0x910003fd,   /* mov  x29, sp */
-      0xd2800008,   /* mov  x8, #0xnnnn */
-      0xf2a00008,   /* movk x8, #0xnnnn, lsl #16 */
-      0xf2c00008,   /* movk x8, #0xnnnn, lsl #32 */
-      0xf2e00008,   /* movk x8, #0xnnnn, lsl #48 */
-      0xd63f0100,   /* blr  x8 */
-      0xa8c17bfd,   /* ldp  x29, x30, [sp], #16 */
-      0xd2800008,   /* mov  x8, #0xnnnn */
-      0xf2a00008,   /* movk x8, #0xnnnn, lsl #16 */
-      0xf2c00008,   /* movk x8, #0xnnnn, lsl #32 */
-      0xf2e00008,   /* movk x8, #0xnnnn, lsl #48 */
-      0xd61f0100,   /* br x8 */
+      0xa9bf7bfd, /* stp  x29, x30, [sp, #-16]! */
+      0x910003fd, /* mov  x29, sp */
+      0xd2800008, /* mov  x8, #0xnnnn */
+      0xf2a00008, /* movk x8, #0xnnnn, lsl #16 */
+      0xf2c00008, /* movk x8, #0xnnnn, lsl #32 */
+      0xf2e00008, /* movk x8, #0xnnnn, lsl #48 */
+      0xd63f0100, /* blr  x8 */
+      0xa8c17bfd, /* ldp  x29, x30, [sp], #16 */
+      0xd2800008, /* mov  x8, #0xnnnn */
+      0xf2a00008, /* movk x8, #0xnnnn, lsl #16 */
+      0xf2c00008, /* movk x8, #0xnnnn, lsl #32 */
+      0xf2e00008, /* movk x8, #0xnnnn, lsl #48 */
+      0xd61f0100, /* br x8 */
     };
     void* trampo_area;
     unsigned* trampoline;
@@ -389,22 +389,22 @@ static int patch_libc_close_nocancel(void)
      * and map only the useful page. AArch64 has only a 48-bit virtual address
      * space, so we get a pointer we can fit in to two mov instructions. */
     trampo_area = mmap(NULL, 65536, PROT_NONE,
-                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if( trampo_area == MAP_FAILED ) {
       rc = -errno;
       LOG_S(ci_log("__close_nocancel reservation failed: %d", errno));
       return rc;
     }
-    trampoline = (unsigned*)CI_PTR_ALIGN_FWD(trampo_area, 65536);
+    trampoline = (unsigned*) CI_PTR_ALIGN_FWD(trampo_area, 65536);
     if( mmap(trampoline, CI_PAGE_SIZE, PROT_READ | PROT_WRITE,
-             MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0) != trampoline ) {
+            MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0) != trampoline ) {
       rc = -errno;
       LOG_S(ci_log("__close_nocancel mmap failed: %d", errno));
       return rc;
     }
     memcpy(trampoline, trampo_code, sizeof(trampo_code));
     aarch64_write_ptr_insns(trampoline + 2, oo_close_nocancel_entry);
-    aarch64_write_ptr_insns(trampoline + 8, (unsigned*)close_nocancel + 3);
+    aarch64_write_ptr_insns(trampoline + 8, (unsigned*) close_nocancel + 3);
     rc = mprotect(trampoline, CI_PAGE_SIZE, PROT_READ | PROT_EXEC);
     if( rc != 0 ) {
       rc = -errno;
@@ -412,10 +412,10 @@ static int patch_libc_close_nocancel(void)
       return rc;
     }
 
-    ci_assert_equal((uintptr_t)trampoline & 0xffff, 0);
-    ci_assert_equal((uintptr_t)trampoline >> 48, 0);
-    replacement[0] |= (((uintptr_t)trampoline >> 16) & 0xffff) << 5;
-    replacement[1] |= (((uintptr_t)trampoline >> 32) & 0xffff) << 5;
+    ci_assert_equal((uintptr_t) trampoline & 0xffff, 0);
+    ci_assert_equal((uintptr_t) trampoline >> 48, 0);
+    replacement[0] |= (((uintptr_t) trampoline >> 16) & 0xffff) << 5;
+    replacement[1] |= (((uintptr_t) trampoline >> 32) & 0xffff) << 5;
     return modify_glibc_code(close_nocancel, replacement, sizeof(replacement));
   }
 #else
@@ -437,11 +437,11 @@ int citp_fdtable_ctor()
 
   Log_S(log("%s:", __FUNCTION__));
 
-  /* How big should our fdtable be by default?  It's pretty arbitrary, but we have
-   * seen a few apps that use setrlimit to set the fdtable to 4096 entries on
-   * start-up (see bugs 3253 and 3373), so we choose that.  (Note: we can't grow
-   * the table if the app later does setrlimit, and unused entries consume virtual
-   * space only, so it's worth allocating a table of reasonable sized.)
+  /* How big should our fdtable be by default?  It's pretty arbitrary, but we
+   * have seen a few apps that use setrlimit to set the fdtable to 4096 entries
+   * on start-up (see bugs 3253 and 3373), so we choose that.  (Note: we can't
+   * grow the table if the app later does setrlimit, and unused entries consume
+   * virtual space only, so it's worth allocating a table of reasonable sized.)
    */
   citp_fdtable.size = 4096;
 
@@ -449,34 +449,33 @@ int citp_fdtable_ctor()
     citp_fdtable.size = rlim.rlim_max;
     if( CITP_OPTS.fdtable_size != 0 &&
         CITP_OPTS.fdtable_size != rlim.rlim_max ) {
-      Log_S(ci_log("Set the limits for the number of opened files "
-                   "to EF_FDTABLE_SIZE=%u value.",
-                   CITP_OPTS.fdtable_size));
+      Log_S(
+          ci_log("Set the limits for the number of opened files "
+                 "to EF_FDTABLE_SIZE=%u value.",
+              CITP_OPTS.fdtable_size));
       rlim.rlim_max = CITP_OPTS.fdtable_size;
       if( rlim.rlim_cur > rlim.rlim_max )
         rlim.rlim_cur = rlim.rlim_max;
       if( ci_sys_setrlimit(RLIMIT_NOFILE, &rlim) == 0 )
-          citp_fdtable.size = rlim.rlim_max;
+        citp_fdtable.size = rlim.rlim_max;
       else {
         /* Most probably, we've got EPERM */
         ci_assert_lt(citp_fdtable.size, CITP_OPTS.fdtable_size);
         ci_log("Can't set EF_FDTABLE_SIZE=%u; using %u",
-               CITP_OPTS.fdtable_size, citp_fdtable.size);
+            CITP_OPTS.fdtable_size, citp_fdtable.size);
         rlim.rlim_max = rlim.rlim_cur = citp_fdtable.size;
         CI_TRY(ci_sys_setrlimit(RLIMIT_NOFILE, &rlim));
       }
     }
-  }
-  else
+  } else
     Log_S(ci_log("Assume EF_FDTABLE_SIZE=%u", citp_fdtable.size));
 
   citp_fdtable.inited_count = 0;
 
-  citp_fdtable.table = malloc(sizeof (citp_fdtable_entry) *
-                              citp_fdtable.size);
+  citp_fdtable.table = malloc(sizeof(citp_fdtable_entry) * citp_fdtable.size);
   if( ! citp_fdtable.table ) {
     Log_U(log("%s: failed to allocate fdtable (0x%x)", __FUNCTION__,
-              citp_fdtable.size));
+        citp_fdtable.size));
     return -1;
   }
 
@@ -496,7 +495,8 @@ int citp_fdtable_ctor()
 
   rc = patch_libc_close_nocancel();
   if( rc < 0 ) {
-    Log_E(log("%s: Didn't intercept libc internal close %d", __FUNCTION__, rc));
+    Log_E(
+        log("%s: Didn't intercept libc internal close %d", __FUNCTION__, rc));
     /* Which is bad, but not fatal */
   }
 
@@ -509,17 +509,17 @@ int citp_fdtable_ctor()
 }
 
 
-#if !defined (NDEBUG) || CI_CFG_FDTABLE_CHECKS
+#if ! defined(NDEBUG) || CI_CFG_FDTABLE_CHECKS
 /* This function does some simple tests to ensure that the fdtable makes sense.
  * There are many more tests we could do; feel free to add them at your
  * leisure!
  */
-void
-citp_fdtable_assert_valid(void)
+void citp_fdtable_assert_valid(void)
 {
   int i;
 
-  if( ! citp_fdtable.table )  return;
+  if( ! citp_fdtable.table )
+    return;
 
   CITP_FDTABLE_LOCK_RD();
 
@@ -527,26 +527,26 @@ citp_fdtable_assert_valid(void)
     citp_fdinfo_p fdip = citp_fdtable.table[i].fdip;
 
     if( fdip_is_normal(fdip) ) {
-      citp_fdinfo * fdi = fdip_to_fdi(fdip);
+      citp_fdinfo* fdi = fdip_to_fdi(fdip);
 
       ci_assert(fdi);
       ci_assert(fdi->protocol);
-      if( ( fdi->protocol->type == CITP_TCP_SOCKET ||
-            fdi->protocol->type == CITP_UDP_SOCKET )
-          && fdi_to_socket(fdi)->s )
-	ci_assert(! (fdi_to_socket(fdi)->s->b.sb_aflags & CI_SB_AFLAG_ORPHAN));
+      if( (fdi->protocol->type == CITP_TCP_SOCKET ||
+              fdi->protocol->type == CITP_UDP_SOCKET) &&
+          fdi_to_socket(fdi)->s )
+        ci_assert(! (fdi_to_socket(fdi)->s->b.sb_aflags & CI_SB_AFLAG_ORPHAN));
 
-      if (!fdi->is_special) {
+      if( ! fdi->is_special ) {
         /* Ensure the "back pointer" makes sense */
-        ci_assert (fdi->fd == i);
+        ci_assert(fdi->fd == i);
         /* Ensure that the reference count is in a vaguely sensible range */
-        ci_assert ((oo_atomic_read (&fdi->ref_count) > 0) &&
-                   (oo_atomic_read (&fdi->ref_count) < 10000));
+        ci_assert((oo_atomic_read(&fdi->ref_count) > 0) &&
+                  (oo_atomic_read(&fdi->ref_count) < 10000));
 
         /* 10,000 threads is a bit mad, warn if more than 20 */
-        if (oo_atomic_read (&fdi->ref_count) > 20) {
-          Log_U (log ("Warning: fd %d's ref-count suspiciously large (%d)\n",
-                      i, oo_atomic_read (&fdi->ref_count)));
+        if( oo_atomic_read(&fdi->ref_count) > 20 ) {
+          Log_U(log("Warning: fd %d's ref-count suspiciously large (%d)\n", i,
+              oo_atomic_read(&fdi->ref_count)));
         }
       }
     }
@@ -557,19 +557,21 @@ citp_fdtable_assert_valid(void)
 #endif
 
 
-static void fdtable_swap(unsigned fd, citp_fdinfo_p from,
-			 citp_fdinfo_p to, int fdt_locked)
+static void fdtable_swap(
+    unsigned fd, citp_fdinfo_p from, citp_fdinfo_p to, int fdt_locked)
 {
   volatile citp_fdinfo_p* p_fdip;
   citp_fdinfo_p fdip;
 
   p_fdip = &citp_fdtable.table[fd].fdip;
 
- again:
+again:
   fdip = *p_fdip;
-  if( fdip_is_busy(fdip) )  fdip = citp_fdtable_busy_wait(fd, fdt_locked);
+  if( fdip_is_busy(fdip) )
+    fdip = citp_fdtable_busy_wait(fd, fdt_locked);
   ci_assert_equal(fdip, from);
-  if( fdip_cas_fail(p_fdip, from, to) )  goto again;
+  if( fdip_cas_fail(p_fdip, from, to) )
+    goto again;
 }
 
 /* If this is called with OO_IOC_TCP_HANDOVER the stack lock must be held */
@@ -597,9 +599,8 @@ static int fdtable_fd_move(ci_fd_t sock_fd, int op)
   return rc;
 }
 
-static int
-citp_fdtable_probe_restore(int fd, ci_ep_info_t * info, int print_banner,
-                           citp_fdinfo_p* fdip_out)
+static int citp_fdtable_probe_restore(
+    int fd, ci_ep_info_t* info, int print_banner, citp_fdinfo_p* fdip_out)
 {
   citp_protocol_impl* proto = 0;
   citp_fdinfo* fdi = 0;
@@ -613,25 +614,30 @@ citp_fdtable_probe_restore(int fd, ci_ep_info_t * info, int print_banner,
 
   /* Will need to review this function if the following assert fires */
   switch( info->fd_flags & OO_FDFLAG_EP_MASK ) {
-  case OO_FDFLAG_EP_TCP:  proto = &citp_tcp_protocol_impl;  break;
-  case OO_FDFLAG_EP_UDP:  proto = &citp_udp_protocol_impl;  break;
-  case OO_FDFLAG_EP_PASSTHROUGH:
-    proto = &citp_passthrough_protocol_impl;
-    c_sock_fdi = 0;
-    break;
-  case OO_FDFLAG_EP_ALIEN:
-    proto = NULL;
-    c_sock_fdi = 0;
-    break;
-  case OO_FDFLAG_EP_PIPE_READ:
-    proto = &citp_pipe_read_protocol_impl;
-    c_sock_fdi = 0;
-    break;
-  case OO_FDFLAG_EP_PIPE_WRITE:
-    proto = &citp_pipe_write_protocol_impl;
-    c_sock_fdi = 0;
-    break;
-  default:                   ci_assert(0);
+    case OO_FDFLAG_EP_TCP:
+      proto = &citp_tcp_protocol_impl;
+      break;
+    case OO_FDFLAG_EP_UDP:
+      proto = &citp_udp_protocol_impl;
+      break;
+    case OO_FDFLAG_EP_PASSTHROUGH:
+      proto = &citp_passthrough_protocol_impl;
+      c_sock_fdi = 0;
+      break;
+    case OO_FDFLAG_EP_ALIEN:
+      proto = NULL;
+      c_sock_fdi = 0;
+      break;
+    case OO_FDFLAG_EP_PIPE_READ:
+      proto = &citp_pipe_read_protocol_impl;
+      c_sock_fdi = 0;
+      break;
+    case OO_FDFLAG_EP_PIPE_WRITE:
+      proto = &citp_pipe_write_protocol_impl;
+      c_sock_fdi = 0;
+      break;
+    default:
+      ci_assert(0);
   }
 
   /* Attempt to find the user-level netif for this endpoint */
@@ -641,17 +647,16 @@ citp_fdtable_probe_restore(int fd, ci_ep_info_t * info, int print_banner,
 
     /* Not found, rebuild/restore the netif for this endpoint */
     rc = citp_netif_recreate_probed(fd, &netif_fd, &ni);
-    if ( rc < 0 ) {
-      Log_E(log("%s: citp_netif_recreate_probed failed! (%d)",
-		__FUNCTION__, rc));
+    if( rc < 0 ) {
+      Log_E(log(
+          "%s: citp_netif_recreate_probed failed! (%d)", __FUNCTION__, rc));
       goto fail;
     }
 
     if( print_banner ) {
       ci_netif_log_startup_banner(ni, "Importing");
     }
-  }
-  else
+  } else
     citp_netif_add_ref(ni);
 
   /* There is a race condition where the fd can have been created, but it has
@@ -667,7 +672,7 @@ citp_fdtable_probe_restore(int fd, ci_ep_info_t * info, int print_banner,
     return rc;
   }
 
-  if (c_sock_fdi) {
+  if( c_sock_fdi ) {
     citp_sock_fdi* sock_fdi;
 
     sock_fdi = CI_ALLOC_OBJ(citp_sock_fdi);
@@ -680,14 +685,13 @@ citp_fdtable_probe_restore(int fd, ci_ep_info_t * info, int print_banner,
 
     sock_fdi->sock.s = SP_TO_SOCK_CMN(ni, info->sock_id);
     sock_fdi->sock.netif = ni;
-  }
-  else if( info->fd_flags & OO_FDFLAG_EP_PASSTHROUGH ) {
+  } else if( info->fd_flags & OO_FDFLAG_EP_PASSTHROUGH ) {
     citp_waitable* w = SP_TO_WAITABLE(ni, info->sock_id);
     citp_alien_fdi* alien_fdi;
     if( ~w->sb_aflags & CI_SB_AFLAG_MOVED_AWAY_IN_EPOLL &&
         fdtable_fd_move(fd, OO_IOC_FILE_MOVED) == 0 ) {
       citp_netif_release_ref(ni, 1);
-      *fdip_out = fdip_passthru; 
+      *fdip_out = fdip_passthru;
       return rc;
     }
 
@@ -756,11 +760,12 @@ citp_fdtable_probe_restore(int fd, ci_ep_info_t * info, int print_banner,
   /* We're returning a reference to the caller. */
   citp_fdinfo_ref(fdi);
   citp_fdtable_insert(fdi, fd, 1);
-  *fdip_out = fdi_to_fdip(fdi); 
+  *fdip_out = fdi_to_fdip(fdi);
   return rc;
- 
- fail:
-  if( ni  )  citp_netif_release_ref(ni, 1);
+
+fail:
+  if( ni )
+    citp_netif_release_ref(ni, 1);
   *fdip_out = fdip_unknown;
   return rc;
 }
@@ -769,9 +774,8 @@ citp_fdtable_probe_restore(int fd, ci_ep_info_t * info, int print_banner,
 /* Find out what sort of thing [fd] is, and if it is a user-level socket
  * then map in the user-level state.
  */
-static int
-citp_fdtable_probe_locked(unsigned fd, int print_banner,
-                          int fdip_is_already_busy, citp_fdinfo** fdi_out)
+static int citp_fdtable_probe_locked(unsigned fd, int print_banner,
+    int fdip_is_already_busy, citp_fdinfo** fdi_out)
 {
   citp_fdinfo* fdi = NULL;
   struct stat64 st;
@@ -785,14 +789,17 @@ citp_fdtable_probe_locked(unsigned fd, int print_banner,
     ** this keeps it cleaner.  May optimise down the line when I understand
     ** what other code needs to call this.
     */
-    
+
     p_fdip = &citp_fdtable.table[fd].fdip;
-   again:
+  again:
     fdip = *p_fdip;
-    if( fdip_is_busy(fdip) )  fdip = citp_fdtable_busy_wait(fd, 1);
-    if( ! fdip_is_unknown(fdip) && ! fdip_is_normal(fdip) )  goto exit;
-    if( fdip_cas_fail(p_fdip, fdip, fdip_busy) )  goto again;
-    
+    if( fdip_is_busy(fdip) )
+      fdip = citp_fdtable_busy_wait(fd, 1);
+    if( ! fdip_is_unknown(fdip) && ! fdip_is_normal(fdip) )
+      goto exit;
+    if( fdip_cas_fail(p_fdip, fdip, fdip_busy) )
+      goto again;
+
     if( fdip_is_normal(fdip) ) {
       fdi = fdip_to_fdi(fdip);
       citp_fdinfo_ref(fdi);
@@ -814,61 +821,62 @@ citp_fdtable_probe_locked(unsigned fd, int print_banner,
 
   /* oo_get_st_rdev() and oo_onloadfs_dev_t() open-and-close fd, so
    * fdtable should be locked if strict mode requested. */
-  if( fdtable_strict() )  { CITP_FDTABLE_ASSERT_LOCKED(1); }
+  if( fdtable_strict() ) {
+    CITP_FDTABLE_ASSERT_LOCKED(1);
+  }
 
-  if(  st.st_dev == oo_onloadfs_dev_t() ) {
+  if( st.st_dev == oo_onloadfs_dev_t() ) {
     /* Retrieve user-level endpoint info */
     if( oo_ep_info(fd, &info) < 0 ) {
-      Log_V(log("%s: fd=%d unknown type "OO_FDFLAG_FMT,
-                __FUNCTION__, fd, OO_FDFLAG_ARG(info.fd_flags)));
+      Log_V(log("%s: fd=%d unknown type " OO_FDFLAG_FMT, __FUNCTION__, fd,
+          OO_FDFLAG_ARG(info.fd_flags)));
       citp_fdtable_busy_clear(fd, fdip_passthru, 1);
       goto exit;
     }
 
     switch( info.fd_flags & (OO_FDFLAG_EP_MASK | OO_FDFLAG_STACK) ) {
-    case OO_FDFLAG_EP_TCP:
-    case OO_FDFLAG_EP_UDP:
-    case OO_FDFLAG_EP_PASSTHROUGH:
-    case OO_FDFLAG_EP_ALIEN:
-    case OO_FDFLAG_EP_PIPE_READ:
-    case OO_FDFLAG_EP_PIPE_WRITE:
-    {
-      citp_fdinfo_p fdip;
+      case OO_FDFLAG_EP_TCP:
+      case OO_FDFLAG_EP_UDP:
+      case OO_FDFLAG_EP_PASSTHROUGH:
+      case OO_FDFLAG_EP_ALIEN:
+      case OO_FDFLAG_EP_PIPE_READ:
+      case OO_FDFLAG_EP_PIPE_WRITE: {
+        citp_fdinfo_p fdip;
 
-      Log_V(log("%s: fd=%d restore type "OO_FDFLAG_FMT, __FUNCTION__, fd,
-                OO_FDFLAG_ARG(info.fd_flags)));
-      rc = citp_fdtable_probe_restore(fd, &info, print_banner, &fdip);
-      if( fdip_is_normal(fdip) )
-        fdi = fdip_to_fdi(fdip);
-      else
-        citp_fdtable_busy_clear(fd, fdip, 1);
-      goto exit;
-    }
+        Log_V(log("%s: fd=%d restore type " OO_FDFLAG_FMT, __FUNCTION__, fd,
+            OO_FDFLAG_ARG(info.fd_flags)));
+        rc = citp_fdtable_probe_restore(fd, &info, print_banner, &fdip);
+        if( fdip_is_normal(fdip) )
+          fdi = fdip_to_fdi(fdip);
+        else
+          citp_fdtable_busy_clear(fd, fdip, 1);
+        goto exit;
+      }
 
-    case OO_FDFLAG_STACK:
-      /* This should never happen, because netif fds are close-on-exec.
-      ** But let's leave this code here just in case my reasoning is bad.
-      */
-      Log_U(log("%s: fd=%d NETIF reserved", __FUNCTION__, fd));
-      citp_fdtable_busy_clear(fd, fdip_reserved, 1);
-      fdi = &citp_the_reserved_fd;
-      citp_fdinfo_ref(fdi);
-      goto exit;
+      case OO_FDFLAG_STACK:
+        /* This should never happen, because netif fds are close-on-exec.
+        ** But let's leave this code here just in case my reasoning is bad.
+        */
+        Log_U(log("%s: fd=%d NETIF reserved", __FUNCTION__, fd));
+        citp_fdtable_busy_clear(fd, fdip_reserved, 1);
+        fdi = &citp_the_reserved_fd;
+        citp_fdinfo_ref(fdi);
+        goto exit;
 
-    default:
-      /* This happens if a thread gets at an onload driver fd that has just
-       * been created, but not yet specialised.  On Linux I think this
-       * means it will shortly be a new netif internal fd.  (fds associated
-       * with sockets and pipes are never unspecialised).
-       */
-      Log_V(log("%s: fd=%d TYPE_NONE", __FUNCTION__, fd));
-      citp_fdtable_busy_clear(fd, fdip_passthru, 1);
-      goto exit;
+      default:
+        /* This happens if a thread gets at an onload driver fd that has just
+         * been created, but not yet specialised.  On Linux I think this
+         * means it will shortly be a new netif internal fd.  (fds associated
+         * with sockets and pipes are never unspecialised).
+         */
+        Log_V(log("%s: fd=%d TYPE_NONE", __FUNCTION__, fd));
+        citp_fdtable_busy_clear(fd, fdip_passthru, 1);
+        goto exit;
     }
   }
 #if CI_CFG_EPOLL2
   else if( ci_major(st.st_rdev) == ci_major(oo_get_st_rdev(OO_EPOLL_DEV)) ) {
-    citp_epollb_fdi *epi = CI_ALLOC_OBJ(citp_epollb_fdi);
+    citp_epollb_fdi* epi = CI_ALLOC_OBJ(citp_epollb_fdi);
     if( ! epi ) {
       Log_E(log("%s: out of memory (epoll_fdi)", __FUNCTION__));
       citp_fdtable_busy_clear(fd, fdip_passthru, 1);
@@ -894,13 +902,12 @@ citp_fdtable_probe_locked(unsigned fd, int print_banner,
   Log_V(log("%s: fd=%u non-efab", __FUNCTION__, fd));
   citp_fdtable_busy_clear(fd, fdip_passthru, 1);
 
- exit:
+exit:
   *fdi_out = fdi;
   return rc;
 }
 
-static citp_fdinfo *
-citp_fdtable_probe(unsigned fd)
+static citp_fdinfo* citp_fdtable_probe(unsigned fd)
 {
   citp_fdinfo* fdi;
   int saved_errno;
@@ -919,19 +926,18 @@ citp_fdtable_probe(unsigned fd)
   return fdi;
 }
 
-static int
-citp_fdinfo_is_consistent(citp_fdinfo* fdi)
+static int citp_fdinfo_is_consistent(citp_fdinfo* fdi)
 {
   switch( fdi->protocol->type ) {
-  case CITP_TCP_SOCKET:
-  case CITP_UDP_SOCKET:
-    return ~fdi_to_sock_fdi(fdi)->sock.s->b.sb_aflags & CI_SB_AFLAG_MOVED_AWAY;
+    case CITP_TCP_SOCKET:
+    case CITP_UDP_SOCKET:
+      return ~fdi_to_sock_fdi(fdi)->sock.s->b.sb_aflags &
+             CI_SB_AFLAG_MOVED_AWAY;
   }
   return CI_TRUE;
 }
 
-citp_fdinfo *
-citp_fdtable_lookup(unsigned fd)
+citp_fdinfo* citp_fdtable_lookup(unsigned fd)
 {
   /* Note that if we haven't yet initialised this module, then
   ** [inited_count] will be zero, and the following test will fail.  So the
@@ -946,7 +952,6 @@ citp_fdtable_lookup(unsigned fd)
   ci_assert(oo_per_thread_get()->sig.c.inside_lib);
 
   if( fd < citp_fdtable.inited_count ) {
-
     volatile citp_fdinfo_p* p_fdip = &citp_fdtable.table[fd].fdip;
     citp_fdinfo_p fdip;
 
@@ -956,49 +961,48 @@ citp_fdtable_lookup(unsigned fd)
 
     if( fdip_is_normal(fdip) ) {
       if( citp_fdtable_not_mt_safe() ) {
-	if( fdip_cas_succeed(p_fdip, fdip, fdip_busy) ) {
-	  fdi = fdip_to_fdi(fdip);
-	  ci_assert(fdi);
-	  ci_assert_gt(oo_atomic_read(&fdi->ref_count), 0);
-	  ci_assert(fdip_is_closing(fdip) || fdip_is_reserved(fdip) ||
-		    fdi->fd == fd);
-	  /* Bump the reference count. */
-	  citp_fdinfo_ref(fdi);
+        if( fdip_cas_succeed(p_fdip, fdip, fdip_busy) ) {
+          fdi = fdip_to_fdi(fdip);
+          ci_assert(fdi);
+          ci_assert_gt(oo_atomic_read(&fdi->ref_count), 0);
+          ci_assert(fdip_is_closing(fdip) || fdip_is_reserved(fdip) ||
+                    fdi->fd == fd);
+          /* Bump the reference count. */
+          citp_fdinfo_ref(fdi);
 
           if( ! citp_fdinfo_is_consistent(fdi) ) {
             /* Something is wrong.  Re-probe. */
             fdi = citp_reprobe_moved(fdi, CI_FALSE, CI_TRUE);
-          }
-          else {
+          } else {
             /* Swap the busy marker out again. */
             citp_fdtable_busy_clear(fd, fdip, 0);
           }
-	  return fdi;
-	}
-	goto again;
-      }
-      else {
-	/* No need to use atomic ops when single-threaded.  The definition
+          return fdi;
+        }
+        goto again;
+      } else {
+        /* No need to use atomic ops when single-threaded.  The definition
          * of "fds_mt_safe" is that the app does not change the meaning of
          * a file descriptor in one thread when it is being used in another
          * thread.  In that case I'm hoping this should be safe, but at
          * time of writing I'm really not confident.  (FIXME).
          */
-	fdi = fdip_to_fdi(fdip);
+        fdi = fdip_to_fdi(fdip);
         if( ci_is_multithreaded() )
-	  citp_fdinfo_ref(fdi);
+          citp_fdinfo_ref(fdi);
         else
           ++fdi->ref_count.n;
 
         if( ! citp_fdinfo_is_consistent(fdi) )
           fdi = citp_reprobe_moved(fdi, CI_FALSE, CI_FALSE);
 
-	return fdi;
+        return fdi;
       }
     }
 
     /* Not normal! */
-    if( fdip_is_passthru(fdip) )  return NULL;
+    if( fdip_is_passthru(fdip) )
+      return NULL;
 
     if( fdip_is_busy(fdip) ) {
       citp_fdtable_busy_wait(fd, 0);
@@ -1009,24 +1013,24 @@ citp_fdtable_lookup(unsigned fd)
     goto probe;
   }
 
-  if (citp.init_level < CITP_INIT_FDTABLE) {
-    if (_citp_do_init_inprogress == 0)
+  if( citp.init_level < CITP_INIT_FDTABLE ) {
+    if( _citp_do_init_inprogress == 0 )
       CI_TRY(citp_do_init(CITP_INIT_MAX));
     else
       CI_TRY(citp_do_init(CITP_INIT_FDTABLE)); /* get what we need */
   }
 
-  if( fd >= citp_fdtable.size )  return NULL;
+  if( fd >= citp_fdtable.size )
+    return NULL;
 
- probe:
+probe:
   fdi = citp_fdtable_probe(fd);
 
   return fdi;
 }
 
 
-citp_fdinfo*
-citp_fdtable_lookup_fast(citp_lib_context_t* ctx, unsigned fd)
+citp_fdinfo* citp_fdtable_lookup_fast(citp_lib_context_t* ctx, unsigned fd)
 {
   /* Note that if we haven't yet initialised this module, then
   ** [inited_count] will be zero, and the following test will fail.  So the
@@ -1040,38 +1044,36 @@ citp_fdtable_lookup_fast(citp_lib_context_t* ctx, unsigned fd)
   /* Try to avoid entering lib. */
   ctx->thread = NULL;
 
-  if(CI_LIKELY( fd < citp_fdtable.inited_count )) {
+  if( CI_LIKELY(fd < citp_fdtable.inited_count) ) {
     volatile citp_fdinfo_p* p_fdip = &citp_fdtable.table[fd].fdip;
     citp_fdinfo_p fdip;
 
   again:
     fdip = *p_fdip;
-    if(CI_LIKELY( fdip_is_normal(fdip) )) {
-
+    if( CI_LIKELY(fdip_is_normal(fdip)) ) {
       citp_enter_lib_if(ctx);
       if( citp_fdtable_is_mt_safe() ) {
-	/* No need to use atomic ops or add a ref to the fdi when MT-safe.
+        /* No need to use atomic ops or add a ref to the fdi when MT-safe.
          * The definition of "fds_mt_safe" is that the app does not change
          * the meaning of a file descriptor in one thread when it is being
          * used in another thread.
          */
         fdi = fdip_to_fdi(fdip);
-        if(CI_UNLIKELY( ! citp_fdinfo_is_consistent(fdi) ))
+        if( CI_UNLIKELY(! citp_fdinfo_is_consistent(fdi)) )
           fdi = citp_reprobe_moved(fdi, CI_TRUE, CI_FALSE);
 
-	return fdi;
-      }
-      else {
+        return fdi;
+      } else {
         /* Swap in the busy marker. */
-	if( fdip_cas_succeed(p_fdip, fdip, fdip_busy) ) {
-	  fdi = fdip_to_fdi(fdip);
+        if( fdip_cas_succeed(p_fdip, fdip, fdip_busy) ) {
+          fdi = fdip_to_fdi(fdip);
 
-	  ci_assert(fdi);
-	  ci_assert_gt(oo_atomic_read(&fdi->ref_count), 0);
-	  ci_assert(fdip_is_closing(fdip) || fdip_is_reserved(fdip) ||
-		    fdi->fd == fd);
-	  /* Bump the reference count. */
-	  citp_fdinfo_ref(fdi);
+          ci_assert(fdi);
+          ci_assert_gt(oo_atomic_read(&fdi->ref_count), 0);
+          ci_assert(fdip_is_closing(fdip) || fdip_is_reserved(fdip) ||
+                    fdi->fd == fd);
+          /* Bump the reference count. */
+          citp_fdinfo_ref(fdi);
 
           if( ! citp_fdinfo_is_consistent(fdi) )
             fdi = citp_reprobe_moved(fdi, CI_FALSE, CI_TRUE);
@@ -1079,9 +1081,9 @@ citp_fdtable_lookup_fast(citp_lib_context_t* ctx, unsigned fd)
             /* Swap the busy marker out again. */
             citp_fdtable_busy_clear(fd, fdip, 0);
           }
-	  return fdi;
-	}
-	goto again;
+          return fdi;
+        }
+        goto again;
       }
     }
 
@@ -1109,7 +1111,7 @@ citp_fdtable_lookup_fast(citp_lib_context_t* ctx, unsigned fd)
   if( fd >= citp_fdtable.size )
     return NULL;
 
- probe:
+probe:
   citp_enter_lib_if(ctx);
   fdi = citp_fdtable_probe(fd);
   if( fdi && citp_fdtable_is_mt_safe() )
@@ -1132,7 +1134,7 @@ citp_fdinfo* citp_fdtable_lookup_noprobe(unsigned fd, int fdt_locked)
   ** fdtable lock, and on fail see if we need to initialise it.
   */
   if( CI_UNLIKELY(citp.init_level < CITP_INIT_FDTABLE) ) {
-    if (_citp_do_init_inprogress == 0)
+    if( _citp_do_init_inprogress == 0 )
       CI_TRY(citp_do_init(CITP_INIT_MAX));
     else
       CI_TRY(citp_do_init(CITP_INIT_FDTABLE)); /* get what we need */
@@ -1141,7 +1143,6 @@ citp_fdinfo* citp_fdtable_lookup_noprobe(unsigned fd, int fdt_locked)
   }
 
   if( fd < citp_fdtable.inited_count ) {
-
     volatile citp_fdinfo_p* p_fdip = &citp_fdtable.table[fd].fdip;
     citp_fdinfo_p fdip;
 
@@ -1150,11 +1151,11 @@ citp_fdinfo* citp_fdtable_lookup_noprobe(unsigned fd, int fdt_locked)
     fdip = *p_fdip;
     if( fdip_is_normal(fdip) ) {
       if( fdip_cas_succeed(p_fdip, fdip, fdip_busy) ) {
-	/* Bump the reference count. */
-	citp_fdinfo* fdi = fdip_to_fdi(fdip);
-	citp_fdinfo_ref(fdi);
-	/* Swap the busy marker out again. */
-	citp_fdtable_busy_clear(fd, fdip, fdt_locked);
+        /* Bump the reference count. */
+        citp_fdinfo* fdi = fdip_to_fdi(fdip);
+        citp_fdinfo_ref(fdi);
+        /* Swap the busy marker out again. */
+        citp_fdtable_busy_clear(fd, fdip, fdt_locked);
         return fdi;
       }
       goto again;
@@ -1164,7 +1165,6 @@ citp_fdinfo* citp_fdtable_lookup_noprobe(unsigned fd, int fdt_locked)
       citp_fdtable_busy_wait(fd, fdt_locked);
       goto again;
     }
-
   }
 
   return NULL;
@@ -1177,8 +1177,7 @@ static ci_netif* fd_to_netif(int fd, int fdt_locked)
 
   if( oo_ep_info(fd, &info) < 0 ) {
     Log_V(log("%s: fd=%d unknown", __FUNCTION__, fd));
-  }
-  else {
+  } else {
     ni = citp_find_ul_netif(info.resource_id, fdt_locked);
   }
 
@@ -1201,13 +1200,13 @@ static void citp_fdinfo_do_handover(citp_fdinfo* fdi, int fdt_locked)
 
 
   Log_V(ci_log("%s: fd=%d nonb_switch=%d", __FUNCTION__, fdi->fd,
-	       fdi->on_rcz.handover_nonb_switch));
+      fdi->on_rcz.handover_nonb_switch));
 
   epoll_fdi = citp_epoll_fdi_from_member(fdi, fdt_locked);
 #if CI_CFG_EPOLL2
   if( fdi->epoll_fd >= 0 && epoll_fdi != NULL &&
       epoll_fdi->protocol->type == CITP_EPOLLB_FD ) {
-      citp_epollb_on_handover(epoll_fdi, fdi);
+    citp_epollb_on_handover(epoll_fdi, fdi);
   }
 #endif
 
@@ -1223,7 +1222,7 @@ static void citp_fdinfo_do_handover(citp_fdinfo* fdi, int fdt_locked)
   ci_assert(ni);
   ci_netif_lock(ni);
   /* Remove SO_LINGER flag from the old ep: we want to close it silently */
-  sock->s_flags &=~ CI_SOCK_FLAG_LINGER;
+  sock->s_flags &= ~CI_SOCK_FLAG_LINGER;
   citp_waitable_cleanup(ni, SOCK_TO_WAITABLE_OBJ(sock), 0);
   rc = fdtable_fd_move(fdi->fd, OO_IOC_TCP_HANDOVER);
   ci_netif_unlock(ni);
@@ -1238,15 +1237,17 @@ static void citp_fdinfo_do_handover(citp_fdinfo* fdi, int fdt_locked)
   }
   if( rc != 0 ) {
     citp_fdinfo* new_fdi;
-    if( ! fdt_locked ) CITP_FDTABLE_LOCK();
+    if( ! fdt_locked )
+      CITP_FDTABLE_LOCK();
     citp_fdtable_probe_locked(fdi->fd, CI_TRUE, CI_TRUE, &new_fdi);
     citp_fdinfo_release_ref(new_fdi, 1);
-    if( ! fdt_locked ) CITP_FDTABLE_UNLOCK();
+    if( ! fdt_locked )
+      CITP_FDTABLE_UNLOCK();
     ci_assert_equal(citp_fdinfo_get_type(new_fdi), CITP_PASSTHROUGH_FD);
     os_fd = fdi_to_alien_fdi(new_fdi)->os_socket;
   }
   if( fdi->on_rcz.handover_nonb_switch >= 0 ) {
-    int on_off = !! fdi->on_rcz.handover_nonb_switch;
+    int on_off = ! ! fdi->on_rcz.handover_nonb_switch;
     int rc = ci_sys_ioctl(os_fd, FIONBIO, &on_off);
     if( rc < 0 )
       Log_E(ci_log("%s: ioctl failed on_off=%d", __FUNCTION__, on_off));
@@ -1258,8 +1259,7 @@ exit:
   citp_fdinfo_get_ops(fdi)->dtor(fdi, fdt_locked);
   if( epoll_fdi != NULL && epoll_fdi->protocol->type == CITP_EPOLL_FD ) {
     citp_epoll_on_handover(epoll_fdi, fdi, fdt_locked);
-  }
-  else {
+  } else {
     if( epoll_fdi != NULL )
       citp_fdinfo_release_ref(epoll_fdi, fdt_locked);
     citp_fdinfo_free(fdi);
@@ -1268,23 +1268,23 @@ exit:
 
 #if CI_CFG_FD_CACHING
 /* Closes a cached fd. In the typical case, this boils down to sys_close. */
-static int uncache_fd_ul(ci_netif* ni, ci_tcp_state* ts, int cur_tgid, int quiet)
+static int uncache_fd_ul(
+    ci_netif* ni, ci_tcp_state* ts, int cur_tgid, int quiet)
 {
-  int fd  = ts->cached_on_fd;
+  int fd = ts->cached_on_fd;
   int pid = ts->cached_on_pid;
-  Log_V(ci_log("Uncaching fd %d on pid %d running pid %d", fd,
-               pid, cur_tgid));
+  Log_V(ci_log("Uncaching fd %d on pid %d running pid %d", fd, pid, cur_tgid));
   /* No tasklets or other bottom-halves - we always have "current" */
   if( ts->s.b.sb_aflags & CI_SB_AFLAG_IN_CACHE &&
-      !(ts->s.b.sb_aflags & CI_SB_AFLAG_IN_CACHE_NO_FD) ) {
+      ! (ts->s.b.sb_aflags & CI_SB_AFLAG_IN_CACHE_NO_FD) ) {
     if( pid != cur_tgid ) {
       if( quiet )
         return -1;
       Log_V(ci_log("%s: file cached on unexpected PID %d , expected %d",
-                   __FUNCTION__, pid, cur_tgid));
+          __FUNCTION__, pid, cur_tgid));
       return -1;
     }
-    S_TO_EPS(ni,ts)->fd = CI_FD_BAD;
+    S_TO_EPS(ni, ts)->fd = CI_FD_BAD;
     /* simply close kernel FD, it should not affect endpoint at all */
     ci_tcp_helper_close_no_trampoline(fd);
     CITP_STATS_NETIF_INC(ni, epoll_fd_uncache);
@@ -1293,8 +1293,8 @@ static int uncache_fd_ul(ci_netif* ni, ci_tcp_state* ts, int cur_tgid, int quiet
 }
 
 
-static void
-__citp_uncache_fds_ul(ci_netif* netif, struct oo_p_dllink_state list)
+static void __citp_uncache_fds_ul(
+    ci_netif* netif, struct oo_p_dllink_state list)
 {
   int cur_tgid = getpid();
   ci_tcp_state** eps;
@@ -1307,7 +1307,8 @@ __citp_uncache_fds_ul(ci_netif* netif, struct oo_p_dllink_state list)
     struct oo_p_dllink_state l;
 
     eps = malloc(sizeof(ci_tcp_state*) * n_ep_bufs);
-    oo_p_dllink_for_each(netif, l, list) {
+    oo_p_dllink_for_each(netif, l, list)
+    {
       if( n >= n_ep_bufs ) {
         ci_log("%s: ep %d with n_ep_bufs %d", __FUNCTION__, n, n_ep_bufs);
         break;
@@ -1316,7 +1317,7 @@ __citp_uncache_fds_ul(ci_netif* netif, struct oo_p_dllink_state list)
       ci_assert(ts);
       ci_assert(ci_tcp_is_cached(ts));
       if( ts->s.b.sb_aflags & CI_SB_AFLAG_IN_CACHE &&
-          !(ts->s.b.sb_aflags & CI_SB_AFLAG_IN_CACHE_NO_FD) &&
+          ! (ts->s.b.sb_aflags & CI_SB_AFLAG_IN_CACHE_NO_FD) &&
           ts->cached_on_pid == cur_tgid )
         eps[n++] = ts;
     }
@@ -1325,18 +1326,17 @@ __citp_uncache_fds_ul(ci_netif* netif, struct oo_p_dllink_state list)
   {
     int i;
     for( i = 0; i < n; ++i )
-      uncache_fd_ul(netif, eps[i], cur_tgid, 1/*quiet*/);
+      uncache_fd_ul(netif, eps[i], cur_tgid, 1 /*quiet*/);
   }
   free(eps);
 }
 
 
-void
-citp_uncache_fds_ul(ci_netif* netif)
+void citp_uncache_fds_ul(ci_netif* netif)
 {
   {
     int i;
-    for( i = 0; i < netif->state->n_ep_bufs; ++i) {
+    for( i = 0; i < netif->state->n_ep_bufs; ++i ) {
       int fd = netif->eps[i].fd;
       if( fd != CI_FD_BAD )
         ci_tcp_helper_close_no_trampoline(fd);
@@ -1345,17 +1345,17 @@ citp_uncache_fds_ul(ci_netif* netif)
   return;
   if( netif->cached_count == 0 )
     return;
-  Log_V(ci_log("%s: %d: %s: cached_count %d", __func__,
-               getpid(), netif->state->pretty_name, netif->cached_count));
+  Log_V(ci_log("%s: %d: %s: cached_count %d", __func__, getpid(),
+      netif->state->pretty_name, netif->cached_count));
   /* Remove all fds from the cache that belong to the current process */
-  __citp_uncache_fds_ul(netif, oo_p_dllink_ptr(netif,
-                                &netif->state->passive_scalable_cache.cache));
-  __citp_uncache_fds_ul(netif, oo_p_dllink_ptr(netif,
-                                &netif->state->passive_scalable_cache.pending));
-  __citp_uncache_fds_ul(netif, oo_p_dllink_ptr(netif,
-                                &netif->state->active_cache.cache));
-  __citp_uncache_fds_ul(netif, oo_p_dllink_ptr(netif,
-                                &netif->state->active_cache.pending));
+  __citp_uncache_fds_ul(netif,
+      oo_p_dllink_ptr(netif, &netif->state->passive_scalable_cache.cache));
+  __citp_uncache_fds_ul(netif,
+      oo_p_dllink_ptr(netif, &netif->state->passive_scalable_cache.pending));
+  __citp_uncache_fds_ul(
+      netif, oo_p_dllink_ptr(netif, &netif->state->active_cache.cache));
+  __citp_uncache_fds_ul(
+      netif, oo_p_dllink_ptr(netif, &netif->state->active_cache.pending));
 }
 #endif
 
@@ -1380,8 +1380,8 @@ void __citp_fdinfo_ref_count_zero(citp_fdinfo* fdi, int fdt_locked)
 #if CI_CFG_FD_CACHING
   int cached;
 #endif
-  Log_V(log("%s: fd=%d on_rcz=%d", __FUNCTION__, fdi->fd,
-	    fdi->on_ref_count_zero));
+  Log_V(log(
+      "%s: fd=%d on_rcz=%d", __FUNCTION__, fdi->fd, fdi->on_ref_count_zero));
 
   citp_fdinfo_assert_valid(fdi);
   ci_assert(oo_atomic_read(&fdi->ref_count) == 0);
@@ -1390,80 +1390,85 @@ void __citp_fdinfo_ref_count_zero(citp_fdinfo* fdi, int fdt_locked)
   ci_assert_nequal(fdi_to_fdip(fdi), citp_fdtable.table[fdi->fd].fdip);
 
   switch( fdi->on_ref_count_zero ) {
-  case FDI_ON_RCZ_CLOSE:
+    case FDI_ON_RCZ_CLOSE:
 #if CI_CFG_FD_CACHING
-    cached = citp_fdinfo_get_ops(fdi)->cache(fdi);
-    if( cached == 1 ) {
-      if( ! fdt_locked && fdtable_strict() )  CITP_FDTABLE_LOCK();
-      fdi_to_socket(fdi)->netif->cached_count++;
-      fdtable_swap(fdi->fd, fdip_closing, fdip_unknown,
-                    fdt_locked | fdtable_strict());
-      citp_fdinfo_get_ops(fdi)->dtor(fdi, fdt_locked | fdtable_strict());
-      if( ! fdt_locked && fdtable_strict() )  CITP_FDTABLE_UNLOCK();
-      citp_fdinfo_free(fdi);
-      break;
-    }
-#endif
-    {
-#if CI_CFG_UL_INTERRUPT_HELPER
-      ci_netif* netif = fdi_to_stack(fdi);
-#endif
-
-      /* We mark the fd as busy before closing it to avoid races.  This means
-       * that if this fd is looked up during this phase of the close the looker
-       * upper will have to wait.
-       *
-       * There are problems if we try and keep this safe just by swapping
-       * the unknown and closing fdi entries.  If we set to unknown before
-       * close that could result in things being re-probed in the gap between
-       * setting to uknown and actually closing the fd.  If we close before
-       * setting to unknown then the fd could be re-used by the kernel
-       * without onload seeing it, and lookups would still return the closing
-       * fdi until the unknown entry had been swapped in.
-       */
-      if( ! fdt_locked && fdtable_strict() )  CITP_FDTABLE_LOCK();
-
-      fdtable_swap(fdi->fd, fdip_closing, fdip_busy,
-		   fdt_locked | fdtable_strict());
-      if( fdi->protocol->type == CITP_TCP_SOCKET )
-        SC_TO_EPS(fdi_to_socket(fdi)->netif,fdi_to_socket(fdi)->s)->fd = CI_FD_BAD;
-
-      if( fdi->on_ref_count_zero == FDI_ON_RCZ_CLOSE )
-        ci_tcp_helper_close_no_trampoline(fdi->fd);
-
-#if CI_CFG_UL_INTERRUPT_HELPER
-      /* If it was the last fd for this socket, then we should proceed with
-       * the real closing right now.
-       * Todo: In case of SO_LINGER it is really important to handle it all
-       * here.
-       */
-      if( netif != NULL && ci_netif_trylock(netif) ) {
-        ci_netif_handle_actions(netif);
-        ci_netif_unlock(netif);
+      cached = citp_fdinfo_get_ops(fdi)->cache(fdi);
+      if( cached == 1 ) {
+        if( ! fdt_locked && fdtable_strict() )
+          CITP_FDTABLE_LOCK();
+        fdi_to_socket(fdi)->netif->cached_count++;
+        fdtable_swap(fdi->fd, fdip_closing, fdip_unknown,
+            fdt_locked | fdtable_strict());
+        citp_fdinfo_get_ops(fdi)->dtor(fdi, fdt_locked | fdtable_strict());
+        if( ! fdt_locked && fdtable_strict() )
+          CITP_FDTABLE_UNLOCK();
+        citp_fdinfo_free(fdi);
+        break;
       }
 #endif
+      {
+#if CI_CFG_UL_INTERRUPT_HELPER
+        ci_netif* netif = fdi_to_stack(fdi);
+#endif
 
-      citp_fdtable_busy_clear(fdi->fd, fdip_unknown,
-                              fdt_locked | fdtable_strict());
-      citp_fdinfo_get_ops(fdi)->dtor(fdi, fdt_locked | fdtable_strict());
-      if( ! fdt_locked && fdtable_strict() )  CITP_FDTABLE_UNLOCK();
+        /* We mark the fd as busy before closing it to avoid races.  This means
+         * that if this fd is looked up during this phase of the close the
+         * looker upper will have to wait.
+         *
+         * There are problems if we try and keep this safe just by swapping
+         * the unknown and closing fdi entries.  If we set to unknown before
+         * close that could result in things being re-probed in the gap between
+         * setting to uknown and actually closing the fd.  If we close before
+         * setting to unknown then the fd could be re-used by the kernel
+         * without onload seeing it, and lookups would still return the closing
+         * fdi until the unknown entry had been swapped in.
+         */
+        if( ! fdt_locked && fdtable_strict() )
+          CITP_FDTABLE_LOCK();
+
+        fdtable_swap(
+            fdi->fd, fdip_closing, fdip_busy, fdt_locked | fdtable_strict());
+        if( fdi->protocol->type == CITP_TCP_SOCKET )
+          SC_TO_EPS(fdi_to_socket(fdi)->netif, fdi_to_socket(fdi)->s)->fd =
+              CI_FD_BAD;
+
+        if( fdi->on_ref_count_zero == FDI_ON_RCZ_CLOSE )
+          ci_tcp_helper_close_no_trampoline(fdi->fd);
+
+#if CI_CFG_UL_INTERRUPT_HELPER
+        /* If it was the last fd for this socket, then we should proceed with
+         * the real closing right now.
+         * Todo: In case of SO_LINGER it is really important to handle it all
+         * here.
+         */
+        if( netif != NULL && ci_netif_trylock(netif) ) {
+          ci_netif_handle_actions(netif);
+          ci_netif_unlock(netif);
+        }
+#endif
+
+        citp_fdtable_busy_clear(
+            fdi->fd, fdip_unknown, fdt_locked | fdtable_strict());
+        citp_fdinfo_get_ops(fdi)->dtor(fdi, fdt_locked | fdtable_strict());
+        if( ! fdt_locked && fdtable_strict() )
+          CITP_FDTABLE_UNLOCK();
+        citp_fdinfo_free(fdi);
+        break;
+      }
+    case FDI_ON_RCZ_DUP2:
+      dup2_complete(fdi, fdi_to_fdip(fdi), fdt_locked);
+      break;
+    case FDI_ON_RCZ_HANDOVER:
+      citp_fdinfo_do_handover(fdi, fdt_locked);
+      break;
+    case FDI_ON_RCZ_MOVED:
+      citp_fdinfo_get_ops(fdi)->dtor(fdi, fdt_locked);
       citp_fdinfo_free(fdi);
       break;
-    }
-  case FDI_ON_RCZ_DUP2:
-    dup2_complete(fdi, fdi_to_fdip(fdi), fdt_locked);
-    break;
-  case FDI_ON_RCZ_HANDOVER:
-    citp_fdinfo_do_handover(fdi, fdt_locked);
-    break;
-  case FDI_ON_RCZ_MOVED:
-    citp_fdinfo_get_ops(fdi)->dtor(fdi, fdt_locked);
-    citp_fdinfo_free(fdi);
-    break;
-  default:
-    CI_DEBUG(ci_log("%s: fd=%d on_ref_count_zero=%d", __FUNCTION__,
-		    fdi->fd, fdi->on_ref_count_zero));
-    ci_assert(0);
+    default:
+      CI_DEBUG(ci_log("%s: fd=%d on_ref_count_zero=%d", __FUNCTION__, fdi->fd,
+          fdi->on_ref_count_zero));
+      ci_assert(0);
   }
 }
 
@@ -1483,21 +1488,23 @@ void citp_fdinfo_handover(citp_fdinfo* fdi, int nonb_switch)
   citp_fdinfo_p fdip;
   unsigned fd = fdi->fd;
 
+  LOG_U(ci_log("handing FD over: %d", fdi->fd));
+
   /* We're about to free some user-level state, so we need to interlock
   ** against select and poll.
   */
   CITP_FDTABLE_LOCK();
 
   p_fdip = &citp_fdtable.table[fd].fdip;
- again:
+again:
   fdip = *p_fdip;
-  if( fdip_is_busy(fdip) )  fdip = citp_fdtable_busy_wait(fd, 1);
+  if( fdip_is_busy(fdip) )
+    fdip = citp_fdtable_busy_wait(fd, 1);
 
   if( fdip == fdi_to_fdip(fdi) ) {
     if( fdip_cas_fail(p_fdip, fdip, fdip_busy) )
       goto again;
-  }
-  else {
+  } else {
     /* [fd] must have changed meaning under our feet.  It must be closing,
     ** so do nothing except drop the ref passed in.
     */
@@ -1531,14 +1538,14 @@ void citp_fdtable_fork_hook(void)
 {
   unsigned fd;
 
-  for (fd = 0; fd < citp_fdtable.inited_count; fd++) {
+  for( fd = 0; fd < citp_fdtable.inited_count; fd++ ) {
     citp_fdinfo_p fdip = citp_fdtable.table[fd].fdip;
 
     /* Parent has forked when one of its threads had made an fdtable
      * entry busy.  Here in the child no-one will clear the busy state.
      * We can't do any better than just clearing back to the unknown
      * state. */
-    if (fdip_is_busy(fdip)) {
+    if( fdip_is_busy(fdip) ) {
       citp_fdtable.table[fd].fdip = fdip_unknown;
       continue;
     }
@@ -1546,17 +1553,19 @@ void citp_fdtable_fork_hook(void)
 }
 
 
-citp_fdinfo_p
-citp_fdtable_new_fd_set(unsigned fd, citp_fdinfo_p new_fdip, int fdt_locked)
+citp_fdinfo_p citp_fdtable_new_fd_set(
+    unsigned fd, citp_fdinfo_p new_fdip, int fdt_locked)
 {
   volatile citp_fdinfo_p* p_fdip;
   citp_fdinfo_p prev;
 
   if( fd >= citp_fdtable.inited_count ) {
     ci_assert_lt(fd, citp_fdtable.size);
-    if( ! fdt_locked )  CITP_FDTABLE_LOCK();
+    if( ! fdt_locked )
+      CITP_FDTABLE_LOCK();
     __citp_fdtable_extend(fd);
-    if( ! fdt_locked )  CITP_FDTABLE_UNLOCK();
+    if( ! fdt_locked )
+      CITP_FDTABLE_UNLOCK();
   }
 
   p_fdip = &citp_fdtable.table[fd].fdip;
@@ -1575,17 +1584,16 @@ citp_fdtable_new_fd_set(unsigned fd, citp_fdinfo_p new_fdip, int fdt_locked)
 
     /* Reserved?  Perhaps it was a netif fd that has just been closed.  So it
     ** should be about to be unreserved. */
-  } while (fdip_is_reserved(prev) || fdip_cas_fail(p_fdip, prev, new_fdip) );
+  } while( fdip_is_reserved(prev) || fdip_cas_fail(p_fdip, prev, new_fdip) );
 
   if( fdip_is_normal(prev) ) {
     /* We can get here is close-trampolining fails.  So for release
     ** builds we accept that the user-level state got out-of-sync, and
     ** leak [fdi] since it seems like a suitably cautious thing to do.
     */
-    ci_log("%s: ERROR: Orphaned entry %d in user-level fd-table",
-           __FUNCTION__, fd);
-  }
-  else
+    ci_log("%s: ERROR: Orphaned entry %d in user-level fd-table", __FUNCTION__,
+        fd);
+  } else
     /* We (at time of writing) only register a trampoline handler when we
     ** create a netif, so we can miss the closing of pass-through
     ** descriptors.
@@ -1610,8 +1618,8 @@ void citp_fdtable_insert(citp_fdinfo* fdi, unsigned fd, int fdt_locked)
 }
 
 
-void __citp_fdtable_busy_clear_slow(unsigned fd, citp_fdinfo_p new_fdip,
-				    int fdt_locked)
+void __citp_fdtable_busy_clear_slow(
+    unsigned fd, citp_fdinfo_p new_fdip, int fdt_locked)
 {
   volatile citp_fdinfo_p* p_fdip = &citp_fdtable.table[fd].fdip;
   citp_fdinfo_p fdip, next;
@@ -1623,24 +1631,28 @@ void __citp_fdtable_busy_clear_slow(unsigned fd, citp_fdinfo_p new_fdip,
 
   /* We need to write-lock citp_ul_lock to avoid races between
    * this oo_rwlock_cond_broadcast() and oo_rwlock_cond_wait() below. */
-  if( !fdt_locked )
+  if( ! fdt_locked )
     CITP_FDTABLE_LOCK();
 
- again:
+again:
   fdip = *p_fdip;
   ci_assert(fdip_is_busy(fdip));
   waiter = fdip_to_waiter(fdip);
   ci_assert(waiter);
   ci_assert(fdip_is_busy(waiter->next));
-  if( waiter->next == fdip_busy )  next = new_fdip;
-  else                             next = waiter->next;
-  if( fdip_cas_fail(p_fdip, fdip, next) )  goto again;
+  if( waiter->next == fdip_busy )
+    next = new_fdip;
+  else
+    next = waiter->next;
+  if( fdip_cas_fail(p_fdip, fdip, next) )
+    goto again;
 
   oo_rwlock_cond_broadcast(&waiter->cond);
 
-  if( next != new_fdip )  goto again;
+  if( next != new_fdip )
+    goto again;
 
-  if( !fdt_locked )
+  if( ! fdt_locked )
     CITP_FDTABLE_UNLOCK();
 }
 
@@ -1659,10 +1671,10 @@ citp_fdinfo_p citp_fdtable_busy_wait(unsigned fd, int fdt_locked)
 
   /* We should lock citp_ul_lock before checking the condition which can
    * lead to oo_rwlock_cond_wait() call. */
-  if( !fdt_locked )
+  if( ! fdt_locked )
     CITP_FDTABLE_LOCK();
 
- again:
+again:
   waiter.next = *p_fdip;
   if( fdip_is_busy(waiter.next) ) {
     /* we can replace one "busy" fdip by another without fdtable lock */
@@ -1671,7 +1683,7 @@ citp_fdinfo_p citp_fdtable_busy_wait(unsigned fd, int fdt_locked)
     goto again;
   }
 
-  if( !fdt_locked )
+  if( ! fdt_locked )
     CITP_FDTABLE_UNLOCK();
 
   oo_rwlock_cond_destroy(&waiter.cond);
@@ -1692,9 +1704,10 @@ static citp_fdinfo_p citp_fdtable_closing_wait(unsigned fd, int fdt_locked)
 
   Log_V(ci_log("%s: fd=%u", __FUNCTION__, fd));
 
- again:
+again:
   fdip = *p_fdip;
-  if( fdip_is_busy(fdip)    )  fdip = citp_fdtable_busy_wait(fd, fdt_locked);
+  if( fdip_is_busy(fdip) )
+    fdip = citp_fdtable_busy_wait(fd, fdt_locked);
   if( fdip_is_closing(fdip) ) {
     if( fdt_locked ) {
       /* Need to drop the lock to avoid deadlock with the other thread
@@ -1714,8 +1727,10 @@ void __citp_fdtable_reserve(int fd, int protect)
   CITP_FDTABLE_ASSERT_LOCKED(1);
   ci_assert_lt((unsigned) fd, citp_fdtable.size);
 
-  if( protect )  citp_fdtable_new_fd_set(fd, fdip_reserved, 1);
-  else           fdtable_swap(fd, fdip_reserved, fdip_unknown, 1);
+  if( protect )
+    citp_fdtable_new_fd_set(fd, fdip_reserved, 1);
+  else
+    fdtable_swap(fd, fdip_reserved, fdip_unknown, 1);
 }
 
 
@@ -1743,8 +1758,7 @@ int citp_ep_dup_fcntl_dup_cloexec(int oldfd, long arg)
 ** Why do these live here?  Because they need to hack into the low-level
 ** dirty nastiness of the fdtable.
 */
-int citp_ep_dup(unsigned oldfd, int (*syscall)(int oldfd, long arg),
-		long arg)
+int citp_ep_dup(unsigned oldfd, int (*syscall)(int oldfd, long arg), long arg)
 {
   /* This implements dup(oldfd) and fcntl(oldfd, F_DUPFD, arg). */
 
@@ -1756,8 +1770,8 @@ int citp_ep_dup(unsigned oldfd, int (*syscall)(int oldfd, long arg),
 
   Log_V(log("%s(%d)", __FUNCTION__, oldfd));
 
-  if(CI_UNLIKELY( citp.init_level < CITP_INIT_FDTABLE ||
-                  oo_per_thread_get()->in_vfork_child ))
+  if( CI_UNLIKELY(citp.init_level < CITP_INIT_FDTABLE ||
+                  oo_per_thread_get()->in_vfork_child) )
     /* Lib not initialised, so no U/L state, and therefore system dup()
     ** will do just fine. */
     return syscall(oldfd, arg);
@@ -1773,7 +1787,7 @@ int citp_ep_dup(unsigned oldfd, int (*syscall)(int oldfd, long arg),
   }
 
   p_oldfdip = &citp_fdtable.table[oldfd].fdip;
- again:
+again:
   oldfdip = *p_oldfdip;
   if( fdip_is_busy(oldfdip) )
     oldfdip = citp_fdtable_busy_wait(oldfd, 0);
@@ -1814,18 +1828,20 @@ int citp_ep_dup(unsigned oldfd, int (*syscall)(int oldfd, long arg),
       return -1;
     }
 
-    if( fdtable_strict() )  CITP_FDTABLE_LOCK();
+    if( fdtable_strict() )
+      CITP_FDTABLE_LOCK();
     newfd = syscall(oldfd, arg);
     if( newfd >= 0 )
       citp_fdtable_new_fd_set(newfd, fdip_busy, fdtable_strict());
-    if( fdtable_strict() )  CITP_FDTABLE_UNLOCK();
+    if( fdtable_strict() )
+      CITP_FDTABLE_UNLOCK();
     if( newfd >= 0 ) {
       citp_fdtable_insert(newfdi, newfd, 0);
       newfdi = 0;
     }
-  }
-  else {
-    if( fdtable_strict() )  CITP_FDTABLE_LOCK();
+  } else {
+    if( fdtable_strict() )
+      CITP_FDTABLE_LOCK();
     newfd = syscall(oldfd, arg);
     if( newfd >= 0 && newfd < citp_fdtable.inited_count ) {
       /* Mark newfd as unknown.  When used, it'll get probed.
@@ -1838,19 +1854,21 @@ int citp_ep_dup(unsigned oldfd, int (*syscall)(int oldfd, long arg),
        */
       citp_fdtable_new_fd_set(newfd, fdip_unknown, fdtable_strict());
     }
-    if( fdtable_strict() )  CITP_FDTABLE_UNLOCK();
+    if( fdtable_strict() )
+      CITP_FDTABLE_UNLOCK();
   }
 
   citp_fdtable_busy_clear(oldfd, oldfdip, 0);
-  if( newfdi )  citp_fdinfo_free(newfdi);
+  if( newfdi )
+    citp_fdinfo_free(newfdi);
   return newfd;
 }
 
 
-static void dup2_complete(citp_fdinfo* prev_tofdi,
-			  citp_fdinfo_p prev_tofdip, int fdt_locked)
+static void dup2_complete(
+    citp_fdinfo* prev_tofdi, citp_fdinfo_p prev_tofdip, int fdt_locked)
 {
-  volatile citp_fdinfo_p *p_fromfdip;
+  volatile citp_fdinfo_p* p_fromfdip;
   unsigned fromfd = prev_tofdi->on_rcz.dup3_args.fd;
   unsigned tofd = prev_tofdi->fd;
   citp_fdinfo_p fromfdip;
@@ -1865,7 +1883,7 @@ static void dup2_complete(citp_fdinfo* prev_tofdi,
   citp_fdinfo* fromfdi;
 
   p_fromfdip = &citp_fdtable.table[fromfd].fdip;
- lock_fromfdip_again:
+lock_fromfdip_again:
   fromfdip = *p_fromfdip;
   if( fdip_is_busy(fromfdip) )
     fromfdip = citp_fdtable_busy_wait(fromfd, fdt_locked);
@@ -1878,9 +1896,11 @@ static void dup2_complete(citp_fdinfo* prev_tofdi,
 #if CI_CFG_FD_CACHING
   /* Need to check in case this sucker's cached */
   if( fdip_is_unknown(fromfdip) ) {
-    if( !fdt_locked ) CITP_FDTABLE_LOCK();
+    if( ! fdt_locked )
+      CITP_FDTABLE_LOCK();
     citp_fdtable_probe_locked(fromfd, CI_FALSE, CI_FALSE, &fromfdi);
-    if( !fdt_locked ) CITP_FDTABLE_UNLOCK();
+    if( ! fdt_locked )
+      CITP_FDTABLE_UNLOCK();
     if( fromfdi == &citp_the_closed_fd ) {
       prev_tofdi->on_rcz.dup2_result = -EBADF;
       ci_wmb();
@@ -1907,16 +1927,16 @@ static void dup2_complete(citp_fdinfo* prev_tofdi,
   }
 
   ci_assert(fdip_is_normal(fromfdip) | fdip_is_passthru(fromfdip) |
-	    fdip_is_unknown(fromfdip));
+            fdip_is_unknown(fromfdip));
 
   if( fdip_is_normal(fromfdip) &&
-     (((fromfdi = fdip_to_fdi(fromfdip))->protocol->type) == CITP_EPOLL_FD) ) {
+      (((fromfdi = fdip_to_fdi(fromfdip))->protocol->type) ==
+          CITP_EPOLL_FD) ) {
     citp_fdinfo* newfdi = citp_fdinfo_get_ops(fromfdi)->dup(fromfdi);
     if( newfdi ) {
       citp_fdinfo_init(newfdi, fdip_to_fdi(fromfdip)->protocol);
       citp_fdtable_insert(newfdi, tofd, fdt_locked);
-    }
-    else {
+    } else {
       /* Out of memory.  Can't probe epoll1 fd later on, so fail. */
       citp_fdtable_busy_clear(fromfd, fromfdip, fdt_locked);
       prev_tofdi->on_rcz.dup2_result = -ENOMEM;
@@ -1924,8 +1944,7 @@ static void dup2_complete(citp_fdinfo* prev_tofdi,
       prev_tofdi->on_ref_count_zero = FDI_ON_RCZ_DONE;
       return;
     }
-  }
-  else {
+  } else {
     /* Mark newfd as unknown.  When used, it'll get probed.
      *
      * We are not just being lazy here: Setting to unknown rather than
@@ -2001,7 +2020,7 @@ int citp_ep_dup3(unsigned fromfd, unsigned tofd, int flags)
   pthread_mutex_lock(&citp_dup_lock);
   CITP_FDTABLE_LOCK();
   p_tofdip = &citp_fdtable.table[tofd].fdip;
- lock_tofdip_again:
+lock_tofdip_again:
   tofdip = *p_tofdip;
   if( fdip_is_busy(tofdip) )
     tofdip = citp_fdtable_busy_wait(tofd, 1);
@@ -2011,7 +2030,7 @@ int citp_ep_dup3(unsigned fromfd, unsigned tofd, int flags)
     /* ?? FIXME: we can't cope with this at the moment */
     CITP_FDTABLE_UNLOCK();
     Log_U(log("%s(%d, %d): target is reserved, see EF_ONLOAD_FD_BASE",
-              __FUNCTION__, fromfd, tofd));
+        __FUNCTION__, fromfd, tofd));
     errno = EBUSY;
     tofd = -1;
     goto out;
@@ -2020,7 +2039,7 @@ int citp_ep_dup3(unsigned fromfd, unsigned tofd, int flags)
     goto lock_tofdip_again;
   CITP_FDTABLE_UNLOCK();
   ci_assert(fdip_is_normal(tofdip) | fdip_is_passthru(tofdip) |
- 	    fdip_is_unknown(tofdip));
+            fdip_is_unknown(tofdip));
 
   if( fdip_is_normal(tofdip) ) {
     /* We're duping onto a user-level socket. */
@@ -2055,7 +2074,7 @@ int citp_ep_dup3(unsigned fromfd, unsigned tofd, int flags)
       while( tofdi->on_ref_count_zero != FDI_ON_RCZ_DONE ) {
         if( ci_is_multithreaded() && i % 10000 == 9999 ) {
           pthread_t pth = tofdi->thread_id;
-          if( pth !=  pthread_self() && pth != PTHREAD_NULL ) {
+          if( pth != pthread_self() && pth != PTHREAD_NULL ) {
             pthread_kill(pth, SIGONLOAD);
             sleep(1);
           }
@@ -2073,8 +2092,7 @@ int citp_ep_dup3(unsigned fromfd, unsigned tofd, int flags)
       CI_DEBUG(tofdi->on_ref_count_zero = FDI_ON_RCZ_NONE);
       citp_fdtable_busy_clear(tofd, tofdip, 0);
       tofd = -1;
-    }
-    else {
+    } else {
       ci_assert(tofdi->on_rcz.dup2_result == tofd);
       citp_fdinfo_get_ops(tofdi)->dtor(tofdi, 0);
       citp_fdinfo_free(tofdi);
@@ -2096,12 +2114,11 @@ int citp_ep_dup3(unsigned fromfd, unsigned tofd, int flags)
       errno = -fdi.on_rcz.dup2_result;
       citp_fdtable_busy_clear(tofd, tofdip, 0);
       tofd = -1;
-    }
-    else
+    } else
       ci_assert(fdi.on_rcz.dup2_result == tofd);
   }
 
- out:
+out:
   pthread_mutex_unlock(&citp_dup_lock);
   return tofd;
 }
@@ -2153,14 +2170,15 @@ int citp_ep_close(unsigned fd)
   got_lock = 1;
 
   p_fdip = &citp_fdtable.table[fd].fdip;
- again:
+again:
   fdip = *p_fdip;
-  if( fdip_is_busy(fdip) )  fdip = citp_fdtable_busy_wait(fd, 1);
+  if( fdip_is_busy(fdip) )
+    fdip = citp_fdtable_busy_wait(fd, 1);
 
   if( fdip_is_closing(fdip) | fdip_is_reserved(fdip) ) {
     /* Concurrent close or attempt to close reserved. */
     Log_V(ci_log("%s: fd=%d closing=%d reserved=%d", __FUNCTION__, fd,
-		 fdip_is_closing(fdip), fdip_is_reserved(fdip)));
+        fdip_is_closing(fdip), fdip_is_reserved(fdip)));
     errno = EBADF;
     rc = -1;
     goto done;
@@ -2181,8 +2199,8 @@ int citp_ep_close(unsigned fd)
   }
 #endif
 
-  ci_assert(fdip_is_normal(fdip) | fdip_is_passthru(fdip) |
-	    fdip_is_unknown(fdip));
+  ci_assert(
+      fdip_is_normal(fdip) | fdip_is_passthru(fdip) | fdip_is_unknown(fdip));
 
   /* Swap in the "closed" pseudo-fdinfo.  This lets any other thread know
   ** that we're in the middle of closing this fd.
@@ -2227,22 +2245,21 @@ int citp_ep_close(unsigned fd)
 
     citp_fdinfo_release_ref(fdi, 0);
     rc = 0;
-  }
-  else {
-    ci_assert(fdip_is_passthru(fdip) ||
-	      fdip_is_unknown(fdip));
+  } else {
+    ci_assert(fdip_is_passthru(fdip) || fdip_is_unknown(fdip));
     if( ! fdtable_strict() ) {
       CITP_FDTABLE_UNLOCK();
       got_lock = 0;
     }
     Log_V(ci_log("%s: fd=%d passthru=%d unknown=%d", __FUNCTION__, fd,
-		 fdip_is_passthru(fdip), fdip_is_unknown(fdip)));
+        fdip_is_passthru(fdip), fdip_is_unknown(fdip)));
     fdtable_swap(fd, fdip_closing, fdip_unknown, fdtable_strict());
     rc = ci_tcp_helper_close_no_trampoline(fd);
   }
 
- done:
-  if( got_lock )  CITP_FDTABLE_UNLOCK();
+done:
+  if( got_lock )
+    CITP_FDTABLE_UNLOCK();
   FDTABLE_ASSERT_VALID();
   return rc;
 }
@@ -2252,8 +2269,7 @@ int citp_ep_close(unsigned fd)
  * or from citp_fdtable_lookup_fast().  The _fast() variant is used by
  * read/write/recvmsg/sendto/... socket call interceptors. */
 int citp_reprobe_moved_common(citp_fdinfo* fdinfo, int from_fast_lookup,
-                              int fdip_is_already_busy,
-                              citp_fdinfo** fdinfo_out)
+    int fdip_is_already_busy, citp_fdinfo** fdinfo_out)
 {
   int fd = fdinfo->fd;
   citp_fdinfo* new_fdinfo = NULL;
@@ -2264,14 +2280,16 @@ int citp_reprobe_moved_common(citp_fdinfo* fdinfo, int from_fast_lookup,
   if( ! fdip_is_already_busy ) {
     volatile citp_fdinfo_p* p_fdip;
     citp_fdinfo_p fdip;
-    
+
     p_fdip = &citp_fdtable.table[fd].fdip;
-   again:
+  again:
     fdip = *p_fdip;
-    if( fdip_is_busy(fdip) )  fdip = citp_fdtable_busy_wait(fd, 1);
-    ci_assert( fdip_is_normal(fdip) || fdip_is_passthru(fdip) );
-    if( fdip_cas_fail(p_fdip, fdip, fdip_busy) )  goto again;
-    
+    if( fdip_is_busy(fdip) )
+      fdip = citp_fdtable_busy_wait(fd, 1);
+    ci_assert(fdip_is_normal(fdip) || fdip_is_passthru(fdip));
+    if( fdip_cas_fail(p_fdip, fdip, fdip_busy) )
+      goto again;
+
     /* Possibly, a parrallel thread have already called
      * citp_reprobe_moved() for us. */
     if( fdip_is_passthru(fdip) ) {
@@ -2280,16 +2298,15 @@ int citp_reprobe_moved_common(citp_fdinfo* fdinfo, int from_fast_lookup,
         citp_fdinfo_ref(new_fdinfo);
       goto done;
     }
-    ci_assert( fdip_is_normal(fdip) );
+    ci_assert(fdip_is_normal(fdip));
     new_fdinfo = fdip_to_fdi(fdip);
-    if( new_fdinfo != fdinfo) {
+    if( new_fdinfo != fdinfo ) {
       citp_fdtable_busy_clear(fd, fdip, 1);
       if( new_fdinfo != NULL )
         citp_fdinfo_ref(new_fdinfo);
       goto done;
     }
-  }
-  else
+  } else
     ci_assert(fdip_is_busy(citp_fdtable.table[fd].fdip));
 
   /* re-probe new fd */
@@ -2301,8 +2318,7 @@ int citp_reprobe_moved_common(citp_fdinfo* fdinfo, int from_fast_lookup,
     if( epoll_fdi->protocol->type == CITP_EPOLLB_FD ) {
       citp_epollb_on_handover(epoll_fdi, fdinfo);
       citp_fdinfo_release_ref(epoll_fdi, 1);
-    }
-    else
+    } else
 #endif
     {
       citp_epoll_on_move(epoll_fdi, fdinfo, new_fdinfo, 1);
@@ -2313,7 +2329,7 @@ int citp_reprobe_moved_common(citp_fdinfo* fdinfo, int from_fast_lookup,
   fdinfo->on_ref_count_zero = FDI_ON_RCZ_MOVED;
   citp_fdinfo_release_ref(fdinfo, 1);
 
- done:
+done:
   /* One refcount from the caller */
   if( from_fast_lookup )
     citp_fdinfo_release_ref_fast(fdinfo);
@@ -2340,7 +2356,8 @@ void __oo_service_fd(bool fdtable_locked)
   int fd;
 
   ci_assert_equal(citp.onload_fd, -1);
-  if( ef_onload_driver_open(&fd, OO_STACK_DEV, 1) )  return;
+  if( ef_onload_driver_open(&fd, OO_STACK_DEV, 1) )
+    return;
   if( ci_cas32_succeed(&citp.onload_fd, -1, fd) ) {
     if( fdtable_locked ) {
       /* __citp_fdtable_extend() handles citp.onload_fd, so there is no
@@ -2349,8 +2366,7 @@ void __oo_service_fd(bool fdtable_locked)
         __citp_fdtable_extend(fd);
       else
         __citp_fdtable_reserve(fd, 0);
-    }
-    else {
+    } else {
       /* We do not know the current context, so we can't lock fdtable,
        * or leverage the already-taken lock.
        * Let's hope that logging happens at start of day, so our fd is
@@ -2360,11 +2376,10 @@ void __oo_service_fd(bool fdtable_locked)
       if( citp_fdtable.table ) {
         ci_assert_lt(fd, citp_fdtable.size);
         citp_fdtable.table[citp.onload_fd].fdip =
-                                        fdi_to_fdip(&citp_the_reserved_fd);
+            fdi_to_fdip(&citp_the_reserved_fd);
       }
     }
-  }
-  else {
+  } else {
     /* Unspecialised /dev/onload does not trampoline,
      * so simple close is OK.  */
     ci_sys_close(fd);

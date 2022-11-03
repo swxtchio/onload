@@ -499,8 +499,10 @@ int ci_tcp_sock_set_stack_filter(ci_netif* ni, ci_sock_cmn* s)
   int rc;
   oo_sp sock;
 
-  LOG_TC(log(NSS_FMT " %s", NSS_PRI_ARGS(ni, s), __FUNCTION__));
-  ci_assert((s->s_flags & CI_SOCK_FLAG_STACK_FILTER) == 0);
+  LOG_TC(log(NSS_FMT " %s %d", NSS_PRI_ARGS(ni, s), __FUNCTION__, s->s_flags));
+  ci_assert_equal(s->s_flags & CI_SOCK_FLAG_STACK_FILTER, 0);
+
+  // todo figure out something here
 
   sock = ci_netif_filter_lookup(ni, sock_af_space(s), sock_ipx_laddr(s),
       sock_lport_be16(s), sock_ipx_raddr(s), sock_rport_be16(s),
@@ -523,7 +525,6 @@ int ci_tcp_sock_set_stack_filter(ci_netif* ni, ci_sock_cmn* s)
 
 void ci_tcp_sock_clear_stack_filter(ci_netif* ni, ci_tcp_state* ts)
 {
-  LOG_TC(log(LNT_FMT " %s", LNT_PRI_ARGS(ni, ts), __FUNCTION__));
   ci_assert((ts->s.s_flags & CI_SOCK_FLAG_STACK_FILTER) != 0);
   ci_netif_filter_remove(ni, S_ID(ts), sock_af_space(&ts->s),
       tcp_ipx_laddr(ts), tcp_lport_be16(ts), tcp_ipx_raddr(ts),

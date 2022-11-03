@@ -12,30 +12,34 @@ static const char *_TX_COMP_RING = "TX_COMP_RING";
 static const char *_RX_RING = "RX_RING";
 static const char *_RX_FILL_RING = "RX_FILL_RING";
 static const char *_RX_MBUF_POOL = "RX_MBUF_POOL";
-static const char *_TX_PREP_RING = "TX_PREP_RING";
-static const char *_RX_PREP_RING = "RX_PREP_RING";
 static const char *_RX_PENDING_RING = "RX_PENDING_RING";
-static const unsigned RECEIVE_PUSH_SIZE = 16;
+
+typedef struct swxtch_ring_state {
+  uint32_t old_head;
+  uint32_t new_head;
+} swxtch_ring_state;
+
+/* This type is a wrapper around DPDK rings that maintains state and allows
+ * splitting enqueue operations across function calls */
+typedef struct swxtch_ring {
+  struct rte_ring *r;
+  swxtch_ring_state states[16];
+  uint16_t num_states;
+} swxtch_ring;
+
 
 typedef struct swxtch_rings {
   struct rte_mempool *mempool;       // basic mempool to pull mbufs from
-  struct rte_ring *rx_fill_ring;     // rx fill ring to fill indicate to that
-                                     // rx packets can be received
+  swxtch_ring rx_fill_ring;          // rx fill ring to fill indicate to
+                                     // that rx packets can be received
   struct rte_ring *rx_ring;          // ring containing rx packets
-  struct rte_ring *tx_ring;          // ring contain packets to send
+  struct swxtch_ring tx_ring;        // ring contain packets to send
   struct rte_ring *tx_comp_ring;     // ring containing packets that were sent
-  // the prep rings are semi hacky and are used as a staging area for
-  // rx|tx_init before _push is called
-  struct rte_ring *tx_prep_ring;
-  struct rte_ring *rx_prep_ring;
   // in between polling and reading rx packets live here
   struct rte_ring *rx_pending_ring;
 } swxtch_rings;
 
 static swxtch_rings m_rings;
-
-// testing using this as our "fill pkt"
-static int fake_fill_pkt = 1;
 
 // drain a ring on startup to free any stuck mbufs
 void efswxtch_drain_ring(struct rte_ring *ring, int should_free)
@@ -44,6 +48,7 @@ void efswxtch_drain_ring(struct rte_ring *ring, int should_free)
   int count = 0;
   int burst_size = 32;
   void *bufs[burst_size];
+  unsigned drained = 0;
 
   do {
     count = rte_ring_dequeue_burst(ring, &bufs[0], burst_size, &available);
@@ -51,16 +56,16 @@ void efswxtch_drain_ring(struct rte_ring *ring, int should_free)
     if( should_free ) {
       rte_pktmbuf_free_bulk((struct rte_mbuf **) bufs, count);
     }
+
+    drained += count;
   } while( available != 0 );
 }
 
 void efswxtch_drain_rings(void)
 {
-  efswxtch_drain_ring(m_rings.rx_fill_ring, 0);
-  efswxtch_drain_ring(m_rings.tx_ring, 1);
+  efswxtch_drain_ring(m_rings.rx_fill_ring.r, 0);
+  efswxtch_drain_ring(m_rings.tx_ring.r, 1);
   efswxtch_drain_ring(m_rings.rx_ring, 1);
-  efswxtch_drain_ring(m_rings.rx_prep_ring, 0);
-  efswxtch_drain_ring(m_rings.tx_prep_ring, 1);
   efswxtch_drain_ring(m_rings.tx_comp_ring, 1);
   efswxtch_drain_ring(m_rings.rx_pending_ring, 1);
 }
@@ -68,39 +73,30 @@ void efswxtch_drain_rings(void)
 int efswxtch_init_rings(void)
 {
   m_rings.mempool = rte_mempool_lookup(_RX_MBUF_POOL);
-  m_rings.rx_fill_ring = rte_ring_lookup(_RX_FILL_RING);
+  m_rings.rx_fill_ring.r = rte_ring_lookup(_RX_FILL_RING);
   m_rings.rx_ring = rte_ring_lookup(_RX_RING);
-  m_rings.tx_ring = rte_ring_lookup(_TX_RING);
+  m_rings.tx_ring.r = rte_ring_lookup(_TX_RING);
   m_rings.tx_comp_ring = rte_ring_lookup(_TX_COMP_RING);
-  m_rings.tx_prep_ring = rte_ring_lookup(_TX_PREP_RING);
-  m_rings.rx_prep_ring = rte_ring_lookup(_RX_PREP_RING);
   m_rings.rx_pending_ring = rte_ring_lookup(_RX_PENDING_RING);
   if( m_rings.mempool == NULL ) {
     ef_log("NO MEMPOOL");
     return -1;
   }
-  if( m_rings.tx_ring == NULL ) {
+  if( m_rings.tx_ring.r == NULL ) {
     ef_log("NO TX RING");
     return -1;
   }
+
   if( m_rings.tx_comp_ring == NULL ) {
     ef_log("NO TX COMP RING");
     return -1;
   }
-  if( m_rings.rx_fill_ring == NULL ) {
+  if( m_rings.rx_fill_ring.r == NULL ) {
     ef_log("NO FILL RING");
     return -1;
   }
   if( m_rings.rx_ring == NULL ) {
     ef_log("NO RX RING");
-    return -1;
-  }
-  if( m_rings.tx_prep_ring == NULL ) {
-    ef_log("NO PREP RING");
-    return -1;
-  }
-  if( m_rings.rx_prep_ring == NULL ) {
-    ef_log("NO RX PREP RING");
     return -1;
   }
   if( m_rings.rx_pending_ring == NULL ) {
@@ -119,7 +115,7 @@ static int efswxtch_ef_vi_safe_enqueue(
     struct rte_ring *ring, struct rte_mbuf **mbufs, unsigned count)
 {
   unsigned enq = rte_ring_enqueue_burst(ring, (void **) mbufs, count, NULL);
-  if( enq != count ) {
+  if( unlikely(enq != count) ) {
     ef_log("Only enqueued %d:%d on ring: %s", enq, count, ring->name);
     rte_pktmbuf_free_bulk((struct rte_mbuf **) &mbufs[enq], count - enq);
     return 0;
@@ -128,6 +124,111 @@ static int efswxtch_ef_vi_safe_enqueue(
   return 1;
 }
 
+static __rte_always_inline void swxtch_ring_add_state(
+    swxtch_ring *ring, uint32_t prev, uint32_t new)
+{
+  if( likely(ring->r->prod.single) ) {
+    return;
+  }
+
+  if( unlikely(ring->num_states == 0) ) {
+    ring->num_states++;
+    ring->states[0].new_head = new;
+    ring->states[0].old_head = prev;
+    return;
+  }
+
+  swxtch_ring_state *state = &ring->states[ring->num_states - 1];
+  if( likely(state->new_head == prev) ) {
+    // the new state to add is continugous with the previously added one. Just
+    // extend the range and move on.
+    state->new_head = new;
+  } else {
+    ring->num_states++;
+    state = &ring->states[ring->num_states - 1];
+    state->new_head = new;
+    state->old_head = prev;
+  }
+}
+
+static __rte_always_inline int swxtch_ring_enqueue(
+    swxtch_ring *ring, unsigned n)
+{
+  const uint32_t capacity = ring->r->capacity;
+  unsigned int max = n;
+  int success;
+  uint32_t free_entries;
+  uint32_t old_head, new_head;
+
+  do {
+    /* Reset n to the initial burst count */
+    n = max;
+
+    old_head = ring->r->prod.head;
+
+    /* add rmb barrier to avoid load/load reorder in weak
+     * memory model. It is noop on x86
+     */
+    rte_smp_rmb();
+
+    /*
+     *  The subtraction is done between two unsigned 32bits value
+     * (the result is always modulo 32 bits even if we have
+     * *old_head > cons_tail). So 'free_entries' is always between 0
+     * and capacity (which is < size).
+     */
+    free_entries = (capacity + ring->r->cons.tail - old_head);
+
+    /* check that we have enough room in ring */
+    if( unlikely(n > free_entries) )
+      n = 0;
+
+    if( n == 0 )
+      return 0;
+
+    new_head = old_head + n;
+    if( likely(ring->r->prod.single) ) {
+      success = 1;
+      ring->r->prod.head = new_head;
+    } else {
+      new_head = old_head + n;
+      success = rte_atomic32_cmpset(&ring->r->prod.head, old_head, new_head);
+    }
+
+  } while( unlikely(success == 0) );
+
+  swxtch_ring_add_state(ring, old_head, new_head);
+  return n;
+}
+
+/* This function only works for single producers and 1 packet*/
+static __rte_always_inline void swxtch_enqueue_ptrs(
+    swxtch_ring *ring, void **obj_table)
+{
+  uint32_t head = ring->r->prod.head - 1;
+  uint32_t idx = head & ring->r->mask;
+  void **start = (void **) &ring->r[1];
+
+  start[idx] = obj_table[0];
+}
+
+static __rte_always_inline void swxtch_ring_confirm(swxtch_ring *ring)
+{
+  rte_smp_wmb();
+  if( likely(ring->r->prod.single) ) {
+    ring->r->prod.tail = ring->r->prod.head;
+    return;
+  }
+  for( int i = 0; i < ring->num_states; ++i ) {
+    while( unlikely(ring->r->prod.tail != ring->states[i].old_head) ) {
+      rte_pause();
+    }
+    ring->r->prod.tail = ring->states[i].new_head;
+  }
+  ring->num_states = 0;
+}
+
+
 static void efswxtch_ef_vi_tx_fill_pkt(
     ef_vi *vi, const char *pkt, const unsigned len)
 {
@@ -135,8 +236,10 @@ static void efswxtch_ef_vi_tx_fill_pkt(
   if( rte_mempool_get_bulk(m_rings.mempool, (void **) mbufs, 1) == 0 ) {
     memcpy(rte_pktmbuf_mtod(mbufs[0], char *), pkt, len);
     mbufs[0]->data_len = len;
-    efswxtch_ef_vi_safe_enqueue(
-        m_rings.tx_prep_ring, (struct rte_mbuf **) mbufs, 1);
+    if( swxtch_ring_enqueue(&m_rings.tx_ring, 1) == 0 ) {
+      ef_log("failed to enqueue tx packet.");
+    }
+    swxtch_enqueue_ptrs(&m_rings.tx_ring, (void **) mbufs);
   } else {
     ef_log("failed to fill tx packet. Out of buffers");
   }
@@ -162,16 +265,7 @@ static int efswxtch_ef_vi_transmitv_init(
 
 static void efswxtch_ef_vi_transmit_push(ef_vi *vi)
 {
-  struct rte_mbuf *mbufs[EF_VI_TRANSMIT_BATCH];
-  int removed;
-
-  removed = rte_ring_dequeue_burst(
-      m_rings.tx_prep_ring, (void **) mbufs, EF_VI_TRANSMIT_BATCH, NULL);
-  if( removed != 0 ) {
-    efswxtch_ef_vi_safe_enqueue(m_rings.tx_ring, mbufs, removed);
-  } else {
-    ef_log("pushing but have no data");
-  }
+  swxtch_ring_confirm(&m_rings.tx_ring);
 }
 
 static int efswxtch_ef_vi_transmit(
@@ -179,7 +273,7 @@ static int efswxtch_ef_vi_transmit(
 {
   ef_iovec iov = { base, len };
   int rc = efswxtch_ef_vi_transmitv_init(vi, &iov, 1, dma_id);
-  if( rc == 0 ) {
+  if( likely(rc == 0) ) {
     wmb();
     efswxtch_ef_vi_transmit_push(vi);
   }
@@ -190,7 +284,7 @@ static int efswxtch_ef_vi_transmitv(
     ef_vi *vi, const ef_iovec *iov, int iov_len, ef_request_id dma_id)
 {
   int rc = efswxtch_ef_vi_transmitv_init(vi, iov, iov_len, dma_id);
-  if( rc == 0 ) {
+  if( likely(rc == 0) ) {
     wmb();
     efswxtch_ef_vi_transmit_push(vi);
   }
@@ -296,55 +390,30 @@ static int efswxtch_ef_vi_transmit_memcpy_sync(
   return -EOPNOTSUPP;
 }
 
+
 static int efswxtch_ef_vi_receive_init(
     ef_vi *vi, ef_addr addr, ef_request_id dma_id)
 {
   ef_vi_rxq *q = &vi->vi_rxq;
   ef_vi_rxq_state *qs = &vi->ep_state->rxq;
   int i;
-  if( qs->added - qs->removed >= q->mask )
+  if( unlikely(qs->added - qs->removed >= q->mask) )
     return -EAGAIN;
 
   i = qs->added++ & q->mask;
   q->ids[i] = dma_id;
 
-  if( rte_ring_enqueue(m_rings.rx_prep_ring, &fake_fill_pkt) != 0 ) {
-    ef_log("Unable to initalize the receive queue");
+  if( unlikely(swxtch_ring_enqueue(&m_rings.rx_fill_ring, 1) == 0) ) {
+    ef_log("Unable to initialize the RX Fill ring");
     return -EAGAIN;
   }
-
-  /*
-    if( rte_mempool_get(m_rings.mempool, (void **) &mbufs[0]) == 0 ) {
-      if( ! efswxtch_ef_vi_safe_enqueue(m_rings.rx_prep_ring, mbufs, 1) ) {
-        return -2;
-      }
-    } else {
-      ef_log("Unable to get mbuf to enqueue on the rx prep ring: %d left",
-          rte_mempool_avail_count(m_rings.mempool));
-      return -1;
-    }
-    */
 
   return 0;
 }
 
 static void efswxtch_ef_vi_receive_push(ef_vi *vi)
 {
-  unsigned available = 0;
-  void *fake_pkts[RECEIVE_PUSH_SIZE];
-  do {
-    int dequeued = rte_ring_dequeue_burst(
-        m_rings.rx_prep_ring, fake_pkts, RECEIVE_PUSH_SIZE, &available);
-
-    if( dequeued == 0 ) {
-      ef_log("failed to get rx prep ring buffs");
-      return;
-    }
-    if( rte_ring_enqueue_bulk(
-            m_rings.rx_fill_ring, fake_pkts, dequeued, NULL) == 0 ) {
-      ef_log("Unable to enqueue the fake pkts onto the fill ring");
-    }
-  } while( available != 0 );
+  swxtch_ring_confirm(&m_rings.rx_fill_ring);
 }
 
 
@@ -356,17 +425,14 @@ static void efswxtch_ef_eventq_prime(ef_vi *vi)
 static void efswxtch_rx_fill_pkt(ef_vi *vi, char *pkt, int index)
 {
   struct rte_mbuf *mbuf[1];
-  if( rte_ring_dequeue(m_rings.rx_pending_ring, (void **) &mbuf[0]) != 0 ) {
+  if( unlikely(rte_ring_dequeue(m_rings.rx_pending_ring, (void **) &mbuf[0]) !=
+               0) ) {
     ef_log("Nothing to fill in the rx pkts");
     return;
   }
   memcpy(pkt, rte_pktmbuf_mtod(mbuf[0], unsigned char *),
       rte_pktmbuf_data_len(mbuf[0]));
-  if( mbuf[0] == NULL ) {
-    ef_log("freeing NULL");
-  } else {
-    rte_pktmbuf_free(mbuf[0]);
-  }
+  rte_pktmbuf_free(mbuf[0]);
 }
 
 static int efswxtch_ef_eventq_poll(ef_vi *vi, ef_event *evs, int evs_len)
@@ -374,7 +440,7 @@ static int efswxtch_ef_eventq_poll(ef_vi *vi, ef_event *evs, int evs_len)
   // n is the index of the current event we're filling in. consists of both RX
   // events and TX completion events
   int n = 0, count = 0;
-  unsigned available = 0, page = 0;
+  unsigned available = 0, page_start = 0;
 
   ef_vi_rxq *rx_q = &vi->vi_rxq;
   ef_vi_txq *tx_q = &vi->vi_txq;
@@ -409,25 +475,24 @@ static int efswxtch_ef_eventq_poll(ef_vi *vi, ef_event *evs, int evs_len)
 
   if( n < evs_len ) {
     available = 0;
-    page = 0;
     do {
-      // TX can acknowledge multiple at once using the last id
+      // TX can acknowledge upto EF_VI_TRANSMIT_BATCH at once using the last id
+      // for a single TYPE_TX event
       count = rte_ring_dequeue_burst(m_rings.tx_comp_ring, (void **) tx_bufs,
           EF_VI_TRANSMIT_BATCH, &available);
-      if( count != 0 ) {
-        int desc_id =
-            (tx_qs->removed + count + (EF_VI_TRANSMIT_BATCH * page)) &
-            tx_q->mask;
+      if( likely(count != 0) ) {
+        int desc_id = (tx_qs->removed + count + page_start) & tx_q->mask;
         evs[n].tx.type = EF_EVENT_TYPE_TX;
         evs[n].tx.desc_id = desc_id;
         evs[n].tx.flags = 0;
         evs[n].tx.q_id = 0;
         ++n;
-        ++page;
+        page_start += count;
 
         rte_pktmbuf_free_bulk(tx_bufs, count);
       }
-    } while( available != 0 && n < evs_len );
+      // don't waste our time confirming anything less than the transmit max?
+    } while( available > EF_VI_TRANSMIT_BATCH && n < evs_len );
   }
 
   return n;
@@ -456,27 +521,7 @@ static void efswxtch_ef_eventq_timer_zero(ef_vi *vi)
 int efswxtch_ef_eventq_check_event(const ef_vi *_vi)
 {
   return rte_ring_count(m_rings.rx_ring) > 0 ||
-         rte_ring_count(m_rings.tx_comp_ring) > 0;
-}
-
-static int efswxtch_ef_vi_refill_rx(ef_vi *vi)
-{
-  unsigned existing_count = rte_ring_count(m_rings.rx_fill_ring);
-  unsigned count_needed =
-      vi->ep_state->rxq.added - vi->ep_state->rxq.removed - existing_count;
-  if( count_needed > 0 ) {
-    struct rte_mbuf *pkts[count_needed];
-    if( rte_mempool_get_bulk(m_rings.mempool, (void **) pkts, count_needed) !=
-        0 ) {
-      ef_log("Unabble to refil the RX fill packets");
-      return 0;
-    }
-
-    return efswxtch_ef_vi_safe_enqueue(
-        m_rings.rx_fill_ring, pkts, count_needed);
-  }
-
-  return 1;
+         rte_ring_count(m_rings.tx_comp_ring) >= EF_VI_TRANSMIT_BATCH;
 }
 
 void efswxtch_vi_init(ef_vi *vi)
@@ -510,7 +555,6 @@ void efswxtch_vi_init(ef_vi *vi)
   vi->ops.transmit_memcpy_sync = efswxtch_ef_vi_transmit_memcpy_sync;
   vi->ops.rx_fill_pkt = efswxtch_rx_fill_pkt;
   vi->ops.tx_fill_pkt = efswxtch_ef_vi_tx_fill_pkt;
-  vi->ops.refill_rx = efswxtch_ef_vi_refill_rx;
   if( vi->vi_flags & EF_VI_TX_CTPIO ) {
     vi->ops.transmit_ctpio_fallback = efswxtch_ef_vi_transmit_ctpio_fallback;
     vi->ops.transmitv_ctpio_fallback = efswxtch_ef_vi_transmitv_ctpio_fallback;

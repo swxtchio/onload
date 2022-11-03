@@ -13,3 +13,5 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client_socket:
         client_socket.send(message.encode())
         print('sent')
         time.sleep(1)
+        #response = client_socket.recv(1024).decode()
+        #print(str(response))

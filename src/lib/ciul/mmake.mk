@@ -9,8 +9,6 @@ TARGETS		:= $(CIUL_LIB)
 endif
 MMAKE_TYPE	:= LIB
 
-MMAKE_DPDK_LIBS :=-lrte_bpf -lrte_flow_classify -lrte_pipeline -lrte_table -lrte_port -lrte_fib -lrte_ipsec -lrte_vhost -lrte_stack -lrte_security -lrte_sched -lrte_reorder -lrte_rib -lrte_rcu -lrte_rawdev -lrte_pdump -lrte_power -lrte_member -lrte_lpm -lrte_latencystats -lrte_kni -lrte_jobstats -lrte_ip_frag -lrte_gso -lrte_gro -lrte_eventdev -lrte_efd -lrte_distributor -lrte_cryptodev -lrte_compressdev -lrte_cfgfile -lrte_bitratestats -lrte_bbdev -lrte_acl -lrte_timer -lrte_hash -lrte_metrics -lrte_cmdline -lrte_pci -lrte_ethdev -lrte_meter -lrte_net -lrte_mbuf -lrte_mempool -lrte_ring -lrte_eal -lrte_kvargs
-MMAKE_DPDK := -L/usr/local/lib/x86_64-linux-gnu
 
 
 # Standalone subset for descriptor munging only.
@@ -32,6 +30,11 @@ LIB_SRCS	:=		\
 		checksum.c
 
 ifneq ($(DRIVER),1)
+ifeq ($(RTE_SDK),)
+$(error "Please define RTE_SDK environment variable")
+endif
+MMAKE_INCLUDE += -I$(RTE_SDK)/build/install/include
+MMAKE_DPDK := $(DEFAULT_DPDK)
 LIB_SRCS	+=		\
 		open.c		\
 		event_q.c	\
@@ -113,7 +116,7 @@ $(objd)efch_intf_ver.h: $(EFCH_INTF_HDRS)
 
 $(objd)$(MMAKE_OBJ_PREFIX)pt_endpoint.o: $(objd)efch_intf_ver.h
 $(objd)$(MMAKE_OBJ_PREFIX)vi_init.o: $(objd)efch_intf_ver.h
-
+$(MMAKE_OBJ_PREFIX)efswxtch_vi.o: cwarnings += -Wno-error=deprecated-declarations -Wno-error=implicit-fallthrough
 
 ######################################################
 # UL library
