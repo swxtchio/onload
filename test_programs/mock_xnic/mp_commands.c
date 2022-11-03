@@ -104,15 +104,13 @@ static void dump_rings(__attribute__((unused)) void *parsed_result,
       "TX Comp Ring Count: %d:%d\n"
       "RX Fill Ring Count: %d:%d\n"
       "RX Ring Count: %d:%d\n"
-      "RX Prep Ring Count: %d:%d\n"
       "TX Prep Ring Count: %d:%d\n"
       "RX Pending Ring Count: %d:%d\n",
       idle_count, rte_ring_count(tx_ring), rte_ring_get_capacity(tx_ring),
       rte_ring_count(tx_completion_ring),
       rte_ring_get_capacity(tx_completion_ring), rte_ring_count(rx_fill_ring),
       rte_ring_get_capacity(rx_fill_ring), rte_ring_count(rx_ring),
-      rte_ring_get_capacity(rx_ring), rte_ring_count(rx_prep_ring),
-      rte_ring_get_capacity(rx_prep_ring), rte_ring_count(tx_prep_ring),
+      rte_ring_get_capacity(rx_ring), rte_ring_count(tx_prep_ring),
       rte_ring_get_capacity(tx_prep_ring), rte_ring_count(rx_pending_ring),
       rte_ring_get_capacity(rx_pending_ring));
 }

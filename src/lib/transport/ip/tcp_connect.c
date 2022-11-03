@@ -499,8 +499,14 @@ int ci_tcp_sock_set_stack_filter(ci_netif* ni, ci_sock_cmn* s)
   int rc;
   oo_sp sock;
 
-  LOG_TC(log(NSS_FMT " %s", NSS_PRI_ARGS(ni, s), __FUNCTION__));
-  ci_assert((s->s_flags & CI_SOCK_FLAG_STACK_FILTER) == 0);
+  LOG_TC(log(NSS_FMT " %s %d", NSS_PRI_ARGS(ni, s), __FUNCTION__, s->s_flags));
+  /*
+  // we've already set the filters don't do it again. This can happen if you
+  // attempt to bind and connect a udp socket
+  if( (s->s_flags & CI_SOCK_FLAG_STACK_FILTER) == CI_SOCK_FLAG_STACK_FILTER ) {
+    return 0;
+  }
+  */
 
   sock = ci_netif_filter_lookup(ni, sock_af_space(s), sock_ipx_laddr(s),
       sock_lport_be16(s), sock_ipx_raddr(s), sock_rport_be16(s),

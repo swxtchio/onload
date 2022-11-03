@@ -49,12 +49,11 @@
 #include "mp_commands.h"
 
 #define RTE_LOGTYPE_APP RTE_LOGTYPE_USER1
-#define DEBUG_TX        0
+#define DEBUG_TX        1
 #define DEBUG_RX        0
 
 static const char *_TX_RING = "TX_RING";
 static const char *_TX_PREP_RING = "TX_PREP_RING";
-static const char *_RX_PREP_RING = "RX_PREP_RING";
 static const char *_RX_PENDING_RING = "RX_PENDING_RING";
 static const char *_TX_COMP_RING = "TX_COMP_RING";
 static const char *_RX_RING = "RX_RING";
@@ -67,7 +66,7 @@ struct rte_ring *tx_ring, *tx_completion_ring, *rx_ring, *rx_fill_ring,
 static const unsigned MAX_MESSAGE_SIZE = 2048;
 
 #define RX_RING_SIZE    1024
-#define TX_RING_SIZE    1024
+#define TX_RING_SIZE    2048
 
 #define NUM_MBUFS       8192
 #define MBUF_CACHE_SIZE 0
@@ -450,8 +449,6 @@ int main(int argc, char **argv)
       MBUF_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, SOCKET_ID_ANY);
   tx_prep_ring = rte_ring_create(_TX_PREP_RING, ring_size / 2, SOCKET_ID_ANY,
       RING_F_SC_DEQ | RING_F_SP_ENQ);
-  rx_prep_ring = rte_ring_create(_RX_PREP_RING, ring_size / 2, SOCKET_ID_ANY,
-      RING_F_SC_DEQ | RING_F_SP_ENQ);
   rx_pending_ring = rte_ring_create(_RX_PENDING_RING, ring_size / 4,
       SOCKET_ID_ANY, RING_F_SC_DEQ | RING_F_SP_ENQ);
 
@@ -490,7 +487,6 @@ int main(int argc, char **argv)
   rte_ring_free(tx_completion_ring);
   rte_ring_free(rx_fill_ring);
   rte_ring_free(tx_prep_ring);
-  rte_ring_free(rx_prep_ring);
   rte_ring_free(rx_pending_ring);
   rte_mempool_free(mbuf_pool);
   return 0;

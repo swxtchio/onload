@@ -9,3 +9,5 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
     while True:
         payload, client_address = s.recvfrom(1024)
         print(str(payload))
+        sent = s.sendto(payload, client_address)
+
