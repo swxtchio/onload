@@ -49,11 +49,10 @@
 #include "mp_commands.h"
 
 #define RTE_LOGTYPE_APP RTE_LOGTYPE_USER1
-#define DEBUG_TX        1
+#define DEBUG_TX        0
 #define DEBUG_RX        0
 
 static const char *_TX_RING = "TX_RING";
-static const char *_TX_PREP_RING = "TX_PREP_RING";
 static const char *_RX_PENDING_RING = "RX_PENDING_RING";
 static const char *_TX_COMP_RING = "TX_COMP_RING";
 static const char *_RX_RING = "RX_RING";
@@ -61,7 +60,7 @@ static const char *_RX_FILL_RING = "RX_FILL_RING";
 static const char *_RX_MBUF_POOL = "RX_MBUF_POOL";
 
 struct rte_ring *tx_ring, *tx_completion_ring, *rx_ring, *rx_fill_ring,
-    *rx_prep_ring, *tx_prep_ring, *rx_pending_ring;
+    *rx_pending_ring;
 
 static const unsigned MAX_MESSAGE_SIZE = 2048;
 
@@ -74,6 +73,7 @@ static const unsigned MAX_MESSAGE_SIZE = 2048;
 
 struct rte_mempool *mbuf_pool;
 unsigned long idle_count = 0;
+unsigned long packet_count = 0;
 volatile int quit = 0;
 
 struct rte_mbuf *tx_bufs[BURST_SIZE];
@@ -86,6 +86,18 @@ static const struct rte_eth_conf port_conf_default = {
 		.max_rx_pkt_len = RTE_ETHER_MAX_LEN,
 	},
 };
+
+typedef struct SwxtchMetaData_t {
+  uint16_t Token;
+  uint8_t CmdType;
+  uint8_t Tag;
+  uint64_t Seq;
+  uint64_t Timestamp;
+  uint32_t SrcIP;
+  uint32_t DstIP;
+  uint16_t SrcPort;
+  uint16_t DstPort;
+} SwxtchMetaData_t;
 
 /* basicfwd.c: Basic DPDK skeleton forwarding example. */
 
@@ -239,6 +251,31 @@ static void bulk_free(struct rte_mbuf **mbufs, unsigned length)
   }
 }
 
+static void handle_arp(struct rte_ether_hdr *eth_h)
+{
+  struct rte_arp_hdr *arp = (struct rte_arp_hdr *) (eth_h + 1);
+  if( ntohs(arp->arp_opcode) == RTE_ARP_OP_REPLY ) {
+    char ethStr[50];
+    struct in_addr add;
+    add.s_addr = arp->arp_data.arp_sip;
+    rte_ether_format_addr(ethStr, 50, &arp->arp_data.arp_sha);
+    char *ipAddr = inet_ntoa(add);
+    char str[100];
+    sprintf(str, "ip neigh replace %s dev eth1 lladdr %s nud reachable",
+        ipAddr, ethStr);
+    if( system(str) != 0 ) {
+      printf("Failed to add neighbor\n");
+    }
+  }
+}
+
+static inline void maybe_tunnel(struct pkt_rte_mbuf *mbuf)
+{
+  if( unlikely(hdr->next_proto_id != IPPROTO_UDP) ) {
+    return
+  }
+}
+
 static int receive(uint16_t port)
 {
   int allowed =
@@ -263,31 +300,25 @@ static int receive(uint16_t port)
     struct rte_ether_hdr *eth_h =
         rte_pktmbuf_mtod(rx_bufs[i], struct rte_ether_hdr *);
 
-    // drop this because it's breaking everything for now
-    if( ntohs(eth_h->ether_type) == RTE_ETHER_TYPE_IPV6 ) {
-      // recycle unused buffers
-      rte_ring_enqueue(rx_fill_ring, rx_fill_pkts[i]);
-    } else if( ntohs(eth_h->ether_type) == RTE_ETHER_TYPE_ARP ) {
-      rte_ring_enqueue(rx_fill_ring, rx_fill_pkts[i]);
-      /*
-      struct rte_arp_hdr *arp = (struct rte_arp_hdr *) (eth_h + 1);
-      if( ntohs(arp->arp_opcode) == RTE_ARP_OP_REPLY ) {
-        char ethStr[50];
-        struct in_addr add;
-        add.s_addr = arp->arp_data.arp_sip;
-        rte_ether_format_addr(ethStr, 50, &arp->arp_data.arp_sha);
-        char *ipAddr = inet_ntoa(add);
-        char str[100];
-        sprintf(str, "ip neigh replace %s dev eth1 lladdr %s nud reachable",
-            ipAddr, ethStr);
-        if( system(str) != 0 ) {
-          printf("Failed to add neighbor\n");
+    switch( ntohs(eth_h->ether_type) ) {
+      case RTE_ETHER_TYPE_IPV6:     // this is flooding everything for some
+                                    // reason
+        rte_ring_enqueue(rx_fill_ring, rx_fill_pkts[i]);
+        break;
+      case RTE_ETHER_TYPE_ARP:
+        rte_ring_enqueue(rx_fill_ring, rx_fill_pkts[i]);
+        // handle_arp(eth_h);
+        break;
+      case RTE_ETHER_TYPE_IPV4:
+        struct rte_ipv4_hdr *hdr = (struct rte_ipv4_hdr *) (eth_h + 1);
+        if( unlikely(hdr->next_proto_id == IPPROTO_ICMP) ) {
+          rte_ring_enqueue(rx_fill_ring, rx_fill_pkts[i]);
+        } else {
+          rx_final_bufs[enqueueCount++] = rx_bufs[i];
         }
-
-      }
-      */
-    } else {
-      rx_final_bufs[enqueueCount++] = rx_bufs[i];
+        break;
+      default:
+        rx_final_bufs[enqueueCount++] = rx_bufs[i];
     }
   }
 
@@ -299,21 +330,23 @@ static int receive(uint16_t port)
     if( rte_ring_enqueue_bulk(
             rx_ring, (void **) rx_final_bufs, enqueueCount, NULL) == 0 ) {
       printf("FAILED TO HAND TO RX RING\n");
-      bulk_free(rx_final_bufs, enqueueCount);
+      rte_pktmbuf_free_bulk(rx_final_bufs, enqueueCount);
     }
   }
 }
 
-const int max_tries = 1000;
+// Array to keep track of the amount of transactions sent
+static void *null_array[BURST_SIZE];
 
 static int transmit(uint16_t port)
 {
   // might be better to manually move the consumer tail manually?
   int allowed =
-      rte_ring_dequeue_burst(tx_ring, (void **) &tx_bufs, BURST_SIZE, NULL);
+      rte_ring_dequeue_burst(tx_ring, (void **) &tx_bufs[0], BURST_SIZE, NULL);
   if( unlikely(allowed == 0) ) {
     return 0;
   }
+
 
 #if DEBUG_TX
   print_mbufs(tx_bufs, allowed, "TX");
@@ -321,38 +354,25 @@ static int transmit(uint16_t port)
 
   int start = 0;
   int end = allowed;
-  for( int i = 0; i < max_tries; ++i ) {
+  do {
     uint16_t txed = rte_eth_tx_burst(port, 0, &tx_bufs[start], end);
     start += txed;
     end -= txed;
-
-    if( likely(end == 0) ) {
-      break;
-    }
-  }
+  } while( unlikely(start != allowed) );
 
   if( unlikely(start != allowed) ) {
     printf("Unable to send all tx packets\n");
-    bulk_free(&tx_bufs[start], end);
+    rte_pktmbuf_free_bulk(&tx_bufs[start], end);
   }
 
   if( unlikely(start == 0) ) {
     return start;
   }
 
-  struct rte_mbuf *comp_count[allowed];
-
-  if( unlikely(rte_mempool_get_bulk(
-                   mbuf_pool, (void **) comp_count, allowed) != 0) ) {
-    printf("Unable to get pkts to marks as completed\n");
-
-    return start;
-  }
-
-  if( unlikely(rte_ring_enqueue_bulk(tx_completion_ring, (void **) comp_count,
-                   allowed, NULL) == 0) ) {
+  // the tx_completion ring is more of a
+  if( unlikely(rte_ring_enqueue_bulk(
+                   tx_completion_ring, null_array, allowed, NULL) == 0) ) {
     printf("FAILED to mark tx completed\n");
-    bulk_free(comp_count, allowed);
   }
   return start;
 }
@@ -393,7 +413,7 @@ static int lcore_run(__attribute__((unused)) void *arg)
 
     printf("Using PORT: %d\n", port);
 
-    while( ! quit ) {
+    while( likely(! quit) ) {
       int recved = receive(port);
       int sent = transmit(port);
       if( recved == 0 && sent == 0 ) {
@@ -403,6 +423,45 @@ static int lcore_run(__attribute__((unused)) void *arg)
   }
 
   return 0;
+}
+
+static int lcore_run_test_consumer(__attribute__((unused)) void *arg)
+{
+  while( likely(! quit) ) {
+    int count = rte_ring_dequeue_burst(tx_ring, (void **) tx_bufs, 32, NULL);
+    if( unlikely(count == 0) ) {
+      continue;
+    }
+
+
+    rte_ring_enqueue_bulk(tx_completion_ring, (void **) tx_bufs, count, NULL);
+  }
+}
+
+static int lcore_run_test_comp(__attribute__((unused)) void *arg)
+{
+  while( likely(! quit) ) {
+    int count = rte_ring_dequeue_burst(
+        tx_completion_ring, (void **) tx_bufs, 32, NULL);
+    packet_count += count;
+    bulk_free(tx_bufs, count);
+  }
+}
+
+
+static int run_test_producer()
+{
+  const int size = 1;
+  struct rte_mbuf *mbufs[size];
+  time_t t;
+  time(&t);
+  time_t end = t + 10;
+
+  while( t < end ) {
+    rte_mempool_get_bulk(mbuf_pool, (void **) mbufs, size);
+    rte_ring_enqueue_bulk(tx_ring, (void **) mbufs, size, NULL);
+    time(&t);
+  }
 }
 
 static void signal_handler(int signum)
@@ -438,19 +497,33 @@ int main(int argc, char **argv)
     rte_exit(EXIT_FAILURE, "This program must be run as primary\n");
   }
 
-  tx_ring = rte_ring_create(_TX_RING, ring_size, SOCKET_ID_ANY, RING_F_SC_DEQ);
-  rx_ring = rte_ring_create(_RX_RING, ring_size, SOCKET_ID_ANY, RING_F_SC_DEQ);
-  rx_fill_ring = rte_ring_create(
-      _RX_FILL_RING, fill_ring_size, SOCKET_ID_ANY, RING_F_SC_DEQ);
-  tx_completion_ring = rte_ring_create(
-      _TX_COMP_RING, fill_ring_size, SOCKET_ID_ANY, RING_F_SC_DEQ);
+  if( rte_eal_process_type() == RTE_PROC_PRIMARY ) {
+    tx_ring = rte_ring_create(
+        _TX_RING, ring_size * 8, SOCKET_ID_ANY, RING_F_SC_DEQ | RING_F_SP_ENQ);
+    rx_ring = rte_ring_create(
+        _RX_RING, ring_size * 2, SOCKET_ID_ANY, RING_F_SC_DEQ | RING_F_SP_ENQ);
+    rx_fill_ring = rte_ring_create(
+        _RX_FILL_RING, fill_ring_size, SOCKET_ID_ANY, RING_F_SC_DEQ);
+    tx_completion_ring = rte_ring_create(_TX_COMP_RING, fill_ring_size * 2,
+        SOCKET_ID_ANY, RING_F_SC_DEQ | RING_F_SP_ENQ);
 
-  mbuf_pool = rte_pktmbuf_pool_create(_RX_MBUF_POOL, NUM_MBUFS - 1,
-      MBUF_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, SOCKET_ID_ANY);
-  tx_prep_ring = rte_ring_create(_TX_PREP_RING, ring_size / 2, SOCKET_ID_ANY,
-      RING_F_SC_DEQ | RING_F_SP_ENQ);
-  rx_pending_ring = rte_ring_create(_RX_PENDING_RING, ring_size / 4,
-      SOCKET_ID_ANY, RING_F_SC_DEQ | RING_F_SP_ENQ);
+    mbuf_pool = rte_pktmbuf_pool_create(_RX_MBUF_POOL, NUM_MBUFS - 1,
+        MBUF_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, SOCKET_ID_ANY);
+    rx_pending_ring = rte_ring_create(_RX_PENDING_RING, ring_size / 4,
+        SOCKET_ID_ANY, RING_F_SC_DEQ | RING_F_SP_ENQ);
+
+    for( int i = 0; i < BURST_SIZE; i++ ) {
+      null_array[i] = NULL;
+    }
+  } else {
+    tx_ring = rte_ring_lookup(_TX_RING);
+    rx_ring = rte_ring_lookup(_RX_RING);
+    rx_fill_ring = rte_ring_lookup(_RX_FILL_RING);
+    tx_completion_ring = rte_ring_lookup(_TX_COMP_RING);
+    mbuf_pool = rte_mempool_lookup(_RX_MBUF_POOL);
+    rx_pending_ring = rte_ring_lookup(_RX_PENDING_RING);
+  }
+
 
   if( tx_ring == NULL )
     rte_exit(EXIT_FAILURE, "Problem getting sending ring\n");
@@ -466,28 +539,39 @@ int main(int argc, char **argv)
   RTE_LOG(INFO, APP, "Finished Process Init.\n");
 
   /* call lcore_recv() on every slave lcore */
-  RTE_LCORE_FOREACH_SLAVE(lcore_id)
-  {
-    rte_eal_remote_launch(lcore_run, NULL, lcore_id);
+  if( rte_eal_process_type() == RTE_PROC_PRIMARY ) {
+    RTE_LCORE_FOREACH_SLAVE(lcore_id)
+    {
+      rte_eal_remote_launch(lcore_run, NULL, lcore_id);
+    }
+    struct cmdline *cl = cmdline_stdin_new(simple_mp_ctx, "\nsimple_mp > ");
+    if( cl == NULL )
+      rte_exit(EXIT_FAILURE, "Cannot create cmdline instance\n");
+    cmdline_interact(cl);
+    cmdline_stdin_exit(cl);
+
+    rte_eal_mp_wait_lcore();
+
+    rte_ring_free(tx_ring);
+    rte_ring_free(rx_ring);
+    rte_ring_free(tx_completion_ring);
+    rte_ring_free(rx_fill_ring);
+    rte_ring_free(rx_pending_ring);
+    rte_mempool_free(mbuf_pool);
+
+
+  } else {
+    RTE_LCORE_FOREACH_SLAVE(lcore_id)
+    {
+      rte_eal_remote_launch(lcore_run_test_comp, NULL, lcore_id);
+    }
+    run_test_producer();
+    quit = 1;
+    printf("Total packets round tripped = %ld. PPS = %ld\n", packet_count,
+        packet_count / 10);
+    rte_eal_mp_wait_lcore();
   }
 
-  printf("MAIN CORE: %d\n", rte_lcore_id());
-  dump_ring_state(1);
-  /* call cmd prompt on master lcore */
-  struct cmdline *cl = cmdline_stdin_new(simple_mp_ctx, "\nsimple_mp > ");
-  if( cl == NULL )
-    rte_exit(EXIT_FAILURE, "Cannot create cmdline instance\n");
-  cmdline_interact(cl);
-  cmdline_stdin_exit(cl);
 
-  rte_eal_mp_wait_lcore();
-
-  rte_ring_free(tx_ring);
-  rte_ring_free(rx_ring);
-  rte_ring_free(tx_completion_ring);
-  rte_ring_free(rx_fill_ring);
-  rte_ring_free(tx_prep_ring);
-  rte_ring_free(rx_pending_ring);
-  rte_mempool_free(mbuf_pool);
   return 0;
 }

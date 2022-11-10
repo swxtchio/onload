@@ -38,7 +38,7 @@ static void efxdp_tx_kick(ef_vi* vi)
 {
   if( vi->xdp_kick(vi) == 0 ) {
     ef_vi_txq_state* qs = &vi->ep_state->txq;
-    qs->previous        = qs->added;
+    qs->previous = qs->added;
   }
 }
 
@@ -65,10 +65,10 @@ static struct efab_af_xdp_offsets* xdp_offsets(ef_vi* vi)
 static int efxdp_ef_vi_transmitv_init(
     ef_vi* vi, const ef_iovec* iov, int iov_len, ef_request_id dma_id)
 {
-  ef_vi_txq*       q  = &vi->vi_txq;
+  ef_vi_txq* q = &vi->vi_txq;
   ef_vi_txq_state* qs = &vi->ep_state->txq;
   struct xdp_desc* dq = RING_DESC(vi, tx);
-  int              i;
+  int i;
 
   if( iov_len != 1 )
     return -EINVAL; /* Multiple buffers per packet not supported */
@@ -76,9 +76,9 @@ static int efxdp_ef_vi_transmitv_init(
   if( qs->added - qs->removed >= q->mask )
     return -EAGAIN;
 
-  i          = qs->added++ & q->mask;
+  i = qs->added++ & q->mask;
   dq[i].addr = iov->iov_base;
-  dq[i].len  = iov->iov_len;
+  dq[i].len = iov->iov_len;
   EF_VI_BUG_ON(q->ids[i] != EF_REQUEST_ID_MASK);
   q->ids[i] = dma_id;
   return 0;
@@ -106,7 +106,7 @@ static int efxdp_ef_vi_transmit(
     ef_vi* vi, ef_addr base, int len, ef_request_id dma_id)
 {
   ef_iovec iov = { base, len };
-  int      rc  = efxdp_ef_vi_transmitv_init(vi, &iov, 1, dma_id);
+  int rc = efxdp_ef_vi_transmitv_init(vi, &iov, 1, dma_id);
   if( rc == 0 ) {
     wmb();
     efxdp_ef_vi_transmit_push(vi);
@@ -228,15 +228,15 @@ static int efxdp_ef_vi_transmit_memcpy_sync(
 static int efxdp_ef_vi_receive_init(
     ef_vi* vi, ef_addr addr, ef_request_id dma_id)
 {
-  ef_vi_rxq*       q  = &vi->vi_rxq;
+  ef_vi_rxq* q = &vi->vi_rxq;
   ef_vi_rxq_state* qs = &vi->ep_state->rxq;
-  uint64_t*        dq = RING_DESC(vi, fr);
-  int              i;
+  uint64_t* dq = RING_DESC(vi, fr);
+  int i;
 
   if( qs->added - qs->removed >= q->mask )
     return -EAGAIN;
 
-  i     = qs->added++ & q->mask;
+  i = qs->added++ & q->mask;
   dq[i] = addr;
   return 0;
 }
@@ -254,9 +254,6 @@ static void efxdp_ef_eventq_prime(ef_vi* vi)
 
 int efxdp_ef_eventq_check_event(const ef_vi* _vi, int look_ahead)
 {
-  ef_vi* vi = (ef_vi*) _vi; /* drop const */
-  EF_VI_ASSERT(vi->evq_base);
-  EF_VI_BUG_ON(look_ahead < 0);
   return 0;
 }
 
@@ -278,15 +275,15 @@ static int efxdp_ef_eventq_poll(ef_vi* vi, ef_event* evs, int evs_len)
     uint32_t prod = *RING_PRODUCER(vi, rx);
 
     if( cons != prod ) {
-      ef_vi_rxq*       q  = &vi->vi_rxq;
+      ef_vi_rxq* q = &vi->vi_rxq;
       ef_vi_rxq_state* qs = &vi->ep_state->rxq;
       struct xdp_desc* dq = RING_DESC(vi, rx);
 
       do {
         unsigned desc_i = qs->removed++ & q->mask;
 
-        evs[n].rx.type  = EF_EVENT_TYPE_RX;
-        evs[n].rx.q_id  = 0;
+        evs[n].rx.type = EF_EVENT_TYPE_RX;
+        evs[n].rx.q_id = 0;
 
         /* AF_XDP devices do not use dma_ids as
          * FIFO behaviour of rx ring is not guaranteed (Zerocopy).
@@ -297,14 +294,14 @@ static int efxdp_ef_eventq_poll(ef_vi* vi, ef_event* evs, int evs_len)
          * for the client to resolve themselves. */
         evs[n].rx.rq_id = dq[desc_i].addr / vi->rx_buffer_len;
 
-        q->ids[desc_i]  = EF_REQUEST_ID_MASK; /* Debug only? */
+        q->ids[desc_i] = EF_REQUEST_ID_MASK; /* Debug only? */
 
         /* FIXME: handle jumbo, multicast */
         evs[n].rx.flags = EF_EVENT_FLAG_SOP;
         /* In case of AF_XDP offset of the placement of payload from
          * the beginning of the packet buffer may vary. */
-        evs[n].rx.ofs   = dq[desc_i].addr & (vi->rx_buffer_len - 1);
-        evs[n].rx.len   = dq[desc_i].len;
+        evs[n].rx.ofs = dq[desc_i].addr & (vi->rx_buffer_len - 1);
+        evs[n].rx.len = dq[desc_i].len;
 
         ++n;
         ++cons;
@@ -329,10 +326,10 @@ static int efxdp_ef_eventq_poll(ef_vi* vi, ef_event* evs, int evs_len)
         else
           cons += EF_VI_TRANSMIT_BATCH;
 
-        evs[n].tx.type    = EF_EVENT_TYPE_TX;
+        evs[n].tx.type = EF_EVENT_TYPE_TX;
         evs[n].tx.desc_id = cons;
-        evs[n].tx.flags   = 0;
-        evs[n].tx.q_id    = 0;
+        evs[n].tx.flags = 0;
+        evs[n].tx.q_id = 0;
         ++n;
       } while( cons != prod && n != evs_len );
 
@@ -372,33 +369,33 @@ void efxdp_vi_init(ef_vi* vi)
 {
   EF_VI_BUILD_ASSERT(EFAB_AF_XDP_DESC_BYTES == sizeof(struct xdp_desc));
 
-  vi->ops.transmit                    = efxdp_ef_vi_transmit;
-  vi->ops.transmitv                   = efxdp_ef_vi_transmitv;
-  vi->ops.transmitv_init              = efxdp_ef_vi_transmitv_init;
-  vi->ops.transmit_push               = efxdp_ef_vi_transmit_push;
-  vi->ops.transmit_pio                = efxdp_ef_vi_transmit_pio;
-  vi->ops.transmit_copy_pio           = efxdp_ef_vi_transmit_copy_pio;
-  vi->ops.transmit_pio_warm           = efxdp_ef_vi_transmit_pio_warm;
-  vi->ops.transmit_copy_pio_warm      = efxdp_ef_vi_transmit_copy_pio_warm;
-  vi->ops.transmitv_ctpio             = efxdp_ef_vi_transmitv_ctpio;
-  vi->ops.transmitv_ctpio_copy        = efxdp_ef_vi_transmitv_ctpio_copy;
-  vi->ops.transmit_alt_select         = efxdp_ef_vi_transmit_alt_select;
+  vi->ops.transmit = efxdp_ef_vi_transmit;
+  vi->ops.transmitv = efxdp_ef_vi_transmitv;
+  vi->ops.transmitv_init = efxdp_ef_vi_transmitv_init;
+  vi->ops.transmit_push = efxdp_ef_vi_transmit_push;
+  vi->ops.transmit_pio = efxdp_ef_vi_transmit_pio;
+  vi->ops.transmit_copy_pio = efxdp_ef_vi_transmit_copy_pio;
+  vi->ops.transmit_pio_warm = efxdp_ef_vi_transmit_pio_warm;
+  vi->ops.transmit_copy_pio_warm = efxdp_ef_vi_transmit_copy_pio_warm;
+  vi->ops.transmitv_ctpio = efxdp_ef_vi_transmitv_ctpio;
+  vi->ops.transmitv_ctpio_copy = efxdp_ef_vi_transmitv_ctpio_copy;
+  vi->ops.transmit_alt_select = efxdp_ef_vi_transmit_alt_select;
   vi->ops.transmit_alt_select_default = efxdp_ef_vi_transmit_alt_select_normal;
-  vi->ops.transmit_alt_stop           = efxdp_ef_vi_transmit_alt_stop;
-  vi->ops.transmit_alt_go             = efxdp_ef_vi_transmit_alt_go;
-  vi->ops.transmit_alt_discard        = efxdp_ef_vi_transmit_alt_discard;
-  vi->ops.receive_init                = efxdp_ef_vi_receive_init;
-  vi->ops.receive_push                = efxdp_ef_vi_receive_push;
-  vi->ops.eventq_poll                 = efxdp_ef_eventq_poll;
-  vi->ops.eventq_prime                = efxdp_ef_eventq_prime;
-  vi->ops.eventq_timer_prime          = efxdp_ef_eventq_timer_prime;
-  vi->ops.eventq_timer_run            = efxdp_ef_eventq_timer_run;
-  vi->ops.eventq_timer_clear          = efxdp_ef_eventq_timer_clear;
-  vi->ops.eventq_timer_zero           = efxdp_ef_eventq_timer_zero;
-  vi->ops.transmit_memcpy             = efxdp_ef_vi_transmit_memcpy;
-  vi->ops.transmit_memcpy_sync        = efxdp_ef_vi_transmit_memcpy_sync;
+  vi->ops.transmit_alt_stop = efxdp_ef_vi_transmit_alt_stop;
+  vi->ops.transmit_alt_go = efxdp_ef_vi_transmit_alt_go;
+  vi->ops.transmit_alt_discard = efxdp_ef_vi_transmit_alt_discard;
+  vi->ops.receive_init = efxdp_ef_vi_receive_init;
+  vi->ops.receive_push = efxdp_ef_vi_receive_push;
+  vi->ops.eventq_poll = efxdp_ef_eventq_poll;
+  vi->ops.eventq_prime = efxdp_ef_eventq_prime;
+  vi->ops.eventq_timer_prime = efxdp_ef_eventq_timer_prime;
+  vi->ops.eventq_timer_run = efxdp_ef_eventq_timer_run;
+  vi->ops.eventq_timer_clear = efxdp_ef_eventq_timer_clear;
+  vi->ops.eventq_timer_zero = efxdp_ef_eventq_timer_zero;
+  vi->ops.transmit_memcpy = efxdp_ef_vi_transmit_memcpy;
+  vi->ops.transmit_memcpy_sync = efxdp_ef_vi_transmit_memcpy_sync;
   if( vi->vi_flags & EF_VI_TX_CTPIO ) {
-    vi->ops.transmit_ctpio_fallback  = efxdp_ef_vi_transmit_ctpio_fallback;
+    vi->ops.transmit_ctpio_fallback = efxdp_ef_vi_transmit_ctpio_fallback;
     vi->ops.transmitv_ctpio_fallback = efxdp_ef_vi_transmitv_ctpio_fallback;
   } else {
     vi->ops.transmit_ctpio_fallback =
@@ -407,8 +404,8 @@ void efxdp_vi_init(ef_vi* vi)
         efxdp_ef_vi_transmitv_ctpio_fallback_not_supp;
   }
 
-  vi->rx_buffer_len  = 2048;
-  vi->rx_prefix_len  = 0;
+  vi->rx_buffer_len = 2048;
+  vi->rx_prefix_len = 0;
   vi->evq_phase_bits = 1; /* We set this flag for ef_eventq_has_event */
 }
 

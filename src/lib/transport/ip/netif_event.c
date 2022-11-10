@@ -183,6 +183,7 @@ int ci_ip_options_parse(ci_netif* netif, ci_ip4_hdr* ip, const int hdr_size)
   return error;
 }
 
+#if CI_CFG_TIMESTAMPING
 static void record_rx_timestamp(ci_netif* netif, ci_netif_state_nic_t* nsn,
     ci_ip_pkt_fmt* pkt, ef_timespec stamp, unsigned sync_flags)
 {
@@ -200,6 +201,7 @@ static void record_rx_timestamp(ci_netif* netif, ci_netif_state_nic_t* nsn,
   LOG_NR(log(LPF "RX id=%d timestamp: %lu.%09lu sync %d", OO_PKT_FMT(pkt),
       (long) stamp.tv_sec, stamp.tv_nsec, sync_flags));
 }
+#endif
 
 static void get_rx_timestamp(ci_netif* netif, ci_ip_pkt_fmt* pkt)
 {

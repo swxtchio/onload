@@ -86,7 +86,7 @@ static int citp_udp_socket(int domain, int type, int protocol)
   ci_netif* ni;
   int /*bool*/ orderly_handover = CI_FALSE;
 
-  Log_V(log(LPF "socket(%d, %d, %d)", domain, type, protocol));
+  Log_U(log(LPF "socket(%d, %d, %d)", domain, type, protocol));
 
   epi = CI_ALLOC_OBJ(citp_sock_fdi);
   if( ! epi ) {
@@ -168,10 +168,10 @@ static int citp_udp_bind(
   ci_uint16 lport;
   int rc;
 
-  Log_V(log(LPF "bind(%d, sa, %d)", fdinfo->fd, sa_len));
+  Log_U(log(LPF "bind(%d, sa, %d)", fdinfo->fd, sa_len));
 
   if( sa != NULL )
-    Log_V(log("%s: Bind to port = %d", __FUNCTION__,
+    Log_U(log("%s: Bind to port = %d", __FUNCTION__,
         ntohs(((struct sockaddr_in*) sa)->sin_port)));
 
   /* There should be address length check before address family validation to
@@ -243,6 +243,13 @@ static int citp_udp_bind(
   rc = ci_udp_bind_conclude(ep, sa, sa_len, lport);
   ci_netif_unlock_fdi(epi);
 
+  // This will happen when we try to set userland filters that have already
+  // been set We currently don't support that so we have to return that the
+  // Address is in use regardless of any flags set on the socket
+  if( rc == CI_SOCKET_ERROR ) {
+    errno = EADDRINUSE;
+  }
+
 done:
   if( rc == CI_SOCKET_HANDOVER ) {
     CITP_STATS_NETIF(++epi->sock.netif->state->stats.udp_handover_bind);
@@ -250,8 +257,12 @@ done:
     return 0;
   }
 
-  if( fdinfo )
+  if( fdinfo ) {
     citp_fdinfo_release_ref(fdinfo, 0);
+    LOG_U(ci_log("BIND REF COUNT: %d", fdinfo->ref_count.n));
+  }
+
+  LOG_U(ci_log("BIND RC: %d", rc));
   return rc;
 }
 
@@ -262,7 +273,7 @@ static int citp_udp_connect(citp_fdinfo* fdinfo, const struct sockaddr* sa,
   citp_sock_fdi* epi = fdi_to_sock_fdi(fdinfo);
   int rc;
 
-  Log_V(log(LPF "connect(%d, sa, %d)", fdinfo->fd, sa_len));
+  Log_U(log(LPF "connect(%d, sa, %d)", fdinfo->fd, sa_len));
 
   ci_netif_lock_fdi(epi);
   rc = ci_udp_connect(&epi->sock, fdinfo->fd, sa, sa_len);
@@ -284,13 +295,13 @@ static int citp_udp_shutdown(citp_fdinfo* fdinfo, int how)
   citp_sock_fdi* epi = fdi_to_sock_fdi(fdinfo);
   int rc;
 
-  Log_V(ci_log(
+  Log_U(ci_log(
       "%s(" EF_FMT ", %d)", __FUNCTION__, EF_PRI_ARGS(epi, fdinfo->fd), how));
 
   ci_netif_lock_fdi(epi);
   rc = ci_udp_shutdown(&epi->sock, fdinfo->fd, how);
   ci_netif_unlock_fdi(epi);
-  Log_V(log(LPF "shutdown: fd=%d rc=%d", fdinfo->fd, rc));
+  Log_U(log(LPF "shutdown: fd=%d rc=%d", fdinfo->fd, rc));
   return rc;
 }
 
@@ -328,7 +339,7 @@ static int citp_udp_getsockopt(citp_fdinfo* fdinfo, int level, int optname,
   citp_sock_fdi* epi = fdi_to_sock_fdi(fdinfo);
   int rc;
 
-  Log_V(log("%s(" EF_FMT ", %d, %d)", __FUNCTION__,
+  Log_U(log("%s(" EF_FMT ", %d, %d)", __FUNCTION__,
       EF_PRI_ARGS(epi, fdinfo->fd), level, optname));
 
   ci_netif_lock_fdi(epi);
@@ -347,7 +358,7 @@ static int citp_udp_setsockopt(citp_fdinfo* fdinfo, int level, int optname,
   ci_sock_cmn* s = ep->s;
   int rc;
 
-  Log_VSC(log("%s(" EF_FMT ", %d, %d)", __FUNCTION__,
+  Log_U(log("%s(" EF_FMT ", %d, %d)", __FUNCTION__,
       EF_PRI_ARGS(epi, fdinfo->fd), level, optname));
 
   if( ci_opt_is_setting_reuseport(level, optname, optval, optlen) != 0 &&
@@ -364,7 +375,7 @@ static int citp_udp_setsockopt(citp_fdinfo* fdinfo, int level, int optname,
   rc = ci_udp_setsockopt(
       &epi->sock, fdinfo->fd, level, optname, optval, optlen);
 
-  Log_V(log(LPF "setsockopt: fd=%d rc=%d", fdinfo->fd, rc));
+  Log_U(log(LPF "setsockopt: fd=%d rc=%d", fdinfo->fd, rc));
 
   if( rc == CI_SOCKET_HANDOVER ) {
     CITP_STATS_NETIF(++epi->sock.netif->state->stats.udp_handover_setsockopt);
@@ -475,11 +486,11 @@ static int citp_udp_ioctl(citp_fdinfo* fdinfo, int request, void* arg)
   citp_sock_fdi* epi = fdi_to_sock_fdi(fdinfo);
   int rc;
 
-  Log_V(log("%s(" EF_FMT ", %d, 0x%lx)", __FUNCTION__,
+  Log_U(log("%s(" EF_FMT ", %d, 0x%lx)", __FUNCTION__,
       EF_PRI_ARGS(epi, fdinfo->fd), request, (long) arg));
 
   rc = ci_udp_ioctl(&epi->sock, fdinfo->fd, request, arg);
-  Log_V(log(LPF "ioctl()=%d", rc));
+  Log_U(log(LPF "ioctl()=%d", rc));
   if( rc < 0 )
     CI_SET_ERROR(rc, -rc);
   return rc;

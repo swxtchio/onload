@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "ip_internal.h": "c"
+        "ip_internal.h": "c",
+        "*.tmpl": "c",
+        "functional": "c"
     }
 }

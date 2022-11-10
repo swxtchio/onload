@@ -44,9 +44,9 @@ static inline void calc_csum_if_needed(
     ci_netif* ni, ef_vi* vi, ci_ip_pkt_fmt* pkt)
 {
   /* Calculate packet checksum in case of AF_XDP */
-  if( CI_UNLIKELY((vi->nic_type.arch == EF_VI_ARCH_AF_XDP ||
-                      vi->nic_type.arch == EF_VI_ARCH_SWXTCH) &&
-                  is_to_primary_vi(pkt)) ) {
+  if( CI_LIKELY((vi->nic_type.arch == EF_VI_ARCH_AF_XDP ||
+                    vi->nic_type.arch == EF_VI_ARCH_SWXTCH) &&
+                is_to_primary_vi(pkt)) ) {
     struct iovec my_iov[CI_IP_PKT_SEGMENTS_MAX];
     ci_uint8 protocol;
 

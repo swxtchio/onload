@@ -113,7 +113,7 @@ $(objd)efch_intf_ver.h: $(EFCH_INTF_HDRS)
 
 $(objd)$(MMAKE_OBJ_PREFIX)pt_endpoint.o: $(objd)efch_intf_ver.h
 $(objd)$(MMAKE_OBJ_PREFIX)vi_init.o: $(objd)efch_intf_ver.h
-
+$(MMAKE_OBJ_PREFIX)efswxtch_vi.o: cwarnings += -Wno-error=deprecated-declarations
 
 ######################################################
 # UL library
