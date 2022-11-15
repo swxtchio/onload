@@ -12,13 +12,12 @@ all: $(TARGETS)
 clean:
 	@$(MakeClean)
 
-
 exchange: exchange.o utils.o
-exchange: MMAKE_LIBS     += $(LINK_ONLOAD_EXT_LIB)
+exchange: MMAKE_LIBS     += $(LINK_ONLOAD_EXT_LIB) $(DEFAULT_DPDK)
 exchange: MMAKE_LIB_DEPS += $(ONLOAD_EXT_LIB_DEPEND)
 
 trader_onload_ds_efvi: trader_onload_ds_efvi.o utils.o
 trader_onload_ds_efvi: \
-	MMAKE_LIBS     += $(LINK_ONLOAD_EXT_LIB) $(LINK_CIUL_LIB)
+	MMAKE_LIBS     += $(LINK_ONLOAD_EXT_LIB) $(LINK_CIUL_LIB) $(DEFAULT_DPDK)
 trader_onload_ds_efvi: \
 	MMAKE_LIB_DEPS += $(ONLOAD_EXT_LIB_DEPEND) $(CIUL_LIB_DEPEND)

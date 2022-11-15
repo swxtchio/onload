@@ -26,7 +26,7 @@ endif
 
 MMAKE_LIBS	:= $(LINK_CIIP_LIB) $(LINK_CIAPP_LIB) $(MMAKE_LIBS_LIBPCAP) \
 		   $(LINK_CITOOLS_LIB) $(LINK_CIUL_LIB) \
-		   -lpthread $(LINK_CPLANE_LIB)
+		   -lpthread $(LINK_CPLANE_LIB) $(DEFAULT_DPDK)
 MMAKE_INCLUDE	+= -I$(TOPPATH)/src/tools/ip
 
 LIBS      += $(MMAKE_LIBS) $(ZMQ_LIBS)

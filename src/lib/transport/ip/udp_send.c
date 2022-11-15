@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2004-2020 Xilinx, Inc. */
 /**************************************************************************\
-*//*! \file
+ *//*! \file
 ** <L5_PRIVATE L5_SOURCE>
 ** \author  djr/stg
 **  \brief  UDP sendmsg() etc.
@@ -10,9 +10,9 @@
 ** </L5_PRIVATE>
 *//*
 \**************************************************************************/
-  
+
 /*! \cidoxg_lib_transport_ip */
-  
+
 #include "ip_internal.h"
 #include "udp_internal.h"
 #include "ip_tx.h"
@@ -29,53 +29,51 @@
 #if OO_DO_STACK_POLL
 #define VERB(x)
 
-#define LPF "ci_udp_"
-#define LPFIN "-> " LPF
+#define LPF    "ci_udp_"
+#define LPFIN  "-> " LPF
 #define LPFOUT "<- " LPF
 
 
 /* This just avoids some ugly #ifdef.  This val is not used at userlevel. */
 #ifndef __KERNEL__
-# define ERESTARTSYS 0
+#define ERESTARTSYS 0
 #endif
 
 
-#define TXQ_LEVEL(us)                                           \
+#define TXQ_LEVEL(us) \
   ((us)->tx_count + oo_atomic_read(&(us)->tx_async_q_level))
 
 /* If not locked then trylock, and if successful set locked flag and (in
  * some cases) increment the counter.  Return true if lock held, else
  * false.  si_ variants take a [struct udp_send_info*].
  */
-#define trylock(ni, locked)                                     \
+#define trylock(ni, locked) \
   ((locked) || (ci_netif_trylock(ni) && ((locked) = 1)))
-#define si_trylock(ni, sinf)                    \
-  trylock((ni), (sinf)->stack_locked)
-#define trylock_and_inc(ni, locked, cntr)                               \
+#define si_trylock(ni, sinf) trylock((ni), (sinf)->stack_locked)
+#define trylock_and_inc(ni, locked, cntr) \
   ((locked) || (ci_netif_trylock(ni) && (++(cntr), (locked) = 1)))
-#define si_trylock_and_inc(ni, sinf, cntr)              \
+#define si_trylock_and_inc(ni, sinf, cntr) \
   trylock_and_inc((ni), (sinf)->stack_locked, (cntr))
 
 #if CI_CFG_IPV6
-#define msg_namelen_ok(af, namelen) ((af) == AF_INET6 ? \
-  (namelen) >= sizeof(struct sockaddr_in6) : \
-  (namelen) >= sizeof(struct sockaddr_in))
+#define msg_namelen_ok(af, namelen)                            \
+  ((af) == AF_INET6 ? (namelen) >= sizeof(struct sockaddr_in6) \
+                    : (namelen) >= sizeof(struct sockaddr_in))
 #else
-#define msg_namelen_ok(af, namelen) \
-  ((namelen) >= sizeof(struct sockaddr_in))
+#define msg_namelen_ok(af, namelen) ((namelen) >= sizeof(struct sockaddr_in))
 #endif
 
-#define oo_tx_udp_hdr(pkt)  ((ci_udp_hdr*) oo_tx_ip_data(pkt))
+#define oo_tx_udp_hdr(pkt)         ((ci_udp_hdr*) oo_tx_ip_data(pkt))
 #define oo_tx_ipx_udp_hdr(af, pkt) ((ci_udp_hdr*) oo_tx_ipx_data(af, pkt))
 
 
 struct udp_send_info {
-  int                   rc;
-  ci_ip_cached_hdrs     ipcache;
-  int                   used_ipcache;
-  int                   stack_locked;
-  ci_uint32             timeout;
-  int                   old_ipcache_updated;
+  int rc;
+  ci_ip_cached_hdrs ipcache;
+  int used_ipcache;
+  int stack_locked;
+  ci_uint32 timeout;
+  int old_ipcache_updated;
 };
 
 static bool ci_ipx_is_first_frag(int af, ci_ipx_hdr_t* ipx)
@@ -88,15 +86,14 @@ static bool ci_ipx_is_first_frag(int af, ci_ipx_hdr_t* ipx)
     frag_hdr = ipx_hdr_data(af, ipx);
     if( (frag_hdr->frag_off & CI_BSWAPC_BE16(CI_IP6_OFFSET)) == 0 )
       return true;
-  }
-  else
+  } else
 #endif
   {
     if( (ipx->ip4.ip_frag_off_be16 & CI_IP4_OFFSET_MASK) == 0 )
       return true;
   }
   return false;
- }
+}
 
 /* Check if More Fragments flag is set for IPv4 or IPv6 header */
 static bool ci_ipx_is_mf_set(int af, ci_ipx_hdr_t* ipx)
@@ -109,8 +106,7 @@ static bool ci_ipx_is_mf_set(int af, ci_ipx_hdr_t* ipx)
     frag_hdr = ipx_hdr_data(af, ipx);
     if( frag_hdr->frag_off & CI_BSWAPC_BE16(CI_IP6_MF) )
       return true;
-  }
-  else
+  } else
 #endif
   {
     if( ipx->ip4.ip_frag_off_be16 & CI_IP4_FRAG_MORE )
@@ -119,8 +115,8 @@ static bool ci_ipx_is_mf_set(int af, ci_ipx_hdr_t* ipx)
   return false;
 }
 
-ci_noinline void ci_udp_sendmsg_chksum(ci_netif* ni, ci_ip_pkt_fmt* pkt,
-                                       int af, ci_ipx_hdr_t* first_hdr)
+ci_noinline void ci_udp_sendmsg_chksum(
+    ci_netif* ni, ci_ip_pkt_fmt* pkt, int af, ci_ipx_hdr_t* first_hdr)
 {
   /* 1400*50 = 70000, i.e. in normal situation there are <50 fragments */
 #define MAX_IP_FRAGMENTS 50
@@ -133,7 +129,7 @@ ci_noinline void ci_udp_sendmsg_chksum(ci_netif* ni, ci_ip_pkt_fmt* pkt,
   /* iterate all IP fragments */
   while( OO_PP_NOT_NULL(p->next) ) {
     int frag_len;
-    char *frag_start;
+    char* frag_start;
     int max_sg_len;
 
     /* When too many fragments, let's send it without checksum */
@@ -141,27 +137,32 @@ ci_noinline void ci_udp_sendmsg_chksum(ci_netif* ni, ci_ip_pkt_fmt* pkt,
       return;
 
     if( first_frag ) {
-      frag_start = (char*)(udp + 1);
-      frag_len = ( WITH_CI_CFG_IPV6( IS_AF_INET6(af) ?
-          CI_BSWAP_BE16(first_hdr->ip6.payload_len) - sizeof(ci_ip6_frag_hdr) : )
-          CI_BSWAP_BE16(first_hdr->ip4.ip_tot_len_be16) -
-          CI_IP4_IHL(&first_hdr->ip4)) - sizeof(ci_udp_hdr);
+      frag_start = (char*) (udp + 1);
+      frag_len = (WITH_CI_CFG_IPV6(
+                      IS_AF_INET6(af)
+                          ? CI_BSWAP_BE16(first_hdr->ip6.payload_len) -
+                                sizeof(ci_ip6_frag_hdr)
+                          :) CI_BSWAP_BE16(first_hdr->ip4.ip_tot_len_be16) -
+                     CI_IP4_IHL(&first_hdr->ip4)) -
+                 sizeof(ci_udp_hdr);
       first_frag = 0;
-    }
-    else {
+    } else {
       ci_ipx_hdr_t* p_ipx;
       p = PKT_CHK(ni, p->next);
       p_ipx = TX_PKT_IPX_HDR(af, p);
-      frag_len = WITH_CI_CFG_IPV6( IS_AF_INET6(af) ?
-          CI_BSWAP_BE16(p_ipx->ip6.payload_len) - sizeof(ci_ip6_frag_hdr) : )
-          CI_BSWAP_BE16(p_ipx->ip4.ip_tot_len_be16) - CI_IP4_IHL(&p_ipx->ip4);
-      frag_start = (char*)ipx_hdr_data(af, p_ipx) + CI_IPX_FRAG_HDR_SIZE(af);
+      frag_len = WITH_CI_CFG_IPV6(IS_AF_INET6(af)
+                                      ? CI_BSWAP_BE16(p_ipx->ip6.payload_len) -
+                                            sizeof(ci_ip6_frag_hdr)
+                                      :)
+                     CI_BSWAP_BE16(p_ipx->ip4.ip_tot_len_be16) -
+                 CI_IP4_IHL(&p_ipx->ip4);
+      frag_start = (char*) ipx_hdr_data(af, p_ipx) + CI_IPX_FRAG_HDR_SIZE(af);
     }
 
     iov[n].iov_base = frag_start;
     iov[n].iov_len = frag_len;
-    max_sg_len = CI_PTR_ALIGN_FWD(PKT_START(p), CI_CFG_PKT_BUF_SIZE) -
-        frag_start;
+    max_sg_len =
+        CI_PTR_ALIGN_FWD(PKT_START(p), CI_CFG_PKT_BUF_SIZE) - frag_start;
     if( frag_len > max_sg_len ) {
       iov[n].iov_len = max_sg_len;
       frag_len -= max_sg_len;
@@ -178,29 +179,26 @@ ci_noinline void ci_udp_sendmsg_chksum(ci_netif* ni, ci_ip_pkt_fmt* pkt,
 
         iov[n].iov_base = PKT_START(sg_pkt);
         iov[n].iov_len = frag_len;
-        max_sg_len = CI_PTR_ALIGN_FWD(PKT_START(sg_pkt),
-                                      CI_CFG_PKT_BUF_SIZE) -
+        max_sg_len = CI_PTR_ALIGN_FWD(PKT_START(sg_pkt), CI_CFG_PKT_BUF_SIZE) -
                      PKT_START(sg_pkt);
         if( frag_len > max_sg_len ) {
           iov[n].iov_len = max_sg_len;
           frag_len -= max_sg_len;
-        }
-        else
+        } else
           frag_len = 0;
       }
       ci_assert_equal(frag_len, 0);
     }
   }
-  
-  udp->udp_check_be16 = WITH_CI_CFG_IPV6( IS_AF_INET6(af) ?
-                        ci_ip6_udp_checksum(&first_hdr->ip6, udp, iov, n+1) : )
-                        ci_udp_checksum(&first_hdr->ip4, udp, iov, n+1);
+
+  udp->udp_check_be16 = WITH_CI_CFG_IPV6(
+      IS_AF_INET6(af) ? ci_ip6_udp_checksum(&first_hdr->ip6, udp, iov, n + 1)
+                      :) ci_udp_checksum(&first_hdr->ip4, udp, iov, n + 1);
 }
 
 
-static void
-ci_ip_send_udp_slow(ci_netif* ni, struct oo_sock_cplane* sock_cp,
-                    ci_ip_pkt_fmt* pkt, ci_ip_cached_hdrs* ipcache)
+static void ci_ip_send_udp_slow(ci_netif* ni, struct oo_sock_cplane* sock_cp,
+    ci_ip_pkt_fmt* pkt, ci_ip_cached_hdrs* ipcache)
 {
   int os_rc = 0;
 
@@ -231,13 +229,14 @@ static int ci_udp_sendmsg_loop(ci_sock_cmn* s, void* opaque_arg)
      */
     frag_head = state->pkt;
     udp = (ci_udp_hdr*) (oo_ip_hdr(frag_head) + 1);
-    frag_head->tstamp_frc  = IPTIMER_STATE(state->ni)->frc;
-    frag_head->pf.udp.pay_len = CI_BSWAP_BE16(udp->udp_len_be16) - sizeof(*udp);
+    frag_head->tstamp_frc = IPTIMER_STATE(state->ni)->frc;
+    frag_head->pf.udp.pay_len =
+        CI_BSWAP_BE16(udp->udp_len_be16) - sizeof(*udp);
     buf_pkt = frag_head;
     seg_i = 0;
     while( 1 ) {
       ++state->ni->state->n_rx_pkts;
-      ci_assert(!(buf_pkt->flags & CI_PKT_FLAG_RX));
+      ci_assert(! (buf_pkt->flags & CI_PKT_FLAG_RX));
       buf_pkt->flags |= CI_PKT_FLAG_RX;
       if( buf_pkt == state->pkt )
         /* First IP fragment, move past IP+UDP header */
@@ -246,7 +245,7 @@ static int ci_udp_sendmsg_loop(ci_sock_cmn* s, void* opaque_arg)
         /* Subsequent IP fragment, move past IP header */
         buf_start = oo_ip_hdr(buf_pkt) + 1;
       else
-        /* Internal (jumbo) fragment, no header to move past */ 
+        /* Internal (jumbo) fragment, no header to move past */
         buf_start = PKT_START(buf_pkt);
       buf_len = buf_pkt->buf_len;
       buf_len -= (char*) buf_start - PKT_START(buf_pkt);
@@ -265,13 +264,12 @@ static int ci_udp_sendmsg_loop(ci_sock_cmn* s, void* opaque_arg)
   ci_udp_rx_deliver(s, opaque_arg);
   citp_waitable_wake_not_in_poll(state->ni, &s->b, CI_SB_FLAG_WAKE_RX);
 
-  return 0;  /* continue delivering to other sockets */
+  return 0; /* continue delivering to other sockets */
 }
 
 
 static void ci_udp_sendmsg_mcast(ci_netif* ni, ci_udp_state* us,
-                                 ci_ip_cached_hdrs* ipcache,
-                                 ci_ip_pkt_fmt* pkt)
+    ci_ip_cached_hdrs* ipcache, ci_ip_pkt_fmt* pkt)
 {
   /* NB. We don't deliver multicast packets directly to local sockets if
    * sending via the control plane (below) as they'll get there via the
@@ -288,7 +286,7 @@ static void ci_udp_sendmsg_mcast(ci_netif* ni, ci_udp_state* us,
   if( ! (us->udpflags & CI_UDPF_MCAST_LOOP) ||
       ! (NI_OPTS(ni).mcast_send & CITP_MCAST_SEND_FLAG_LOCAL) )
     return;
-  if(CI_UNLIKELY( ni->state->n_rx_pkts >= NI_OPTS(ni).max_rx_packets )) {
+  if( CI_UNLIKELY(ni->state->n_rx_pkts >= NI_OPTS(ni).max_rx_packets) ) {
     ci_netif_try_to_reap(ni, 100);
     if( ni->state->n_rx_pkts >= NI_OPTS(ni).max_rx_packets ) {
       CITP_STATS_NETIF_INC(ni, udp_send_mcast_loop_drop);
@@ -310,26 +308,19 @@ static void ci_udp_sendmsg_mcast(ci_netif* ni, ci_udp_state* us,
    */
   ci_ip_time_resync(IPTIMER_STATE(ni));
 
-  ci_netif_filter_for_each_match(ni,
-                                 oo_ip_hdr(pkt)->ip_daddr_be32,
-                                 udp->udp_dest_be16,
-                                 oo_ip_hdr(pkt)->ip_saddr_be32,
-                                 udp->udp_source_be16,
-                                 IPPROTO_UDP, ipcache->intf_i,
-                                 ipcache->encap.vlan_id,
-                                 ci_udp_sendmsg_loop, &state, NULL);
-  ci_netif_filter_for_each_match(ni,
-                                 oo_ip_hdr(pkt)->ip_daddr_be32,
-                                 udp->udp_dest_be16,
-                                 0, 0, IPPROTO_UDP, ipcache->intf_i,
-                                 ipcache->encap.vlan_id,
-                                 ci_udp_sendmsg_loop, &state, NULL);
+  ci_netif_filter_for_each_match(ni, oo_ip_hdr(pkt)->ip_daddr_be32,
+      udp->udp_dest_be16, oo_ip_hdr(pkt)->ip_saddr_be32, udp->udp_source_be16,
+      IPPROTO_UDP, ipcache->intf_i, ipcache->encap.vlan_id,
+      ci_udp_sendmsg_loop, &state, NULL);
+  ci_netif_filter_for_each_match(ni, oo_ip_hdr(pkt)->ip_daddr_be32,
+      udp->udp_dest_be16, 0, 0, IPPROTO_UDP, ipcache->intf_i,
+      ipcache->encap.vlan_id, ci_udp_sendmsg_loop, &state, NULL);
 }
 
 
 /* Pass prepared packet to ip_send(), release our ref & and update stats */
 ci_inline void prep_send_pkt(ci_netif* ni, ci_udp_state* us,
-                             ci_ip_pkt_fmt* pkt, ci_ip_cached_hdrs* ipcache)
+    ci_ip_pkt_fmt* pkt, ci_ip_cached_hdrs* ipcache)
 {
   int af = ipcache_af(&us->s.pkt);
   ci_ipx_hdr_t* ipx = oo_tx_ipx_hdr(af, pkt);
@@ -342,7 +333,7 @@ ci_inline void prep_send_pkt(ci_netif* ni, ci_udp_state* us,
   us->tx_count += pkt->pf.udp.tx_length;
   pkt->flags |= CI_PKT_FLAG_UDP;
   pkt->pf.udp.tx_sock_id = S_SP(us);
-  CI_UDP_STATS_INC_OUT_DGRAMS( ni );
+  CI_UDP_STATS_INC_OUT_DGRAMS(ni);
 
 #if CI_CFG_IPV6
   if( IS_AF_INET6(af) ) {
@@ -350,9 +341,8 @@ ci_inline void prep_send_pkt(ci_netif* ni, ci_udp_state* us,
       TX_PKT_SET_FLOWLABEL(af, pkt, ci_ip6_flowlabel_be32(&ipcache->ipx.ip6));
     }
     pkt->flags |= CI_PKT_FLAG_IS_IP6;
-  }
-  else {
-    pkt->flags &=~ CI_PKT_FLAG_IS_IP6;
+  } else {
+    pkt->flags &= ~CI_PKT_FLAG_IS_IP6;
   }
 #endif
 
@@ -372,9 +362,8 @@ ci_inline void prep_send_pkt(ci_netif* ni, ci_udp_state* us,
 
 #ifdef __KERNEL__
 
-static int do_sys_sendmsg(tcp_helper_endpoint_t *ep, oo_os_file os_sock,
-                          const ci_msghdr* msg,
-                          int flags, int user_buffers, int atomic)
+static int do_sys_sendmsg(tcp_helper_endpoint_t* ep, oo_os_file os_sock,
+    const ci_msghdr* msg, int flags, int user_buffers, int atomic)
 {
   struct socket* sock;
   int i, bytes;
@@ -385,8 +374,8 @@ static int do_sys_sendmsg(tcp_helper_endpoint_t *ep, oo_os_file os_sock,
   ci_assert(! user_buffers || ! atomic);
 
   LOG_NT(ci_log("%s: user_buffers=%d atomic=%d sk_allocation=%x ATOMIC=%x",
-               __FUNCTION__, user_buffers, atomic,
-               sock->sk->sk_allocation, GFP_ATOMIC));
+      __FUNCTION__, user_buffers, atomic, sock->sk->sk_allocation,
+      GFP_ATOMIC));
 
   if( atomic && sock->sk->sk_allocation != GFP_ATOMIC ) {
     ci_log("%s: cannot proceed", __FUNCTION__);
@@ -400,11 +389,9 @@ static int do_sys_sendmsg(tcp_helper_endpoint_t *ep, oo_os_file os_sock,
   if( user_buffers ) {
     oo_msg_iov_init(&kmsg, WRITE, msg->msg_iov, msg->msg_iovlen, bytes);
     bytes = sock_sendmsg(sock, &kmsg);
-  }
-  else {
-    bytes = kernel_sendmsg(sock, &kmsg,
-                           (struct kvec*) msg->msg_iov, msg->msg_iovlen,
-                           bytes);
+  } else {
+    bytes = kernel_sendmsg(
+        sock, &kmsg, (struct kvec*) msg->msg_iov, msg->msg_iovlen, bytes);
   }
 
   /* Clear OS TX flag if necessary  */
@@ -413,11 +400,10 @@ static int do_sys_sendmsg(tcp_helper_endpoint_t *ep, oo_os_file os_sock,
 }
 
 static int ci_udp_sendmsg_os(ci_netif* ni, ci_udp_state* us,
-                             const ci_msghdr* msg, int flags,
-                             int user_buffers, int atomic)
+    const ci_msghdr* msg, int flags, int user_buffers, int atomic)
 {
   int rc;
-  tcp_helper_endpoint_t *ep = ci_netif_ep_get(ni, us->s.b.bufid);
+  tcp_helper_endpoint_t* ep = ci_netif_ep_get(ni, us->s.b.bufid);
   oo_os_file os_sock;
 
   ++us->stats.n_tx_os;
@@ -434,8 +420,7 @@ static int ci_udp_sendmsg_os(ci_netif* ni, ci_udp_state* us,
 #else
 
 ci_inline int ci_udp_sendmsg_os(ci_netif* ni, ci_udp_state* us,
-                             const struct msghdr* msg, int flags,
-                             int user_buffers, int atomic)
+    const struct msghdr* msg, int flags, int user_buffers, int atomic)
 {
   ++us->stats.n_tx_os;
   return oo_os_sock_sendmsg(ni, S_SP(us), msg, flags);
@@ -450,24 +435,24 @@ ci_inline int ci_udp_sendmsg_os(ci_netif* ni, ci_udp_state* us,
  *
  * TODO: wrap it into ioctl: bind+getsockname.
  * */
-static int ci_udp_sendmsg_os_get_binding(citp_socket *ep, ci_fd_t fd,
-                                         const struct msghdr * msg, int flags)
+static int ci_udp_sendmsg_os_get_binding(
+    citp_socket* ep, ci_fd_t fd, const struct msghdr* msg, int flags)
 {
   ci_netif* ni = ep->netif;
   ci_udp_state* us = SOCK_TO_UDP(ep->s);
   int rc;
   union ci_sockaddr_u sa_u = {};
   socklen_t salen = sizeof(sa_u);
-  ci_fd_t os_sock = (ci_fd_t)ci_get_os_sock_fd(fd);
+  ci_fd_t os_sock = (ci_fd_t) ci_get_os_sock_fd(fd);
   ci_addr_t laddr;
   ci_uint16 lport;
 
-  ci_assert( !udp_lport_be16(us));
+  ci_assert(! udp_lport_be16(us));
 
-  if ( !CI_IS_VALID_SOCKET(os_sock) ) {
-    LOG_U( log("%s: "NT_FMT" can't get OS socket (%d)", __FUNCTION__, 
-		NT_PRI_ARGS(ni,us), os_sock));
-    RET_WITH_ERRNO((int)os_sock); /*! \todo FIXME remvoce cast */
+  if( ! CI_IS_VALID_SOCKET(os_sock) ) {
+    LOG_U(log("%s: " NT_FMT " can't get OS socket (%d)", __FUNCTION__,
+        NT_PRI_ARGS(ni, us), os_sock));
+    RET_WITH_ERRNO((int) os_sock); /*! \todo FIXME remvoce cast */
   }
 
   /* Not bound.  Probably not connected & sending for the first time,
@@ -482,24 +467,25 @@ static int ci_udp_sendmsg_os_get_binding(citp_socket *ep, ci_fd_t fd,
 
   /* see what the kernel did - we'll do just the same */
   if( rc == 0 )
-    rc = ci_sys_getsockname( os_sock, &sa_u.sa, &salen);
+    rc = ci_sys_getsockname(os_sock, &sa_u.sa, &salen);
 
   /* Must release the os_sock fd before we can take the stack lock, as the
    * citp_dup2_lock is held until we do so, and lock ordering does not allow
    * us to take the stack lock with the dup2 lock held.
    */
-  ci_rel_os_sock_fd( os_sock );
+  ci_rel_os_sock_fd(os_sock);
 
   /* get out if getsockname fails or returns a non INET family
-    * or a sockaddr struct that's too darned small */
-  if( CI_UNLIKELY( rc || (!rc &&
-			  ( sa_u.sa.sa_family != us->s.domain ||
-			    /* FIXME case when sa_family is AF_INET and us->s.domain is AF_INET6 */
-			    salen < IPX_SOCKADDR_SIZE(sa_u.sa.sa_family))))) {
-    LOG_UV(log("%s: "NT_FMT" sys_getsockname prob. (rc:%d err:%d, fam:%d, "
-		"len:%d - exp %u)",
-		__FUNCTION__, NT_PRI_ARGS(ni,us), rc, errno, sa_u.sa.sa_family,
-		salen, (unsigned)IPX_SOCKADDR_SIZE(sa_u.sa.sa_family)));
+   * or a sockaddr struct that's too darned small */
+  if( CI_UNLIKELY(rc || (! rc && (sa_u.sa.sa_family != us->s.domain ||
+                                     /* FIXME case when sa_family is AF_INET
+                                        and us->s.domain is AF_INET6 */
+                                     salen < IPX_SOCKADDR_SIZE(
+                                                 sa_u.sa.sa_family)))) ) {
+    LOG_UV(log("%s: " NT_FMT " sys_getsockname prob. (rc:%d err:%d, fam:%d, "
+               "len:%d - exp %u)",
+        __FUNCTION__, NT_PRI_ARGS(ni, us), rc, errno, sa_u.sa.sa_family, salen,
+        (unsigned) IPX_SOCKADDR_SIZE(sa_u.sa.sa_family)));
     return rc;
   }
 
@@ -510,30 +496,30 @@ static int ci_udp_sendmsg_os_get_binding(citp_socket *ep, ci_fd_t fd,
   ci_sock_cmn_set_laddr(ep->s, laddr, lport);
 
   /* Add a filter if the local addressing is appropriate. */
-  if( ~ni->state->flags & CI_NETIF_FLAG_USE_ALIEN_LADDRS &&
-      lport != 0 && (CI_IPX_ADDR_IS_ANY(laddr) ||
-      cicp_user_addr_is_local_efab(ni, laddr)) ) {
-    ci_assert( ! (us->udpflags & CI_UDPF_FILTERED) );
+  if( ~ni->state->flags & CI_NETIF_FLAG_USE_ALIEN_LADDRS && lport != 0 &&
+      (CI_IPX_ADDR_IS_ANY(laddr) ||
+          cicp_user_addr_is_local_efab(ni, laddr)) ) {
+    ci_assert(! (us->udpflags & CI_UDPF_FILTERED));
 
-    rc = ci_tcp_ep_set_filters(ni, S_SP(us), us->s.cp.so_bindtodevice,
-                               OO_SP_NULL);
+    rc = ci_tcp_ep_set_filters(
+        ni, S_SP(us), us->s.cp.so_bindtodevice, OO_SP_NULL);
     if( rc ) {
       LOG_U(log("%s: FILTER ADD FAIL %d", __FUNCTION__, -rc));
       if( rc == -EFILTERSSOME )
         UDP_SET_FLAG(us, CI_UDPF_FILTERED);
       if( CITP_OPTS.no_fail )
         rc = 0;
-    }
-    else {
+    } else {
       UDP_SET_FLAG(us, CI_UDPF_FILTERED);
     }
   }
   ci_netif_unlock(ni);
 
   laddr = sock_laddr(&us->s);
-  LOG_UV(ci_log("%s: "NT_FMT"Unbound: first send via OS got L:[" IPX_PORT_FMT "]",
-                __FUNCTION__, NT_PRI_ARGS(ni,us),
-                IPX_ARG(AF_IP(laddr)), udp_lport_be16(us)));
+  LOG_UV(ci_log("%s: " NT_FMT "Unbound: first send via OS got L:[" IPX_PORT_FMT
+                "]",
+      __FUNCTION__, NT_PRI_ARGS(ni, us), IPX_ARG(AF_IP(laddr)),
+      udp_lport_be16(us)));
 
   return rc;
 }
@@ -541,8 +527,7 @@ static int ci_udp_sendmsg_os_get_binding(citp_socket *ep, ci_fd_t fd,
 
 
 static int ci_udp_sendmsg_send_pkt_via_os(ci_netif* ni, ci_udp_state* us,
-                                          ci_ip_pkt_fmt* pkt, int flags,
-                                          struct udp_send_info* sinf)
+    ci_ip_pkt_fmt* pkt, int flags, struct udp_send_info* sinf)
 {
   int seg_i, buf_len, iov_i;
   ci_ip_pkt_fmt* frag_head;
@@ -566,12 +551,11 @@ static int ci_udp_sendmsg_send_pkt_via_os(ci_netif* ni, ci_udp_state* us,
   {
     ci_addr_t daddr = TX_PKT_DADDR(af, pkt);
     if( ! CI_IPX_ADDR_IS_ANY(daddr) ) {
-      ss = ci_make_sockaddr_storage_from_addr(TX_PKT_UDP(pkt)->udp_dest_be16,
-                                              daddr);
+      ss = ci_make_sockaddr_storage_from_addr(
+          TX_PKT_UDP(pkt)->udp_dest_be16, daddr);
       m.msg_name = &ss;
       m.msg_namelen = IPX_SOCKADDR_SIZE(af);
-    }
-    else {
+    } else {
       m.msg_name = NULL;
       m.msg_namelen = 0;
     }
@@ -592,7 +576,7 @@ static int ci_udp_sendmsg_send_pkt_via_os(ci_netif* ni, ci_udp_state* us,
       /* Subsequent IP fragment, move past IP header */
       buf_start = oo_tx_ipx_data(af, buf_pkt);
     else
-      /* Internal (jumbo) fragment, no header to move past */ 
+      /* Internal (jumbo) fragment, no header to move past */
       buf_start = PKT_START(buf_pkt);
     buf_len = buf_pkt->buf_len;
     buf_len -= (char*) buf_start - PKT_START(buf_pkt);
@@ -628,7 +612,7 @@ static int ci_udp_sendmsg_send_pkt_via_os(ci_netif* ni, ci_udp_state* us,
 }
 
 
-static void fixup_pkt_not_transmitted(ci_netif *ni, ci_ip_pkt_fmt* pkt)
+static void fixup_pkt_not_transmitted(ci_netif* ni, ci_ip_pkt_fmt* pkt)
 {
   ci_assert(ci_netif_is_locked(ni));
   while( 1 ) {
@@ -649,8 +633,7 @@ static void fixup_pkt_not_transmitted(ci_netif *ni, ci_ip_pkt_fmt* pkt)
 
 
 static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
-                                ci_ip_pkt_fmt* pkt, int flags,
-                                struct udp_send_info* sinf)
+    ci_ip_pkt_fmt* pkt, int flags, struct udp_send_info* sinf)
 {
   ci_ip_pkt_fmt* first_pkt = pkt;
   ci_ip_cached_hdrs* ipcache;
@@ -680,9 +663,8 @@ static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
       if( oo_cp_ipcache_is_valid(ni, ipcache) )
         goto done_hdr_update;
       old_ipcache_updated = 1;
-    }
-    else {
-      us->udpflags &=~ CI_UDPF_LAST_SEND_NOMAC;
+    } else {
+      us->udpflags &= ~CI_UDPF_LAST_SEND_NOMAC;
       ci_ipcache_set_daddr(ipcache, pkt_daddr);
       ipcache->dport_be16 = TX_PKT_IPX_DPORT(af, pkt);
       if( sinf != NULL && sinf->used_ipcache &&
@@ -702,8 +684,7 @@ static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
      * footing cicp_user_retrieve(). */
     ci_ip_cache_invalidate(ipcache);
     cicp_user_retrieve(ni, ipcache, &us->s.cp);
-  }
-  else {
+  } else {
     /**********************************************************************
      * Connected send.
      */
@@ -714,7 +695,7 @@ static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
     if( CI_IPX_ADDR_IS_ANY(udp_raddr) )
       goto no_longer_connected;
     ipcache = &us->s.pkt;
-    if(CI_UNLIKELY( ! oo_cp_ipcache_is_valid(ni, ipcache) )) {
+    if( CI_UNLIKELY(! oo_cp_ipcache_is_valid(ni, ipcache)) ) {
       ++us->stats.n_tx_cp_c_lookup;
       cicp_user_retrieve(ni, ipcache, &us->s.cp);
       old_ipcache_updated = 1;
@@ -725,22 +706,22 @@ static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
     TX_PKT_IPX_UDP(af, pkt, is_frag)->udp_dest_be16 = udp_rport_be16(us);
   }
 
- done_hdr_update:
+done_hdr_update:
   switch( ipcache->status ) {
-  case retrrc_success:
-    ipcache_onloadable = 1;
+    case retrrc_success:
+      ipcache_onloadable = 1;
 
-    /* Try to avoid reordering of the packets: send all nomac packets */
-    if( old_ipcache_updated && (us->udpflags & CI_UDPF_LAST_SEND_NOMAC) ) {
-      oo_deferred_send(ni);
-      us->udpflags &=~ CI_UDPF_LAST_SEND_NOMAC;
-    }
-    break;
-  case retrrc_nomac:
-    ipcache_onloadable = 0;
-    break;
-  default:
-    goto send_pkt_via_os;
+      /* Try to avoid reordering of the packets: send all nomac packets */
+      if( old_ipcache_updated && (us->udpflags & CI_UDPF_LAST_SEND_NOMAC) ) {
+        oo_deferred_send(ni);
+        us->udpflags &= ~CI_UDPF_LAST_SEND_NOMAC;
+      }
+      break;
+    case retrrc_nomac:
+      ipcache_onloadable = 0;
+      break;
+    default:
+      goto send_pkt_via_os;
   }
 
 #if CI_CFG_IPV6
@@ -755,7 +736,7 @@ static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
 
   tot_len = ipx_hdr_tot_len(af, oo_tx_ipx_hdr(af, pkt));
 
-  if(CI_UNLIKELY( tot_len > ipcache->mtu ))
+  if( CI_UNLIKELY(tot_len > ipcache->mtu) )
     /* Oh dear -- we've fragmented the packet with too large an MTU.
      * Either the MTU has recently changed, or we are unconnected and
      * sampled the MTU from the cached value at a bad time.
@@ -765,15 +746,15 @@ static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
      *
      * For now just carry on regardless...
      */
-    ci_log("%s: pkt mtu=%d exceeds path mtu=%d", __FUNCTION__,
-           tot_len, ipcache->mtu);
+    ci_log("%s: pkt mtu=%d exceeds path mtu=%d", __FUNCTION__, tot_len,
+        ipcache->mtu);
 
   ci_assert_equal(ni->state->send_may_poll, 0);
   ni->state->send_may_poll = ci_netif_may_poll(ni);
 
   /* Linux allows sending IPv6 packets with zero Hop Limit field */
   if( ipcache_ttl(ipcache) || ipcache_is_ipv6(ipcache) ) {
-    if(CI_LIKELY( ipcache_onloadable )) {
+    if( CI_LIKELY(ipcache_onloadable) ) {
       /* TODO: Hit the doorbell just once. */
       while( 1 ) {
         oo_pkt_p next = pkt->next;
@@ -784,21 +765,20 @@ static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
           break;
         pkt = PKT_CHK(ni, next);
 #ifdef __KERNEL__
-        if(CI_UNLIKELY( i++ > ni->pkt_sets_n << CI_CFG_PKTS_PER_SET_S )) {
-          ci_netif_error_detected(ni, CI_NETIF_ERROR_UDP_SEND_PKTS_LIST,
-                                  __FUNCTION__);
+        if( CI_UNLIKELY(i++ > ni->pkt_sets_n << CI_CFG_PKTS_PER_SET_S) ) {
+          ci_netif_error_detected(
+              ni, CI_NETIF_ERROR_UDP_SEND_PKTS_LIST, __FUNCTION__);
         }
 #endif
       }
       if( flags & MSG_CONFIRM )
-        oo_cp_arp_confirm(ni->cplane, &ipcache->fwd_ver,
-                          ci_ni_fwd_table_id(ni));
+        oo_cp_arp_confirm(
+            ni->cplane, &ipcache->fwd_ver, ci_ni_fwd_table_id(ni));
 
       if( CI_IPX_IS_MULTICAST(ipcache_raddr(ipcache)) )
         ci_udp_sendmsg_mcast(ni, us, ipcache, first_pkt);
-      us->udpflags &=~ CI_UDPF_LAST_SEND_NOMAC;
-    }
-     else {
+      us->udpflags &= ~CI_UDPF_LAST_SEND_NOMAC;
+    } else {
       /* Packet should go via an onload interface, but ipcache is not valid.
        * Could be that we don't have a mac, or could be that we need to drop
        * into the kernel to keep the mac entry alive.
@@ -820,28 +800,26 @@ static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
           break;
         pkt = PKT_CHK(ni, next);
 #ifdef __KERNEL__
-        if(CI_UNLIKELY( i++ > ni->pkt_sets_n << CI_CFG_PKTS_PER_SET_S )) {
-          ci_netif_error_detected(ni, CI_NETIF_ERROR_UDP_SEND_PKTS_LIST,
-                                  __FUNCTION__);
+        if( CI_UNLIKELY(i++ > ni->pkt_sets_n << CI_CFG_PKTS_PER_SET_S) ) {
+          ci_netif_error_detected(
+              ni, CI_NETIF_ERROR_UDP_SEND_PKTS_LIST, __FUNCTION__);
         }
 #endif
       }
     }
-  }
-  else if( CI_IPX_IS_MULTICAST(ipcache_raddr(ipcache)) ) {
+  } else if( CI_IPX_IS_MULTICAST(ipcache_raddr(ipcache)) ) {
     fixup_pkt_not_transmitted(ni, first_pkt);
     ci_udp_sendmsg_mcast(ni, us, ipcache, first_pkt);
-  }
-  else {
+  } else {
     fixup_pkt_not_transmitted(ni, first_pkt);
-    LOG_U(ci_log("%s: do not send UDP packet because IP TTL = 0",
-                 __FUNCTION__));
+    LOG_U(
+        ci_log("%s: do not send UDP packet because IP TTL = 0", __FUNCTION__));
   }
 
   ni->state->send_may_poll = 0;
   return;
 
- send_pkt_via_os:
+send_pkt_via_os:
   ++us->stats.n_tx_os_late;
   fixup_pkt_not_transmitted(ni, pkt);
 
@@ -856,7 +834,7 @@ static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
   }
   return;
 
- no_longer_connected:
+no_longer_connected:
   /* We were connected when we entered ci_udp_sendmsg(), but we're not now.
    * If not draining tx_async_q, return error to caller.  Otherwise just
    * drop this datagram.
@@ -876,12 +854,12 @@ static void ci_udp_sendmsg_send(ci_netif* ni, ci_udp_state* us,
 }
 
 
-static int ci_udp_tx_datagram_level(ci_netif* ni, ci_ip_pkt_fmt* pkt,
-                                    ci_boolean_t ni_locked)
+static int ci_udp_tx_datagram_level(
+    ci_netif* ni, ci_ip_pkt_fmt* pkt, ci_boolean_t ni_locked)
 {
   /* Sum the contributions from each IP fragment. */
   int level = 0;
-  for( ; ; pkt = PKT_CHK_NML(ni, pkt->next, ni_locked) ) {
+  for( ;; pkt = PKT_CHK_NML(ni, pkt->next, ni_locked) ) {
     level += pkt->pf.udp.tx_length;
     if( OO_PP_IS_NULL(pkt->next) )
       return level;
@@ -898,7 +876,8 @@ void ci_udp_sendmsg_send_async_q(ci_netif* ni, ci_udp_state* us)
   /* Grab the contents of [tx_async_q]. */
   do {
     OO_PP_INIT(ni, pp, us->tx_async_q);
-    if( OO_PP_IS_NULL(pp) )  return;
+    if( OO_PP_IS_NULL(pp) )
+      return;
   } while( ci_cas32_fail(&us->tx_async_q, OO_PP_ID(pp), OO_PP_ID_NULL) );
 
   /* Reverse the list. */
@@ -909,8 +888,7 @@ void ci_udp_sendmsg_send_async_q(ci_netif* ni, ci_udp_state* us)
     pp = pkt->netif.tx.dmaq_next;
     pkt->netif.tx.dmaq_next = send_list;
     send_list = OO_PKT_P(pkt);
-  }
-  while( OO_PP_NOT_NULL(pp) );
+  } while( OO_PP_NOT_NULL(pp) );
 
   oo_atomic_add(&us->tx_async_q_level, -level);
 
@@ -924,24 +902,25 @@ void ci_udp_sendmsg_send_async_q(ci_netif* ni, ci_udp_state* us)
     ++us->stats.n_tx_lock_defer;
     ci_udp_sendmsg_send(ni, us, pkt, flags, NULL);
     ci_netif_pkt_release(ni, pkt);
-    if( OO_PP_IS_NULL(pp) )  break;
+    if( OO_PP_IS_NULL(pp) )
+      break;
     pkt = PKT_CHK(ni, pp);
   }
 }
 
-static void ci_udp_sendmsg_async_q_enqueue(ci_netif* ni, ci_udp_state* us,
-                                           ci_ip_pkt_fmt* pkt, int flags)
+static void ci_udp_sendmsg_async_q_enqueue(
+    ci_netif* ni, ci_udp_state* us, ci_ip_pkt_fmt* pkt, int flags)
 {
   if( flags & MSG_CONFIRM )
     /* Only setting this for first IP fragment -- that should be fine. */
     pkt->flags |= CI_PKT_FLAG_MSG_CONFIRM;
 
-  oo_atomic_add(&us->tx_async_q_level, 
-                ci_udp_tx_datagram_level(ni, pkt, CI_FALSE));
+  oo_atomic_add(
+      &us->tx_async_q_level, ci_udp_tx_datagram_level(ni, pkt, CI_FALSE));
   do
     OO_PP_INIT(ni, pkt->netif.tx.dmaq_next, us->tx_async_q);
-  while( ci_cas32_fail(&us->tx_async_q,
-                       OO_PP_ID(pkt->netif.tx.dmaq_next), OO_PKT_ID(pkt)) );
+  while( ci_cas32_fail(
+      &us->tx_async_q, OO_PP_ID(pkt->netif.tx.dmaq_next), OO_PKT_ID(pkt)) );
 
   if( ci_netif_lock_or_defer_work(ni, &us->s.b) )
     ci_netif_unlock(ni);
@@ -950,7 +929,8 @@ static void ci_udp_sendmsg_async_q_enqueue(ci_netif* ni, ci_udp_state* us,
 
 #ifndef __KERNEL__
 /* Check if provided address struct/content is OK for us. */
-static int ci_udp_name_is_ok(int af, ci_udp_state* us, const struct msghdr* msg)
+static int ci_udp_name_is_ok(
+    int af, ci_udp_state* us, const struct msghdr* msg)
 {
   ci_assert(us);
   ci_assert(msg != NULL);
@@ -960,14 +940,14 @@ static int ci_udp_name_is_ok(int af, ci_udp_state* us, const struct msghdr* msg)
   if( msg->msg_name == NULL )
     return 0;
 
-#if CI_CFG_FAKE_IPV6 && !CI_CFG_IPV6
+#if CI_CFG_FAKE_IPV6 && ! CI_CFG_IPV6
   if( us->s.domain == AF_INET6 ) {
     return msg->msg_namelen >= SIN6_LEN_RFC2133 && af == AF_INET6 &&
-      ci_tcp_ipv6_is_ipv4((struct sockaddr*) msg->msg_name);
+           ci_tcp_ipv6_is_ipv4((struct sockaddr*) msg->msg_name);
   }
 #endif
 
-  if( af != AF_INET && !IS_AF_INET6(us->s.domain) )
+  if( af != AF_INET && ! IS_AF_INET6(us->s.domain) )
     return 0;
 
   return msg_namelen_ok(af, msg->msg_namelen);
@@ -975,7 +955,7 @@ static int ci_udp_name_is_ok(int af, ci_udp_state* us, const struct msghdr* msg)
 #endif
 
 
-#define OO_TIMEVAL_UNINITIALISED  ((struct oo_timeval*) 1)
+#define OO_TIMEVAL_UNINITIALISED ((struct oo_timeval*) 1)
 
 
 static int ci_udp_sendmsg_may_send(ci_udp_state* us, int bytes_to_send)
@@ -1002,8 +982,7 @@ static int ci_udp_sendmsg_may_send(ci_udp_state* us, int bytes_to_send)
 
 
 static int ci_udp_sendmsg_wait(ci_netif* ni, ci_udp_state* us,
-                               unsigned bytes_to_send, int flags,
-                               struct udp_send_info* sinf)
+    unsigned bytes_to_send, int flags, struct udp_send_info* sinf)
 {
   ci_uint64 start_frc = 0, now_frc = 0;
   ci_uint64 schedule_frc = 0;
@@ -1030,11 +1009,11 @@ static int ci_udp_sendmsg_wait(ci_netif* ni, ci_udp_state* us,
     if( si_trylock_and_inc(ni, sinf, us->stats.n_tx_lock_poll) )
       ci_netif_poll(ni);
 
- no_error:
+no_error:
   while( 1 ) {
     sleep_seq = us->s.b.sleep_seq.all;
     ci_rmb();
-    if(CI_UNLIKELY( (rc = ci_get_so_error(&us->s)) != 0 || us->s.tx_errno ))
+    if( CI_UNLIKELY((rc = ci_get_so_error(&us->s)) != 0 || us->s.tx_errno) )
       goto so_error;
     if( ci_udp_sendmsg_may_send(us, bytes_to_send) ) {
       us->stats.n_tx_poll_avoids_full += first_time;
@@ -1043,7 +1022,8 @@ static int ci_udp_sendmsg_wait(ci_netif* ni, ci_udp_state* us,
       return 0;
     }
     if( (flags & MSG_DONTWAIT) ||
-        (us->s.b.sb_aflags & (CI_SB_AFLAG_O_NONBLOCK|CI_SB_AFLAG_O_NDELAY)) ) {
+        (us->s.b.sb_aflags &
+            (CI_SB_AFLAG_O_NONBLOCK | CI_SB_AFLAG_O_NDELAY)) ) {
       ++us->stats.n_tx_eagain;
       return -EAGAIN;
     }
@@ -1073,28 +1053,24 @@ static int ci_udp_sendmsg_wait(ci_netif* ni, ci_udp_state* us,
           if( ci_netif_need_poll_spinning(ni, now_frc) ) {
             if( si_trylock(ni, sinf) )
               ci_netif_poll(ni);
-          }
-          else if( ! ni->state->is_spinner )
+          } else if( ! ni->state->is_spinner )
             ni->state->is_spinner = 1;
         }
         if( sinf->stack_locked ) {
           ci_netif_unlock(ni);
           sinf->stack_locked = 0;
         }
-        rc = OO_SPINLOOP_PAUSE_CHECK_SIGNALS(ni, now_frc, &schedule_frc,
-                                             us->s.so.sndtimeo_msec,
-                                             NULL, si);
+        rc = OO_SPINLOOP_PAUSE_CHECK_SIGNALS(
+            ni, now_frc, &schedule_frc, us->s.so.sndtimeo_msec, NULL, si);
         if( rc != 0 ) {
           ni->state->is_spinner = 0;
           return rc;
         }
-      }
-      else if( spin_limit_by_so ) {
+      } else if( spin_limit_by_so ) {
         ++us->stats.n_tx_eagain;
         return -EAGAIN;
       }
-    }
-    else {
+    } else {
       if( sinf->timeout && udp_send_spin ) {
         ci_uint32 spin_ms = NI_OPTS(ni).spin_usec >> 10;
         if( spin_ms < sinf->timeout )
@@ -1106,15 +1082,15 @@ static int ci_udp_sendmsg_wait(ci_netif* ni, ci_udp_state* us,
       }
       ++us->stats.n_tx_block;
       rc = ci_sock_sleep(ni, &us->s.b, CI_SB_FLAG_WAKE_TX,
-                         sinf->stack_locked ? CI_SLEEP_NETIF_LOCKED : 0,
-                         sleep_seq, &sinf->timeout);
+          sinf->stack_locked ? CI_SLEEP_NETIF_LOCKED : 0, sleep_seq,
+          &sinf->timeout);
       sinf->stack_locked = 0;
       if( rc < 0 )
         return rc;
     }
   }
 
- so_error:
+so_error:
   if( udp_send_spin )
     ni->state->is_spinner = 0;
   if( rc == 0 )
@@ -1123,10 +1099,10 @@ static int ci_udp_sendmsg_wait(ci_netif* ni, ci_udp_state* us,
     goto no_error;
   return rc;
 }
-  
 
-ci_inline ci_udp_hdr* udp_init(ci_udp_state* us, ci_ip_pkt_fmt* pkt,
-                               unsigned payload_bytes, bool is_frag)
+
+ci_inline ci_udp_hdr* udp_init(
+    ci_udp_state* us, ci_ip_pkt_fmt* pkt, unsigned payload_bytes, bool is_frag)
 {
   int af = ipcache_af(&us->s.pkt);
   ci_udp_hdr* udp = TX_PKT_IPX_UDP(af, pkt, is_frag);
@@ -1140,8 +1116,8 @@ ci_inline ci_udp_hdr* udp_init(ci_udp_state* us, ci_ip_pkt_fmt* pkt,
 
 /* put in the def. eth hdr, IP hdr then update the address
  * and IP ID fields. */
-ci_inline ci_ip4_hdr* eth_ip_init(ci_netif* ni, ci_udp_state* us, 
-				  ci_ip_pkt_fmt* pkt)
+ci_inline ci_ip4_hdr* eth_ip_init(
+    ci_netif* ni, ci_udp_state* us, ci_ip_pkt_fmt* pkt)
 {
   ci_ip4_hdr* ip;
 
@@ -1158,8 +1134,8 @@ ci_inline ci_ip4_hdr* eth_ip_init(ci_netif* ni, ci_udp_state* us,
 }
 
 #if CI_CFG_IPV6
-ci_inline ci_ip6_hdr* eth_ip6_init(ci_netif* ni, ci_udp_state* us,
-                                   ci_ip_pkt_fmt* pkt, bool is_frag)
+ci_inline ci_ip6_hdr* eth_ip6_init(
+    ci_netif* ni, ci_udp_state* us, ci_ip_pkt_fmt* pkt, bool is_frag)
 {
   ci_ip6_hdr* ip6 = oo_tx_ip6_hdr(pkt);
   ci_uint8 tclass = ci_ip6_tclass(&us->s.pkt.ipx.ip6);
@@ -1176,13 +1152,9 @@ ci_inline ci_ip6_hdr* eth_ip6_init(ci_netif* ni, ci_udp_state* us,
  *
  * Returns [bytes_to_send] on success, -errno on failure.
  */
-static
-int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
-                        ci_iovec_ptr* piov, int bytes_to_send,
-                        int flags,
-                        struct oo_pkt_filler* pf,
-                        struct udp_send_info* sinf,
-                        bool need_frag)
+static int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
+    ci_iovec_ptr* piov, int bytes_to_send, int flags, struct oo_pkt_filler* pf,
+    struct udp_send_info* sinf, bool need_frag)
 {
   ci_ip_pkt_fmt* first_pkt;
   ci_ip_pkt_fmt* new_pkt;
@@ -1192,13 +1164,14 @@ int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
   int pmtu = sinf->ipcache.mtu;
   int can_block = ! ((NI_OPTS(ni).udp_nonblock_no_pkts_mode) &&
                      ((flags & MSG_DONTWAIT) ||
-                       (us->s.b.sb_aflags & (CI_SB_AFLAG_O_NONBLOCK|CI_SB_AFLAG_O_NDELAY))));
+                         (us->s.b.sb_aflags & (CI_SB_AFLAG_O_NONBLOCK |
+                                                  CI_SB_AFLAG_O_NDELAY))));
   int af = ipcache_af(&us->s.pkt);
   ci_udp_hdr* udp;
 
   ci_assert(pmtu > 0);
-  ci_assert_equiv( need_frag,
-      bytes_to_send > pmtu - CI_IPX_HDR_SIZE(af) - sizeof(ci_udp_hdr) );
+  ci_assert_equiv(need_frag,
+      bytes_to_send > pmtu - CI_IPX_HDR_SIZE(af) - sizeof(ci_udp_hdr));
 
   frag_off = 0;
   bytes_left = bytes_to_send;
@@ -1210,21 +1183,22 @@ int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
       ! sinf->stack_locked )
     sinf->stack_locked = ci_netif_trylock(ni);
 
-  rc = ci_netif_pkt_alloc_block(ni, &us->s, &sinf->stack_locked, can_block,
-                                &first_pkt);
+  rc = ci_netif_pkt_alloc_block(
+      ni, &us->s, &sinf->stack_locked, can_block, &first_pkt);
   if( rc != 0 )
     return rc;
   oo_tx_pkt_layout_init(first_pkt);
 
   /* ID for IPv6 case should only be generated when fragmentation is really
    * required. */
-  if( !IS_AF_INET6(af) || need_frag )
+  if( ! IS_AF_INET6(af) || need_frag )
     ipx_id = ci_next_ipx_id_be(af, ni);
 
   udp = udp_init(us, first_pkt, bytes_to_send, need_frag);
 
   oo_pkt_filler_init(pf, first_pkt, (uint8_t*) udp + sizeof(ci_udp_hdr));
-  first_pkt->pay_len = ((char*) udp + sizeof(ci_udp_hdr) - PKT_START(first_pkt));
+  first_pkt->pay_len =
+      ((char*) udp + sizeof(ci_udp_hdr) - PKT_START(first_pkt));
 
   oo_pkt_af_set(first_pkt, af);
 
@@ -1232,8 +1206,7 @@ int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
   if( payload_bytes >= bytes_left ) {
     payload_bytes = bytes_left;
     bytes_left = 0;
-  }
-  else {
+  } else {
     payload_bytes = UDP_PAYLOAD1_SPACE_PMTU(af, pmtu);
     bytes_left -= payload_bytes;
   }
@@ -1241,26 +1214,25 @@ int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
 
   while( 1 ) {
     pf->pkt->pf.udp.tx_length = payload_bytes + sizeof(ci_udp_hdr) +
-        CI_IPX_HDR_SIZE(af) + sizeof(ci_ether_hdr);
+                                CI_IPX_HDR_SIZE(af) + sizeof(ci_ether_hdr);
     if( need_frag )
       pf->pkt->pf.udp.tx_length += CI_IPX_FRAG_HDR_SIZE(af);
 
 #if CI_CFG_IPV6
     if( IS_AF_INET6(af) ) {
-      ci_ip6_hdr *ip6 = eth_ip6_init(ni, us, pf->pkt, need_frag);
+      ci_ip6_hdr* ip6 = eth_ip6_init(ni, us, pf->pkt, need_frag);
       ip6->payload_len = frag_bytes;
       if( need_frag ) {
         ci_ip6_frag_hdr_init(ci_ip6_data(ip6), IPPROTO_UDP, frag_off,
-                             (bytes_left > 0) ? 1 : 0, ipx_id.ip6);
+            (bytes_left > 0) ? 1 : 0, ipx_id.ip6);
 
         ip6->payload_len += CI_IPX_FRAG_HDR_SIZE(af);
       }
       ip6->payload_len = CI_BSWAP_BE16(ip6->payload_len);
-    }
-    else
+    } else
 #endif
     {
-      ci_ip4_hdr *ip = eth_ip_init(ni, us, pf->pkt);
+      ci_ip4_hdr* ip = eth_ip_init(ni, us, pf->pkt);
       ip->ip_tot_len_be16 = frag_bytes + sizeof(ci_ip4_hdr);
       ip->ip_tot_len_be16 = CI_BSWAP_BE16(ip->ip_tot_len_be16);
       ip->ip_frag_off_be16 = frag_off >> 3u;
@@ -1268,8 +1240,8 @@ int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
       if( bytes_left > 0 )
         ip->ip_frag_off_be16 |= CI_IP4_FRAG_MORE;
       else if( us->s.s_flags & CI_SOCK_FLAG_ALWAYS_DF ||
-               ( us->s.s_flags & CI_SOCK_FLAG_PMTU_DO &&
-                 pf->pkt == first_pkt ) ) {
+               (us->s.s_flags & CI_SOCK_FLAG_PMTU_DO &&
+                   pf->pkt == first_pkt) ) {
         ip->ip_frag_off_be16 = CI_IP4_FRAG_DONT;
       }
       ip->ip_id_be16 = ipx_id.ip4;
@@ -1280,8 +1252,8 @@ int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
     ci_netif_pkt_hold(ni, pf->pkt);
 
     rc = oo_pkt_fill(ni, &us->s, &sinf->stack_locked, can_block, pf, piov,
-                     payload_bytes CI_KERNEL_ARG(CI_ADDR_SPC_CURRENT));
-    if( CI_UNLIKELY( rc != 0 ) )
+        payload_bytes CI_KERNEL_ARG(CI_ADDR_SPC_CURRENT));
+    if( CI_UNLIKELY(rc != 0) )
       goto fill_failed;
 
     if( bytes_left == 0 )
@@ -1290,9 +1262,9 @@ int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
     /* This counts the number of fragments not including the first. */
     ++us->stats.n_tx_fragments;
 
-    rc = ci_netif_pkt_alloc_block(ni, &us->s, &sinf->stack_locked, 
-                                  can_block, &new_pkt);
-    if( CI_UNLIKELY( rc != 0 ))
+    rc = ci_netif_pkt_alloc_block(
+        ni, &us->s, &sinf->stack_locked, can_block, &new_pkt);
+    if( CI_UNLIKELY(rc != 0) )
       goto fill_failed;
     oo_tx_pkt_layout_init(new_pkt);
 
@@ -1317,7 +1289,7 @@ int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
 
   return bytes_to_send;
 
- fill_failed:
+fill_failed:
   if( ! sinf->stack_locked && ci_netif_lock(ni) == 0 )
     sinf->stack_locked = 1;
 
@@ -1344,27 +1316,25 @@ int ci_udp_sendmsg_fill(ci_netif* ni, ci_udp_state* us,
       }
     }
   }
- pkt_chain_released:
+pkt_chain_released:
 
   /* Free the packet chain by freeing the first fragment. */
- #ifdef __KERNEL__
-   if( ! sinf->stack_locked )
-     ci_netif_set_merge_atomic_flag(ni);
-   ci_netif_pkt_release_mnl(ni, first_pkt, &sinf->stack_locked);
- #else
-   /* ci_netif_lock() can't fail in UL */
-   ci_assert(sinf->stack_locked);
-   ci_netif_pkt_release(ni, first_pkt);
- #endif
+#ifdef __KERNEL__
+  if( ! sinf->stack_locked )
+    ci_netif_set_merge_atomic_flag(ni);
+  ci_netif_pkt_release_mnl(ni, first_pkt, &sinf->stack_locked);
+#else
+  /* ci_netif_lock() can't fail in UL */
+  ci_assert(sinf->stack_locked);
+  ci_netif_pkt_release(ni, first_pkt);
+#endif
 
   return rc;
 }
 
 
-static
-void ci_udp_sendmsg_onload(ci_netif* ni, ci_udp_state* us,
-                           const ci_msghdr* msg, int flags,
-                           struct udp_send_info* sinf)
+static void ci_udp_sendmsg_onload(ci_netif* ni, ci_udp_state* us,
+    const ci_msghdr* msg, int flags, struct udp_send_info* sinf)
 {
   int rc, i;
   unsigned long bytes_to_send;
@@ -1390,27 +1360,26 @@ void ci_udp_sendmsg_onload(ci_netif* ni, ci_udp_state* us,
         goto efault;
     } while( --i >= 0 );
     ci_iovec_ptr_init_nz(&piov, msg->msg_iov, msg->msg_iovlen);
-  }
-  else {
+  } else {
     ci_iovec_ptr_init(&piov, NULL, 0);
   }
 
-  if( bytes_to_send > sinf->ipcache.mtu - CI_IPX_HDR_SIZE(af) -
-      sizeof(ci_udp_hdr) )
+  if( bytes_to_send >
+      sinf->ipcache.mtu - CI_IPX_HDR_SIZE(af) - sizeof(ci_udp_hdr) )
     need_frag = true;
 
   /* For now we don't allocate packets in advance, so init to NULL */
   pf.alloc_pkt = NULL;
 
-  if( ! UDP_HAS_SENDQ_SPACE(us, bytes_to_send)         |
+  if( ! UDP_HAS_SENDQ_SPACE(us, bytes_to_send) |
       (bytes_to_send > (unsigned long) CI_UDP_MAX_PAYLOAD_BYTES(af)) )
     goto no_space_or_too_big;
 
- back_to_fast_path:
+back_to_fast_path:
   was_locked = sinf->stack_locked;
   if( need_frag && is_sock_flag_always_df_set(&us->s, af) ) {
     /* We are trying to send too large a datagram with DontFragment bit */
-    if( is_sockopt_flag_ip_recverr_set(&us->s, af ) ) {
+    if( is_sockopt_flag_ip_recverr_set(&us->s, af) ) {
       /* We have to add an error message to the error queue.
        * Let OS do it! */
       goto send_via_os;
@@ -1419,8 +1388,7 @@ void ci_udp_sendmsg_onload(ci_netif* ni, ci_udp_state* us,
       /* IP_PMTUDISC_DO */
       sinf->rc = -EMSGSIZE;
       return;
-    }
-    else
+    } else
 #ifndef __KERNEL__
         if( msg->msg_namelen == 0 )
 #endif
@@ -1442,8 +1410,8 @@ void ci_udp_sendmsg_onload(ci_netif* ni, ci_udp_state* us,
     }
     /* IP_PMTUDISC_PROBE does not do anything in non-connected case */
   }
-  rc = ci_udp_sendmsg_fill(ni, us, &piov, bytes_to_send, flags, &pf, sinf,
-                           need_frag);
+  rc = ci_udp_sendmsg_fill(
+      ni, us, &piov, bytes_to_send, flags, &pf, sinf, need_frag);
 #if CI_CFG_TIMESTAMPING
   if( us->s.timestamping_flags & ONLOAD_SOF_TIMESTAMPING_OPT_ID ) {
     pf.pkt->ts_key = us->s.ts_key;
@@ -1452,7 +1420,7 @@ void ci_udp_sendmsg_onload(ci_netif* ni, ci_udp_state* us,
 #endif
   if( sinf->stack_locked && ! was_locked )
     ++us->stats.n_tx_lock_pkt;
-  if(CI_LIKELY( rc >= 0 )) {
+  if( CI_LIKELY(rc >= 0) ) {
     sinf->rc = bytes_to_send;
     TX_PKT_SET_DADDR(af, pf.pkt, ipcache_raddr(&sinf->ipcache));
     TX_PKT_IPX_UDP(af, pf.pkt, need_frag)->udp_dest_be16 =
@@ -1463,23 +1431,21 @@ void ci_udp_sendmsg_onload(ci_netif* ni, ci_udp_state* us,
       ci_netif_pkt_release(ni, pf.pkt);
       ci_netif_unlock(ni);
       sinf->stack_locked = 0;
-    }
-    else {
+    } else {
       ci_udp_sendmsg_async_q_enqueue(ni, us, pf.pkt, flags);
     }
-  }
-  else {
+  } else {
     sinf->rc = rc;
   }
   return;
 
 
   /* *********************** */
- efault:
+efault:
   sinf->rc = -EFAULT;
   return;
 
- send_via_os:
+send_via_os:
   if( sinf->stack_locked ) {
     ci_netif_unlock(ni);
     sinf->stack_locked = 0;
@@ -1487,7 +1453,7 @@ void ci_udp_sendmsg_onload(ci_netif* ni, ci_udp_state* us,
   sinf->rc = ci_udp_sendmsg_os(ni, us, msg, flags, 1, 0);
   return;
 
- no_space_or_too_big:
+no_space_or_too_big:
   /* TODO: If we implement IP options we'll have to calculate
    * CI_UDP_MAX_PAYLOAD_BYTES depending on them.
    */
@@ -1498,19 +1464,19 @@ void ci_udp_sendmsg_onload(ci_netif* ni, ci_udp_state* us,
 
   /* There may be insufficient room in the sendq. */
   rc = ci_udp_sendmsg_wait(ni, us, bytes_to_send, flags, sinf);
-  if(CI_UNLIKELY( rc != 0 )) {
+  if( CI_UNLIKELY(rc != 0) ) {
     sinf->rc = rc;
     return;
   }
 
-  LOG_UV(ci_log("%s: "NT_FMT"back to fast path", __FUNCTION__,
-		NT_PRI_ARGS(ni,us)));
+  LOG_UV(ci_log(
+      "%s: " NT_FMT "back to fast path", __FUNCTION__, NT_PRI_ARGS(ni, us)));
   goto back_to_fast_path;
 }
 
-#if !defined(__KERNEL__) && defined(__i386__)
-static int ci_udp_sendmsg_control_os(ci_fd_t fd, ci_udp_state *us,
-                                     const struct msghdr* msg, int flags)
+#if ! defined(__KERNEL__) && defined(__i386__)
+static int ci_udp_sendmsg_control_os(
+    ci_fd_t fd, ci_udp_state* us, const struct msghdr* msg, int flags)
 {
   ci_fd_t os_sock;
   int rc;
@@ -1524,11 +1490,10 @@ static int ci_udp_sendmsg_control_os(ci_fd_t fd, ci_udp_state *us,
 }
 #endif
 
-int ci_udp_sendmsg(ci_udp_iomsg_args *a,
-                   const ci_msghdr* msg, int flags)
+int ci_udp_sendmsg(ci_udp_iomsg_args* a, const ci_msghdr* msg, int flags)
 {
-  ci_netif *ni = a->ni;
-  ci_udp_state *us = a->us;
+  ci_netif* ni = a->ni;
+  ci_udp_state* us = a->us;
   struct udp_send_info sinf;
   int rc;
 
@@ -1547,10 +1512,10 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
   /* We do not want to re-pack msg_control field or to find out sys_sendmsg32()
    * syscall when sending from a 32-bit application. So, let the kernel to take
    * care of it. */
-  if(CI_UNLIKELY( msg->msg_controllen != 0 ))
+  if( CI_UNLIKELY(msg->msg_controllen != 0) )
     return ci_udp_sendmsg_control_os(a->fd, us, msg, flags);
 #else
-  if(CI_UNLIKELY( CMSG_FIRSTHDR(msg) != NULL )) {
+  if( CI_UNLIKELY(CMSG_FIRSTHDR(msg) != NULL) ) {
     void* info = NULL;
     if( ci_ip_cmsg_send(msg, &info) != 0 || info != NULL )
       goto send_via_os;
@@ -1558,29 +1523,29 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
 #endif
 #endif
 
-  if(CI_UNLIKELY( flags & MSG_MORE )) {
+  if( CI_UNLIKELY(flags & MSG_MORE) ) {
     LOG_E(ci_log("%s: MSG_MORE not yet supported", __FUNCTION__));
     CI_SET_ERROR(rc, EOPNOTSUPP);
     return rc;
   }
 
-  if(CI_UNLIKELY( flags & MSG_OOB ))
+  if( CI_UNLIKELY(flags & MSG_OOB) )
     /* This returns an error, so very unlikely! */
     goto send_via_os;
 
-  if(CI_UNLIKELY( us->s.so_error | us->s.tx_errno ))
+  if( CI_UNLIKELY(us->s.so_error | us->s.tx_errno) )
     goto so_error;
- no_error:
+no_error:
 
   if( ! NI_OPTS(ni).udp_send_unlocked ) {
-# ifndef __KERNEL__
+#ifndef __KERNEL__
     ci_netif_lock(ni);
-# else
+#else
     if( (rc = ci_netif_lock(ni)) < 0 ) {
       rc = -ERESTARTSYS;
       goto error;
     }
-# endif
+#endif
     sinf.stack_locked = 1;
   }
 
@@ -1613,14 +1578,13 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
       /* ?? TODO: put some code here to avoid conditional branch forward on
        * fast path.
        */
-    }
-    else {
+    } else {
       /* In the case of a control plane change and stack lock contention we
        * may use old info here.  Worst case is that we'll send via OS when
        * we could have accelerated (and that can only happen if the control
        * plane change affected this connection).
        */
-      if(CI_UNLIKELY( ! oo_cp_ipcache_is_valid(ni, &us->s.pkt) )) {
+      if( CI_UNLIKELY(! oo_cp_ipcache_is_valid(ni, &us->s.pkt)) ) {
         if( si_trylock_and_inc(ni, &sinf, us->stats.n_tx_lock_cp) ) {
           ++us->stats.n_tx_cp_c_lookup;
           cicp_user_retrieve(ni, &us->s.pkt, &us->s.cp);
@@ -1634,11 +1598,10 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
     sinf.ipcache.mtu = us->s.pkt.mtu;
   }
 #ifndef __KERNEL__
-  else if(CI_UNLIKELY( msg->msg_name == NULL )) {
+  else if( CI_UNLIKELY(msg->msg_name == NULL) ) {
     rc = -EFAULT;
     goto error;
-  }
-  else {
+  } else {
     /**********************************************************************
      * Unconnected send -- dest IP and port provided.
      */
@@ -1649,8 +1612,7 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
     if( msg->msg_name != NULL && msg_namelen_ok(af, msg->msg_namelen) &&
         (! CI_CFG_FAKE_IPV6 || us->s.domain == AF_INET) && af == AF_INET ) {
       /* Fast check -- we're okay. */
-    }
-    else if( ! ci_udp_name_is_ok(af, us, msg) )
+    } else if( ! ci_udp_name_is_ok(af, us, msg) )
       /* Fast check and more detailed check failed. */
       goto send_via_os;
 
@@ -1658,8 +1620,8 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
 
 #if CI_CFG_IPV6
     if( CI_IPX_IS_LINKLOCAL(pkt_daddr) &&
-        ci_sock_set_ip6_scope_id(ni, &us->s, CI_SA(msg->msg_name),
-                                 msg->msg_namelen, 1) )
+        ci_sock_set_ip6_scope_id(
+            ni, &us->s, CI_SA(msg->msg_name), msg->msg_namelen, 1) )
       goto send_via_os;
     ci_udp_ipcache_convert(CI_ADDR_AF(pkt_daddr), us);
     sinf.ipcache.ether_type = us->s.pkt.ether_type;
@@ -1672,7 +1634,7 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
       goto send_via_os;
 
 #ifndef __KERNEL__
-    if(CI_UNLIKELY( udp_lport_be16(us) == 0 )) {
+    if( CI_UNLIKELY(udp_lport_be16(us) == 0) ) {
       /* We haven't yet allocated a local port.  Do it now. */
       if( sinf.stack_locked )
         ci_netif_unlock(ni);
@@ -1682,14 +1644,12 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
     }
 #endif
 
-    reuse_ipcache = (sinf.ipcache.dport_be16 ==
-                     us->ephemeral_pkt.dport_be16) &&
-                    CI_IPX_ADDR_EQ(pkt_daddr,
-                                   ipcache_raddr(&us->ephemeral_pkt));
+    reuse_ipcache =
+        (sinf.ipcache.dport_be16 == us->ephemeral_pkt.dport_be16) &&
+        CI_IPX_ADDR_EQ(pkt_daddr, ipcache_raddr(&us->ephemeral_pkt));
     if( ! reuse_ipcache )
-      us->udpflags &=~ CI_UDPF_LAST_SEND_NOMAC;
-    if( reuse_ipcache &&
-        oo_cp_ipcache_is_valid(ni, &us->ephemeral_pkt) ) {
+      us->udpflags &= ~CI_UDPF_LAST_SEND_NOMAC;
+    if( reuse_ipcache && oo_cp_ipcache_is_valid(ni, &us->ephemeral_pkt) ) {
       /* Looks like [us->ephemeral_pkt] has up-to-date info for this
        * destination, so go with it.  This is racey if another thread is
        * sending on the same socket concurrently (and happens to be
@@ -1705,14 +1665,13 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
         goto send_via_os;
       sinf.ipcache.mtu = us->ephemeral_pkt.mtu;
       ++us->stats.n_tx_cp_match;
-    }
-    else if( si_trylock_and_inc(ni, &sinf, us->stats.n_tx_lock_cp) ) {
-      if( !reuse_ipcache ) {
+    } else if( si_trylock_and_inc(ni, &sinf, us->stats.n_tx_lock_cp) ) {
+      if( ! reuse_ipcache ) {
         ci_ipcache_set_daddr(&us->ephemeral_pkt, ipcache_raddr(&sinf.ipcache));
         us->ephemeral_pkt.dport_be16 = sinf.ipcache.dport_be16;
         ci_ip_cache_invalidate(&us->ephemeral_pkt);
       }
-      if(CI_UNLIKELY( ! oo_cp_ipcache_is_valid(ni, &us->ephemeral_pkt) )) {
+      if( CI_UNLIKELY(! oo_cp_ipcache_is_valid(ni, &us->ephemeral_pkt)) ) {
         ++us->stats.n_tx_cp_uc_lookup;
         cicp_user_retrieve(ni, &us->ephemeral_pkt, &us->s.cp);
         if( reuse_ipcache )
@@ -1722,8 +1681,7 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
           us->ephemeral_pkt.status != retrrc_nomac )
         goto send_via_os;
       sinf.ipcache.mtu = us->ephemeral_pkt.mtu;
-    }
-    else {
+    } else {
       /* Need control plane lookup and could not grab stack lock; so do
        * lookup with temporary ipcache [sinf.ipcache].
        */
@@ -1744,21 +1702,21 @@ int ci_udp_sendmsg(ci_udp_iomsg_args *a,
   if( sinf.stack_locked )
     ci_netif_unlock(ni);
   if( sinf.rc < 0 )
-      CI_SET_ERROR(sinf.rc, -sinf.rc);
+    CI_SET_ERROR(sinf.rc, -sinf.rc);
   return sinf.rc;
 
- so_error:
+so_error:
   if( (rc = -ci_get_so_error(&us->s)) == 0 && (rc = -us->s.tx_errno) == 0 )
     goto no_error;
   goto error;
 
- error:
+error:
   if( sinf.stack_locked )
     ci_netif_unlock(ni);
   CI_SET_ERROR(rc, -rc);
   return rc;
 
- send_via_os:
+send_via_os:
   if( sinf.stack_locked )
     ci_netif_unlock(ni);
   rc = ci_udp_sendmsg_os(ni, us, msg, flags, 1, 0);

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2004-2020 Xilinx, Inc. */
 /**************************************************************************\
-*//*! \file netif_init.c
+ *//*! \file netif_init.c
 ** <L5_PRIVATE L5_SOURCE>
 ** \author  stg
 **  \brief  Common functionality used by TCP & UDP
@@ -10,7 +10,7 @@
 ** </L5_PRIVATE>
 *//*
 \**************************************************************************/
-  
+
 /*! \cidoxg_lib_transport_unix */
 
 #include <signal.h>
@@ -22,8 +22,8 @@
 #include <onload/ul/tcp_helper.h>
 
 
-#define LPF "citp_netif_"
-#define LPFIN "-> " LPF
+#define LPF    "citp_netif_"
+#define LPFIN  "-> " LPF
 #define LPFOUT "<- " LPF
 
 
@@ -35,44 +35,43 @@ int citp_netif_init_ctor(void)
 
   citp_cmn_netif_init_ctor(CITP_OPTS.netif_dtor);
 
-  return 0;
+  return dpdk_init();
 }
 
 /* Storage for stackname context across fork() */
 static struct oo_stackname_state stackname_config_across_fork;
 
 /* Storage for library context across fork() */
-static citp_lib_context_t citp_lib_context_across_fork;
+static citp_lib_context_t        citp_lib_context_across_fork;
 
 /*! Handles user-level netif internals pre fork() */
-static void citp_netif_pre_fork_hook(void);
+static void                      citp_netif_pre_fork_hook(void);
 /*! Handles user-level netif internals post fork() in the parent */
-static void citp_netif_parent_fork_hook(void);
+static void                      citp_netif_parent_fork_hook(void);
 /* Handles user-level netif internals post fork() in the child */
-static void citp_netif_child_fork_hook(void);
+static void                      citp_netif_child_fork_hook(void);
 
 /* I do not understand why, but __register_atfork seems to work better than
  * __libc_atfork */
-extern int __register_atfork(void (*prepare)(void), void (*parent)(void), 
-                             void (*child)(void), void *dso);
+extern int __register_atfork(void (*prepare)(void), void (*parent)(void),
+    void (*child)(void), void* dso);
 
-int ci_setup_fork(void)
+int        ci_setup_fork(void)
 {
-    Log_CALL(ci_log("%s()", __FUNCTION__));
-    return __register_atfork(citp_netif_pre_fork_hook,
-                             citp_netif_parent_fork_hook, 
-                             citp_netif_child_fork_hook, NULL);
+  Log_CALL(ci_log("%s()", __FUNCTION__));
+  return __register_atfork(citp_netif_pre_fork_hook,
+      citp_netif_parent_fork_hook, citp_netif_child_fork_hook, NULL);
 }
 
 
 /* Handles user-level netif internals pre fork() */
 static void citp_netif_pre_fork_hook(void)
 {
-  struct oo_stackname_state *stackname_state;
+  struct oo_stackname_state* stackname_state;
 
   /* If we have not inited fork hook, how can we get here in the first
    * place? */
-  if( citp.init_level < CITP_INIT_FORK_HOOKS) {
+  if( citp.init_level < CITP_INIT_FORK_HOOKS ) {
     ci_assert(0);
     return;
   }
@@ -105,9 +104,9 @@ static void citp_netif_pre_fork_hook(void)
     return;
 
   stackname_state = oo_stackname_thread_get();
-  memcpy(&stackname_config_across_fork, stackname_state, 
-         sizeof(stackname_config_across_fork));
-  
+  memcpy(&stackname_config_across_fork, stackname_state,
+      sizeof(stackname_config_across_fork));
+
   /* If the call to _fork() subsequently fails we potentially have
    * marked all of our netifs as shared when ideally we shouldn't
    * have.  However, this is non-fatal and is probably the least of
@@ -123,7 +122,7 @@ static void citp_netif_parent_fork_hook(void)
 {
   /* If we have not inited fork hook, how can we get here in the first
    * place? */
-  if( citp.init_level < CITP_INIT_FORK_HOOKS) {
+  if( citp.init_level < CITP_INIT_FORK_HOOKS ) {
     ci_assert(0);
     return;
   }
@@ -132,12 +131,12 @@ static void citp_netif_parent_fork_hook(void)
   pthread_mutex_unlock(&citp_pkt_map_lock);
   oo_rwlock_unlock_write(&citp_dup2_lock);
 
-  if( citp.init_level < CITP_INIT_FDTABLE)
+  if( citp.init_level < CITP_INIT_FDTABLE )
     goto unlock_fork;
-  else if( citp.init_level < CITP_INIT_NETIF)
+  else if( citp.init_level < CITP_INIT_NETIF )
     goto unlock;
 
-  if( CITP_OPTS.fork_netif == CI_UNIX_FORK_NETIF_PARENT ) 
+  if( CITP_OPTS.fork_netif == CI_UNIX_FORK_NETIF_PARENT )
     __citp_netif_mark_all_dont_use();
 
 unlock:
@@ -152,7 +151,7 @@ static void citp_netif_child_fork_hook(void)
 {
   /* If we have not inited fork hook, how can we get here in the first
    * place? */
-  if( citp.init_level < CITP_INIT_FORK_HOOKS) {
+  if( citp.init_level < CITP_INIT_FORK_HOOKS ) {
     ci_assert(0);
     return;
   }
@@ -179,13 +178,13 @@ static void citp_netif_child_fork_hook(void)
   oo_rwlock_ctor(&citp_dup2_lock);
   pthread_mutex_init(&citp_pkt_map_lock, NULL);
 
-  if( citp.init_level < CITP_INIT_FDTABLE)
+  if( citp.init_level < CITP_INIT_FDTABLE )
     return;
 
   pthread_mutex_lock(&citp_dup_lock);
   CITP_FDTABLE_LOCK();
 
-  if( citp.init_level < CITP_INIT_NETIF)
+  if( citp.init_level < CITP_INIT_NETIF )
     goto setup_fdtable;
 
   citp_setup_logging_prefix();
@@ -193,7 +192,7 @@ static void citp_netif_child_fork_hook(void)
 
   oo_stackname_update(&stackname_config_across_fork);
 
-  if( CITP_OPTS.fork_netif == CI_UNIX_FORK_NETIF_CHILD ) 
+  if( CITP_OPTS.fork_netif == CI_UNIX_FORK_NETIF_CHILD )
     __citp_netif_mark_all_dont_use();
 
 setup_fdtable:
@@ -233,7 +232,7 @@ void citp_netif_pre_bproc_move_hook(void)
    * time of the bproc_move().
    */
   __citp_netif_unprotect_all();
-  
+
   CITP_FDTABLE_UNLOCK();
 }
 
@@ -248,34 +247,36 @@ static void ci_netif_check_process_config(ci_netif* ni)
 #if CI_CFG_FD_CACHING
   if( ni->state->opts.sock_cache_max > 0 ) {
     if( citp_fdtable_not_mt_safe() ) {
-      NI_LOG(ni, CONFIG_WARNINGS, "Socket caching is not supported when "
-                                  "EF_FDS_MT_SAFE=0, and has been disabled");
+      NI_LOG(ni, CONFIG_WARNINGS,
+          "Socket caching is not supported when "
+          "EF_FDS_MT_SAFE=0, and has been disabled");
       citp_netif_cache_disable();
-    }
-    else if( CITP_OPTS.ul_epoll != 3 )
-      NI_LOG(ni, CONFIG_WARNINGS, "Sockets that are added to an epoll set can "
-                                  "only be cached if EF_UL_EPOLL=3");
+    } else if( CITP_OPTS.ul_epoll != 3 )
+      NI_LOG(ni, CONFIG_WARNINGS,
+          "Sockets that are added to an epoll set can "
+          "only be cached if EF_UL_EPOLL=3");
   }
-  if( (NI_OPTS(ni).scalable_filter_enable) &&
-      (CITP_OPTS.ul_epoll != 1) && (CITP_OPTS.ul_epoll != 3) ) {
-    NI_LOG(ni, CONFIG_WARNINGS, "When using a scalable filters mode handover "
-                                "of TCP sockets in an epoll set is only "
-                                "supported if EF_UL_EPOLL=1 or 3.");
+  if( (NI_OPTS(ni).scalable_filter_enable) && (CITP_OPTS.ul_epoll != 1) &&
+      (CITP_OPTS.ul_epoll != 3) ) {
+    NI_LOG(ni, CONFIG_WARNINGS,
+        "When using a scalable filters mode handover "
+        "of TCP sockets in an epoll set is only "
+        "supported if EF_UL_EPOLL=1 or 3.");
   }
 #endif
   if( NI_OPTS(ni).scalable_filter_enable && CITP_OPTS.stack_per_thread ) {
-    NI_LOG(ni, CONFIG_WARNINGS, "EF_STACK_PER_THREAD=1 cannot be used in "
-                                "scalable filters mode as a single filter "
-                                "configuration can only be used by one stack.");
+    NI_LOG(ni, CONFIG_WARNINGS,
+        "EF_STACK_PER_THREAD=1 cannot be used in "
+        "scalable filters mode as a single filter "
+        "configuration can only be used by one stack.");
   }
 }
 
 
 /* Platform specific code, called after netif construction */
-void  citp_netif_ctor_hook(ci_netif* ni, int realloc)
+void citp_netif_ctor_hook(ci_netif* ni, int realloc)
 {
-
-  if (!realloc)
+  if( ! realloc )
     /* Protect the netif's FD table entry */
     __citp_fdtable_reserve(ci_netif_get_driver_handle(ni), 1);
 
@@ -284,11 +285,14 @@ void  citp_netif_ctor_hook(ci_netif* ni, int realloc)
 
 
 /* Platform specific code, called proir to netif destruction */
-void  citp_netif_free_hook(ci_netif* ni)
+void citp_netif_free_hook(ci_netif* ni)
 {
 #if CI_CFG_FD_CACHING
   citp_uncache_fds_ul(ni);
 #endif
+
+  dpdk_cleanup();
+
   /* Unprotect the netif's FD table entry */
   __citp_fdtable_reserve(ci_netif_get_driver_handle(ni), 0);
 }

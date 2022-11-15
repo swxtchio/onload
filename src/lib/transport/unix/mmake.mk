@@ -8,6 +8,13 @@ ifeq ($(ISA),i386)
 BUILD_TREE_COPY	:= mapfile.ilp32
 endif
 
+ifeq ($(RTE_SDK),)
+$(error "Please define RTE_SDK environment variable")
+endif
+
+MMAKE_DPDK := $(DEFAULT_DPDK)
+MMAKE_INCLUDE += -I$(RTE_SDK)/build/install/include
+
 TARGET		:= libcitransport0.so
 MMAKE_TYPE	:= DLL
 
@@ -15,7 +22,7 @@ LDEP	:= $(CITPCOMMON_LIB_DEPEND) $(CIIP_LIB_DEPEND) $(CPLANE_LIB_DEPEND) \
 	$(CITOOLS_LIB_DEPEND) $(CIUL_LIB_DEPEND)
 
 LLNK	:= $(LINK_CITPCOMMON_LIB) $(LINK_CIIP_LIB) $(LINK_CPLANE_LIB) \
-	$(LINK_CITOOLS_LIB) $(LINK_CIUL_LIB)
+	$(LINK_CITOOLS_LIB) $(LINK_CIUL_LIB) $(MMAKE_DPDK) 
 
 LIB_SRCS	:=			\
 		startup.c		\
@@ -44,7 +51,8 @@ LIB_SRCS	:=			\
 		wqlock.c		\
 		poll_select.c		\
 		passthrough_fd.c	\
-		utils.c
+		utils.c \
+		dpdk.c
 
 MMAKE_OBJ_PREFIX := ci_tp_unix_
 LIB_OBJS	:= $(LIB_SRCS:%.c=$(MMAKE_OBJ_PREFIX)%.o)

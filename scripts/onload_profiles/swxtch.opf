@@ -1,0 +1,21 @@
+onload_set EF_SPIN_USEC 10000000000000
+onload_set EF_TCP_CONNECT_SPIN 1
+onload_set EF_TCP_ACCEPT_SPIN 1
+onload_set EF_TCP_RECV_SPIN 1
+onload_set EF_TCP_SEND_SPIN 1
+onload_set EF_UDP_RECV_SPIN 1
+onload_set EF_UDP_SEND_SPIN 1
+onload_set EF_MAX_ENDPOINTS 16384
+onload_set EF_TXQ_SIZE 2048
+onload_set EF_CLUSTER_SIZE 0
+#onload_set EF_MAX_PACKETS 2097152
+#onload_set EF_MAX_TX_PACKETS 1048576
+#onload_set EF_PREALLOC_PACKETS 1
+onload_set EF_USE_HUGE_PAGES 2
+#onload_set EF_UDP_FORCE_REUSEPORT 0
+#onload_set EF_UNIX_LOG 0xFFFFFFFFFFFFFFFFFFFF # this is a crappy bitmask that can be found in opts_citp_def.h and it only seems to kind of work
+#onload_set EF_CTPIO 0
+#onload_set EF_PIO 0
+#onload_set EF_EPOLL_MT_SAFE 1
+#onload_set EF_INT_DRIVEN 0
+#onload_set EF_HIGH_THROUGHPUT_MODE 1

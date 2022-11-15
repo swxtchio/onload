@@ -94,8 +94,8 @@ cwarnings += -Wno-deprecated-declarations
 endif
 
 
-MMAKE_CFLAGS	+= $(MMAKE_CARCH) $(cwarnings)
-MMAKE_CXXFLAGS	+= $(MMAKE_CARCH) $(cxxwarnings)
+MMAKE_CFLAGS	+= $(MMAKE_CARCH) $(cwarnings) -msse3
+MMAKE_CXXFLAGS	+= $(MMAKE_CARCH) $(cxxwarnings) -msse3
 MMAKE_CPPFLAGS	:=
 
 MMAKE_CFLAGS_DLL := -fPIC
@@ -195,7 +195,7 @@ endef
 define MMakeLinkCApp
 set -x; \
 $(CLINK) $(MMAKE_CARCH) $(CFLAGS) -Wl,-E $(MMAKE_DIR_LINKFLAGS) $(filter %.o,$^) \
-	$$libs -lm -lpthread -lrt -lresolv -lanl -o $@
+	$$libs -lm -lpthread -lrt -lresolv -lanl $(MMAKE_DPDK_LIBS) -o $@
 endef
 
 

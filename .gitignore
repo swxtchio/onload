@@ -65,3 +65,5 @@ Thumbs.db
 /src/lib/zf/doxygen/html.zip
 /src/lib/zf/doxygen/latex
 /src/lib/zf/doxygen/rtf
+
+/test_programs/mock_xnic/xnic_data

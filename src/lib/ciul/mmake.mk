@@ -9,6 +9,8 @@ TARGETS		:= $(CIUL_LIB)
 endif
 MMAKE_TYPE	:= LIB
 
+
+
 # Standalone subset for descriptor munging only.
 EFVI_SRCS	:=		\
 		pt_tx.c		\
@@ -28,6 +30,11 @@ LIB_SRCS	:=		\
 		checksum.c
 
 ifneq ($(DRIVER),1)
+ifeq ($(RTE_SDK),)
+$(error "Please define RTE_SDK environment variable")
+endif
+MMAKE_INCLUDE += -I$(RTE_SDK)/build/install/include
+MMAKE_DPDK := $(DEFAULT_DPDK)
 LIB_SRCS	+=		\
 		open.c		\
 		event_q.c	\
@@ -46,6 +53,7 @@ LIB_SRCS	+=		\
 		vi_discard.c	\
 		capabilities.c	\
 		smartnic_exts.c	\
+		efswxtch_vi.c \
 		ctpio.c
 
 # librt is needed on old glibc, e.g. on RHEL 6
@@ -108,7 +116,7 @@ $(objd)efch_intf_ver.h: $(EFCH_INTF_HDRS)
 
 $(objd)$(MMAKE_OBJ_PREFIX)pt_endpoint.o: $(objd)efch_intf_ver.h
 $(objd)$(MMAKE_OBJ_PREFIX)vi_init.o: $(objd)efch_intf_ver.h
-
+$(MMAKE_OBJ_PREFIX)efswxtch_vi.o: cwarnings += -Wno-error=deprecated-declarations -Wno-error=implicit-fallthrough
 
 ######################################################
 # UL library

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2003-2020 Xilinx, Inc. */
 /**************************************************************************\
-*//*! \file
+ *//*! \file
 ** <L5_PRIVATE L5_SOURCE>
 ** \author  djr
 **  \brief  Raw packet transmit.
@@ -40,20 +40,21 @@ static inline int pkt_q_id(ci_ip_pkt_fmt* pkt)
 }
 
 
-static inline void calc_csum_if_needed(ci_netif* ni, ef_vi* vi,
-                                       ci_ip_pkt_fmt* pkt)
+static inline void calc_csum_if_needed(
+    ci_netif* ni, ef_vi* vi, ci_ip_pkt_fmt* pkt)
 {
   /* Calculate packet checksum in case of AF_XDP */
-  if( CI_UNLIKELY(vi->nic_type.arch == EF_VI_ARCH_AF_XDP &&
-                  is_to_primary_vi(pkt)) ) {
+  if( CI_LIKELY((vi->nic_type.arch == EF_VI_ARCH_AF_XDP ||
+                    vi->nic_type.arch == EF_VI_ARCH_SWXTCH) &&
+                is_to_primary_vi(pkt)) ) {
     struct iovec my_iov[CI_IP_PKT_SEGMENTS_MAX];
     ci_uint8 protocol;
 
-    ci_netif_pkt_to_host_iovec(ni, pkt, my_iov,
-                               sizeof(my_iov) / sizeof(my_iov[0]));
+    ci_netif_pkt_to_host_iovec(
+        ni, pkt, my_iov, sizeof(my_iov) / sizeof(my_iov[0]));
 
-    protocol = ipx_hdr_protocol(ci_ethertype2af(oo_tx_ether_type_get(pkt)),
-                                oo_ipx_hdr(pkt));
+    protocol = ipx_hdr_protocol(
+        ci_ethertype2af(oo_tx_ether_type_get(pkt)), oo_ipx_hdr(pkt));
     if( protocol == IPPROTO_TCP || protocol == IPPROTO_UDP )
       oo_pkt_calc_checksums(ni, pkt, my_iov);
   }
@@ -62,27 +63,25 @@ static inline void calc_csum_if_needed(ci_netif* ni, ef_vi* vi,
 
 #if CI_CFG_CTPIO
 static inline int tx_ctpio(ci_netif* ni, int intf_i, ef_vi* vi,
-                           ci_ip_pkt_fmt* pkt, const ef_iovec *iov,
-                           int iov_len)
+    ci_ip_pkt_fmt* pkt, const ef_iovec* iov, int iov_len)
 {
   ci_netif_state_nic_t* nsn = &ni->state->nic[intf_i];
   struct iovec host_iov[CI_IP_PKT_SEGMENTS_MAX];
   int total_length;
   int rc;
 
-  total_length = ci_netif_pkt_to_host_iovec(ni, pkt, host_iov,
-                                      sizeof(host_iov) / sizeof(host_iov[0]));
+  total_length = ci_netif_pkt_to_host_iovec(
+      ni, pkt, host_iov, sizeof(host_iov) / sizeof(host_iov[0]));
 
   if( (nsn->oo_vi_flags & OO_VI_FLAGS_TX_CTPIO_ONLY) &&
-      ef_vi_transmit_space_bytes(vi) < total_length)
+      ef_vi_transmit_space_bytes(vi) < total_length )
     return -ENOSPC;
 
   oo_pkt_calc_checksums(ni, pkt, host_iov);
-  ef_vi_transmitv_ctpio(vi, total_length, host_iov,
-                        iov_len, nsn->ctpio_ct_threshold);
+  ef_vi_transmitv_ctpio(
+      vi, total_length, host_iov, iov_len, nsn->ctpio_ct_threshold);
   CITP_STATS_NETIF_INC(ni, ctpio_pkts);
-  rc = ef_vi_transmitv_ctpio_fallback(vi, iov, iov_len,
-                                      OO_PKT_ID(pkt));
+  rc = ef_vi_transmitv_ctpio_fallback(vi, iov, iov_len, OO_PKT_ID(pkt));
   ci_assert_equal(rc, 0);
   return rc;
 }
@@ -91,17 +90,17 @@ static inline int tx_ctpio(ci_netif* ni, int intf_i, ef_vi* vi,
 
 /* [is_fresh] is a hint indicating that the requested TXs are latency-
  * sensitive. */
-static void __ci_netif_dmaq_shove(ci_netif* ni, oo_pktq* dmaq, ef_vi* vi,
-                                  int intf_i, int is_fresh)
+static void __ci_netif_dmaq_shove(
+    ci_netif* ni, oo_pktq* dmaq, ef_vi* vi, int intf_i, int is_fresh)
 {
   ci_ip_pkt_fmt* pkt = PKT_CHK(ni, dmaq->head);
   int rc;
 #if CI_CFG_CTPIO
- #ifdef __KERNEL__
+#ifdef __KERNEL__
   int ctpio = 0;
- #else
+#else
   int ctpio = is_fresh;
- #endif
+#endif
 
   /* In a non-CTPIO world, we don't need to track whether we've posted any DMA
    * descriptors because the caller has checked that we have available TXQ
@@ -132,17 +131,19 @@ static void __ci_netif_dmaq_shove(ci_netif* ni, oo_pktq* dmaq, ef_vi* vi,
          * we could. */
         ef_remote_iovec remote_iov_storage[CI_IP_PKT_SEGMENTS_MAX + 1];
         ef_remote_iovec* remote_iov = remote_iov_storage;
-        struct ef_vi_tx_extra extra = { .flags = EF_VI_TX_EXTRA_MARK, .mark = 0 };
+        struct ef_vi_tx_extra extra = { .flags = EF_VI_TX_EXTRA_MARK,
+          .mark = 0 };
         ci_tcp_state* ts = SP_TO_TCP(ni, pkt->pf.tcp_tx.sock_id);
         ci_uint32 prev_crc_id = ts->current_crc_id;
 
-        iov_len = ci_netif_pkt_to_remote_iovec(ni, pkt, &remote_iov, &extra.mark,
-                                               sizeof(remote_iov_storage) / sizeof(remote_iov_storage[0]));
+        iov_len =
+            ci_netif_pkt_to_remote_iovec(ni, pkt, &remote_iov, &extra.mark,
+                sizeof(remote_iov_storage) / sizeof(remote_iov_storage[0]));
         if( CI_UNLIKELY(iov_len < 0) ) {
           rc = iov_len;
-        }
-        else {
-          rc = ef_vi_transmitv_init_extra(vi, extra.mark ? &extra : NULL, remote_iov, iov_len, OO_PKT_ID(pkt));
+        } else {
+          rc = ef_vi_transmitv_init_extra(vi, extra.mark ? &extra : NULL,
+              remote_iov, iov_len, OO_PKT_ID(pkt));
 #if CI_CFG_CTPIO
           if( rc >= 0 )
             posted_dma = 1;
@@ -153,25 +154,28 @@ static void __ci_netif_dmaq_shove(ci_netif* ni, oo_pktq* dmaq, ef_vi* vi,
           ts->current_crc_id = prev_crc_id;
           ci_nvme_plugin_crc_packet_cleanup(ni, ts, pkt);
         }
-      }
-      else {
-        iov_len = ci_netif_pkt_to_iovec(ni, pkt, iov,
-                                        sizeof(iov) / sizeof(iov[0]));
+      } else {
+        iov_len =
+            ci_netif_pkt_to_iovec(ni, pkt, iov, sizeof(iov) / sizeof(iov[0]));
         if( CI_UNLIKELY(iov_len < 0) )
           break;
 #if CI_CFG_CTPIO
         if( ctpio && (iov_len < 1 || iov_len > CI_IP_PKT_SEGMENTS_MAX ||
-                      ! ci_netif_may_ctpio(ni, intf_i, pkt->pay_len) ||
-                      pkt->flags & CI_PKT_FLAG_INDIRECT) )
+                         ! ci_netif_may_ctpio(ni, intf_i, pkt->pay_len) ||
+                         pkt->flags & CI_PKT_FLAG_INDIRECT) )
           ctpio = 0;
-        ctpio |= !! (ni->state->nic[pkt->intf_i].oo_vi_flags & OO_VI_FLAGS_TX_CTPIO_ONLY);
+        ctpio |= ! ! (ni->state->nic[pkt->intf_i].oo_vi_flags &
+                      OO_VI_FLAGS_TX_CTPIO_ONLY);
         if( ctpio ) {
           ci_assert(! posted_dma);
           rc = tx_ctpio(ni, intf_i, vi, pkt, iov, iov_len);
-        }
-        else
+        } else
 #endif
         {
+#ifndef __KERNEL__
+          /* This is a hack to convert onload packets into dpdk mbufs*/
+          ef_fill_tx_data(vi, PKT_START(pkt), pkt->buf_len);
+#endif
           rc = ef_vi_transmitv_init(vi, iov, iov_len, OO_PKT_ID(pkt));
 #if CI_CFG_CTPIO
           if( rc >= 0 )
@@ -182,8 +186,7 @@ static void __ci_netif_dmaq_shove(ci_netif* ni, oo_pktq* dmaq, ef_vi* vi,
       if( rc >= 0 ) {
         __oo_pktq_next(ni, dmaq, pkt, netif.tx.dmaq_next);
         CI_DEBUG(pkt->netif.tx.dmaq_next = OO_PP_NULL);
-      }
-      else {
+      } else {
         /* Descriptor ring or plugin id pool is full. */
 #if CI_CFG_STATS_NETIF
         if( (ci_uint32) dmaq->num > ni->state->stats.tx_dma_max )
@@ -192,8 +195,7 @@ static void __ci_netif_dmaq_shove(ci_netif* ni, oo_pktq* dmaq, ef_vi* vi,
         break;
       }
     }
-  }
-  while( oo_pktq_not_empty(dmaq) );
+  } while( oo_pktq_not_empty(dmaq) );
 
 #if CI_CFG_CTPIO
   /* If everything went out by CTPIO, there will be no outstanding DMA
@@ -216,8 +218,8 @@ void ci_netif_dmaq_shove1(ci_netif* ni, int intf_i)
 {
   ef_vi* vi = ci_netif_vi(ni, intf_i);
   if( ef_vi_transmit_space(vi) >= (ef_vi_transmit_capacity(vi) >> 1) )
-    __ci_netif_dmaq_shove(ni, ci_netif_dmaq(ni, intf_i), vi, intf_i,
-                          0 /*is_fresh*/);
+    __ci_netif_dmaq_shove(
+        ni, ci_netif_dmaq(ni, intf_i), vi, intf_i, 0 /*is_fresh*/);
 }
 
 
@@ -235,8 +237,8 @@ void ci_netif_dmaq_shove_plugin(ci_netif* ni, int intf_i, int q_id)
   ef_vi* vi = &ni->nic_hw[intf_i].vis[q_id];
   ci_assert_ge(q_id, 1);
   if( ef_vi_transmit_space(vi) > CI_IP_PKT_SEGMENTS_MAX )
-    __ci_netif_dmaq_shove(ni, &ni->state->nic[intf_i].dmaq[q_id], vi, intf_i,
-                          0 /*is_fresh*/);
+    __ci_netif_dmaq_shove(
+        ni, &ni->state->nic[intf_i].dmaq[q_id], vi, intf_i, 0 /*is_fresh*/);
 }
 #endif
 
@@ -262,17 +264,17 @@ void __ci_netif_send(ci_netif* netif, ci_ip_pkt_fmt* pkt)
 
   ___ci_netif_dmaq_insert_prep_pkt(netif, pkt);
 
-  LOG_NT(log("%s: [%d] id=%d nseg=%d 0:["EF_ADDR_FMT":%d] dhost="
-             CI_MAC_PRINTF_FORMAT, __FUNCTION__, NI_ID(netif),
-             OO_PKT_FMT(pkt), pkt->n_buffers,
-             pkt_dma_addr(netif, pkt, pkt->intf_i),
-             pkt->buf_len, CI_MAC_PRINTF_ARGS(oo_ether_dhost(pkt))));
+  LOG_NT(log("%s: [%d] id=%d nseg=%d 0:[" EF_ADDR_FMT
+             ":%d] dhost=" CI_MAC_PRINTF_FORMAT,
+      __FUNCTION__, NI_ID(netif), OO_PKT_FMT(pkt), pkt->n_buffers,
+      pkt_dma_addr(netif, pkt, pkt->intf_i), pkt->buf_len,
+      CI_MAC_PRINTF_ARGS(oo_ether_dhost(pkt))));
 
   /* Packets to non-primary VIs could be control messages to a plugin, so
    * there's no requirement that they be Ethernet (or any other recognisable
    * protocol). */
-  ci_check( ! is_to_primary_vi(pkt) ||
-            ! ci_eth_addr_is_zero((ci_uint8 *)oo_ether_dhost(pkt)));
+  ci_check(! is_to_primary_vi(pkt) ||
+           ! ci_eth_addr_is_zero((ci_uint8*) oo_ether_dhost(pkt)));
 
   /*
    * Packets can be now be n fragments long. If the packet at the head of the
@@ -299,41 +301,38 @@ void __ci_netif_send(ci_netif* netif, ci_ip_pkt_fmt* pkt)
         is_to_primary_vi(pkt) ) {
       if( pkt->pay_len <= NI_OPTS(netif).pio_thresh && pkt->n_buffers == 1 ) {
         if( (offset = ci_pio_buddy_alloc(netif, buddy, order)) >= 0 ) {
-          rc = ef_vi_transmit_copy_pio(vi,
-                                       offset, PKT_START(pkt), pkt->buf_len,
-                                       OO_PKT_ID(pkt));
+          rc = ef_vi_transmit_copy_pio(
+              vi, offset, PKT_START(pkt), pkt->buf_len, OO_PKT_ID(pkt));
           if( rc == 0 ) {
             CITP_STATS_NETIF_INC(netif, pio_pkts);
             ci_assert(pkt->pio_addr == -1);
             pkt->pio_addr = offset;
             pkt->pio_order = order;
             goto done;
-          }
-          else {
+          } else {
             CITP_STATS_NETIF_INC(netif, no_pio_err);
             ci_pio_buddy_free(netif, buddy, offset, order);
             /* Continue and do normal send. */
           }
-        }
-        else {
+        } else {
           CI_DEBUG(CITP_STATS_NETIF_INC(netif, no_pio_busy));
         }
-      }
-      else {
+      } else {
         CI_DEBUG(CITP_STATS_NETIF_INC(netif, no_pio_too_long));
       }
     }
 #endif
     calc_csum_if_needed(netif, vi, pkt);
-    iov_len = ci_netif_pkt_to_iovec(netif, pkt, iov,
-                                    sizeof(iov) / sizeof(iov[0]));
+    iov_len =
+        ci_netif_pkt_to_iovec(netif, pkt, iov, sizeof(iov) / sizeof(iov[0]));
 
     /* CTPIO only NICs always claim to be able to do CTPIO, so the only
      * things that might stop them are packets that are split over multiple
      * buffers, which should be prevented by the declared MTU and indirect
      * packets, which aren't used with this NIC type.
      */
-  if( netif->state->nic[pkt->intf_i].oo_vi_flags & OO_VI_FLAGS_TX_CTPIO_ONLY ) {
+    if( netif->state->nic[pkt->intf_i].oo_vi_flags &
+        OO_VI_FLAGS_TX_CTPIO_ONLY ) {
       ci_assert_gt(iov_len, 0);
       ci_assert_le(iov_len, CI_IP_PKT_SEGMENTS_MAX);
       ci_assert(is_to_primary_vi(pkt));
@@ -344,14 +343,19 @@ void __ci_netif_send(ci_netif* netif, ci_ip_pkt_fmt* pkt)
         ci_netif_may_ctpio(netif, intf_i, pkt->pay_len) &&
         is_to_primary_vi(pkt) ) {
       rc = tx_ctpio(netif, intf_i, vi, pkt, iov, iov_len);
-    }
-    else
+    } else {
+#else
+    { /* this is some real garbage */
 #endif
-    if( (rc = ef_vi_transmitv(vi, iov, iov_len, OO_PKT_ID(pkt))) == 0 ) {
-      /* After a DMA send, stop attempting CTPIO sends until the TXQ has
-       * drained. */
-      ci_netif_ctpio_desist(netif, intf_i);
-      CITP_STATS_NETIF_INC(netif, tx_dma_doorbells);
+#ifndef __KERNEL__
+      ef_fill_tx_data(vi, PKT_START(pkt), pkt->buf_len);
+#endif
+      if( (rc = ef_vi_transmitv(vi, iov, iov_len, OO_PKT_ID(pkt))) == 0 ) {
+        /* After a DMA send, stop attempting CTPIO sends until the TXQ has
+         * drained. */
+        ci_netif_ctpio_desist(netif, intf_i);
+        CITP_STATS_NETIF_INC(netif, tx_dma_doorbells);
+      }
     }
     if( rc == 0 ) {
       LOG_AT(ci_analyse_pkt(oo_ether_hdr(pkt), pkt->buf_len));
@@ -366,7 +370,7 @@ void __ci_netif_send(ci_netif* netif, ci_ip_pkt_fmt* pkt)
   LOG_NT(log("%s: ENQ id=%d", __FUNCTION__, OO_PKT_FMT(pkt)));
   __ci_netif_dmaq_put(netif, dmaq, pkt);
 
- done:
+done:
 
   /* Poll every now and then to ensure we keep up with completions.  If we
    * don't do this then we can ignore completions for so long that we start
@@ -395,8 +399,8 @@ void __ci_netif_send(ci_netif* netif, ci_ip_pkt_fmt* pkt)
  * low-level function used by VIs which are used for communicating with
  * plugins, where the caller typically has their own reliability policy and
  * hence they don't want automatic handling of it behind the scenes. */
-bool ci_netif_send_immediate(ci_netif* netif, ci_ip_pkt_fmt* pkt,
-                             const struct ef_vi_tx_extra* extra)
+bool ci_netif_send_immediate(
+    ci_netif* netif, ci_ip_pkt_fmt* pkt, const struct ef_vi_tx_extra* extra)
 {
   int intf_i;
   ef_vi* vi;
@@ -410,36 +414,38 @@ bool ci_netif_send_immediate(ci_netif* netif, ci_ip_pkt_fmt* pkt,
   ci_assert_flags(pkt->flags, CI_PKT_FLAG_TX_PENDING);
   ci_assert_nflags(pkt->flags, CI_PKT_FLAG_INDIRECT);
 
-  LOG_NT(log("%s: [%d] id=%d nseg=%d 0:["EF_ADDR_FMT":%d] dhost="
-             CI_MAC_PRINTF_FORMAT, __FUNCTION__, NI_ID(netif),
-             OO_PKT_FMT(pkt), pkt->n_buffers,
-             pkt_dma_addr(netif, pkt, pkt->intf_i),
-             pkt->buf_len, CI_MAC_PRINTF_ARGS(oo_ether_dhost(pkt))));
+  LOG_NT(log("%s: [%d] id=%d nseg=%d 0:[" EF_ADDR_FMT
+             ":%d] dhost=" CI_MAC_PRINTF_FORMAT,
+      __FUNCTION__, NI_ID(netif), OO_PKT_FMT(pkt), pkt->n_buffers,
+      pkt_dma_addr(netif, pkt, pkt->intf_i), pkt->buf_len,
+      CI_MAC_PRINTF_ARGS(oo_ether_dhost(pkt))));
 
   intf_i = pkt->intf_i;
 
   ci_assert_lt(pkt->q_id, CI_MAX_VIS_PER_INTF);
   vi = &netif->nic_hw[intf_i].vis[pkt_q_id(pkt)];
 
-  iov_len = ci_netif_pkt_to_iovec(netif, pkt, iov,
-                                  sizeof(iov) / sizeof(iov[0]));
+  iov_len =
+      ci_netif_pkt_to_iovec(netif, pkt, iov, sizeof(iov) / sizeof(iov[0]));
   if( extra ) {
     int i;
     ef_remote_iovec riov[CI_IP_PKT_SEGMENTS_MAX];
-    for( i = 0; i < iov_len; ++i) {
-      riov[i] = (ef_remote_iovec){
+    for( i = 0; i < iov_len; ++i ) {
+      riov[i] = (ef_remote_iovec) {
         .iov_base = iov[i].iov_base,
         .iov_len = iov[i].iov_len,
         .flags = 0,
         .addrspace = EF_ADDRSPACE_LOCAL,
       };
     }
-    if( ef_vi_transmitv_init_extra(vi, extra, riov, iov_len,
-                                   OO_PKT_ID(pkt)) != 0 )
+    if( ef_vi_transmitv_init_extra(vi, extra, riov, iov_len, OO_PKT_ID(pkt)) !=
+        0 )
       return false;
     ef_vi_transmit_push(vi);
-  }
-  else {
+  } else {
+#ifndef __KERNEL__
+    ef_fill_tx_data(vi, PKT_START(pkt), pkt->buf_len);
+#endif
     if( ef_vi_transmitv(vi, iov, iov_len, OO_PKT_ID(pkt)) != 0 )
       return false;
   }

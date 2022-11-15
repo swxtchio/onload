@@ -19,6 +19,7 @@ TARGETS := $(TESTS:%=$(AppPattern))
 OBJECTS := $(TESTS:%=%.o)
 PASSED := $(TESTS:%=%.passed)
 
+
 # Library objects names are mangled with a prefix. Deal with that madness here.
 LIB_PREFIXES := transport/common/ci_tp_common_ transport/ip/ci_ip_
 lib_prefix = $(notdir $(filter $(dir $(1))%,$(LIB_PREFIXES)))

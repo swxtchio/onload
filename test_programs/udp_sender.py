@@ -1,0 +1,17 @@
+import socket
+import time
+
+server_address = '10.2.164.7'
+server_port = 31337
+
+with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client_socket:
+    client_socket.connect((server_address, server_port))
+    print("connected on port: ", client_socket.getsockname()[1])
+
+    for i in range(0, 5): 
+        message = 'Hello World'
+        client_socket.send(message.encode())
+        print('sent')
+        time.sleep(1)
+        #response = client_socket.recv(1024).decode()
+        #print(str(response))

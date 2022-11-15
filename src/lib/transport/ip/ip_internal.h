@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* X-SPDX-Copyright-Text: (c) Copyright 2004-2020 Xilinx, Inc. */
 /**************************************************************************\
-*//*! \file
+ *//*! \file
 ** <L5_PRIVATE L5_SOURCE>
 ** \author  ctk
 **  \brief  Decls & defs for IP library internal to our libraries.
@@ -22,10 +22,10 @@
 #include <ci/net/ethernet.h>
 #include <onload/ul/tcp_helper.h>
 #ifdef __KERNEL__
-# include <onload/oof_interface.h>
-# include <onload/oof_onload.h>
+#include <onload/oof_interface.h>
+#include <onload/oof_onload.h>
 #else
-# include <onload/extensions_zc.h>
+#include <onload/extensions_zc.h>
 #endif
 #include <onload/cplane_ops.h>
 
@@ -36,7 +36,7 @@
  * the driver.  However, the driver compiles code that uses this
  * definition so just define it to 0.
  */
-#define ONLOAD_MSG_WARM 0
+#define ONLOAD_MSG_WARM   0
 
 /* ONLOAD_MSG_ONEPKT is only used in user space receive calls, so use
  * the same trick as for ONLOAD_MSG_WARM above.
@@ -67,27 +67,32 @@ extern unsigned ci_tp_log CI_HV;
 extern unsigned ci_tp_max_dump CI_HV;
 
 
-#define log  ci_log
+#define log ci_log
 
-ci_inline unsigned raw_pkt_dump_len(unsigned len) {
+ci_inline unsigned raw_pkt_dump_len(unsigned len)
+{
 #if defined(__ci_driver__)
-  if( len > 80 ) len = 80;
+  if( len > 80 )
+    len = 80;
 #else
-  if( len > ci_tp_max_dump )  len = ci_tp_max_dump;
+  if( len > ci_tp_max_dump )
+    len = ci_tp_max_dump;
 #endif
   return len;
 }
 
-ci_inline unsigned ip_pkt_dump_len(unsigned len) {
+ci_inline unsigned ip_pkt_dump_len(unsigned len)
+{
   len += ETH_HLEN; /* ?? Cout VLAN tag as well ?? */
-  if( len > ETH_FRAME_LEN )   len = 80;
+  if( len > ETH_FRAME_LEN )
+    len = 80;
   return raw_pkt_dump_len(len);
 }
 
 #ifdef __ci_driver__
 /* definitions for installing/removing IP filters */
-# include <onload/tcp_helper_endpoint.h>
-# include <onload/tcp_helper_fns.h>
+#include <onload/tcp_helper_endpoint.h>
+#include <onload/tcp_helper_fns.h>
 #endif
 
 
@@ -106,8 +111,8 @@ ci_inline void ci_tcp_update_rtt(ci_netif* netif, ci_tcp_state* ts, int m)
     /* It's possible to get here if the timestamp has been corrupted.  If so
      * it's probably best not to use it to update the rtt.
      */
-    LOG_TL(ci_log("TCP RX %d:%d ditching bad timestamp echo",
-                  LNT_PRI_ARGS(netif, ts)));
+    LOG_TL(ci_log(
+        "TCP RX %d:%d ditching bad timestamp echo", LNT_PRI_ARGS(netif, ts)));
     return;
   }
   m = CI_MAX(1, m);
@@ -117,13 +122,13 @@ ci_inline void ci_tcp_update_rtt(ci_netif* netif, ci_tcp_state* ts, int m)
     ** RFC2988
     */
     m -= (ts->sa >> 3u);
-    ts->sa += m;          /* SRTT <- SRTT + 0.125*(M-SRTT)  */
-    if( m < 0 ) m = -m;
+    ts->sa += m; /* SRTT <- SRTT + 0.125*(M-SRTT)  */
+    if( m < 0 )
+      m = -m;
     m -= (ts->sv >> 2u);
-    ts->sv += m;          /* RTTVAR <- 0.75*RTTVAR + 0.25*|M-SRTT| */
-    ts->rto = tcp_srtt(ts) + ts->sv;   /* RTO <- SRTT + 4*RTTVAR */
-  }
-  else {
+    ts->sv += m; /* RTTVAR <- 0.75*RTTVAR + 0.25*|M-SRTT| */
+    ts->rto = tcp_srtt(ts) + ts->sv; /* RTO <- SRTT + 4*RTTVAR */
+  } else {
     /* first rtt estimate so follow (2.2) of RFC2988 */
     ts->sa = (m << 3u);
     ts->sv = (m << 1u);
@@ -132,21 +137,20 @@ ci_inline void ci_tcp_update_rtt(ci_netif* netif, ci_tcp_state* ts, int m)
 
   ci_tcp_rto_bound(netif, ts);
 
-  CI_IP_SOCK_STATS_VAL_RTT_SRTT_RTO( ts, ts->sv >> 2, ts->sa >> 3, ts->rto );
+  CI_IP_SOCK_STATS_VAL_RTT_SRTT_RTO(ts, ts->sv >> 2, ts->sa >> 3, ts->rto);
   LOG_TR(ci_log("TCP RX %d UPDATE RTT sa=%u sv=%u SRTT=%u RTTVAR=%u RTO=%u",
-	        S_FMT(ts), ts->sa, ts->sv,
-	        tcp_srtt(ts), tcp_rttvar(ts), ts->rto));
+      S_FMT(ts), ts->sa, ts->sv, tcp_srtt(ts), tcp_rttvar(ts), ts->rto));
 }
 
 /*
 ** Turn timestamps into cmsg entries.
 */
-void ip_cmsg_recv_timestamp(ci_netif *ni, ci_uint64 timestamp, 
-                                      struct cmsg_state *cmsg_state);
-void ip_cmsg_recv_timestampns(ci_netif *ni, ci_uint64 timestamp, 
-                                        struct cmsg_state *cmsg_state);
-void ip_cmsg_recv_timestamping(ci_netif *ni, const ci_ip_pkt_fmt *pkt,
-                               int flags, struct cmsg_state *cmsg_state);
+void ip_cmsg_recv_timestamp(
+    ci_netif* ni, ci_uint64 timestamp, struct cmsg_state* cmsg_state);
+void ip_cmsg_recv_timestampns(
+    ci_netif* ni, ci_uint64 timestamp, struct cmsg_state* cmsg_state);
+void ip_cmsg_recv_timestamping(ci_netif* ni, const ci_ip_pkt_fmt* pkt,
+    int flags, struct cmsg_state* cmsg_state);
 
 
 /**********************************************************************
@@ -155,28 +159,28 @@ void ip_cmsg_recv_timestamping(ci_netif *ni, const ci_ip_pkt_fmt *pkt,
 
 /* Macro for sleeping until [cond] is not true (or timeout, or error). */
 /* TODO timeout should be re-calculated when looping */
-#define CITP_WAITABLE_SLEEP_WHILE(ni, w, why, timeout, cond, prc) \
-  do {								\
-    ci_uint64 __sleep_seq;					\
-    ci_uint32 t = (timeout);					\
-    *(prc) = 0;							\
-    while( 1 ) {						\
-      __sleep_seq = (w)->sleep_seq.all;				\
-      ci_rmb();							\
-      if( !(cond) ) break;					\
-      (*prc) = ci_sock_sleep((ni), (w), (why),			\
-			     CI_SLEEP_NETIF_LOCKED |		\
-			     CI_SLEEP_NETIF_RQ,			\
-			     __sleep_seq, &t);		\
-      /* TODO (Bug24547) handle case where netif lock fails */  \
-      CI_TEST(ci_netif_lock(ni) == 0);                          \
-      if( *(prc) )  break;					\
-      ci_netif_poll(ni);					\
-    }								\
-  } while(0)
+#define CITP_WAITABLE_SLEEP_WHILE(ni, w, why, timeout, cond, prc)      \
+  do {                                                                 \
+    ci_uint64 __sleep_seq;                                             \
+    ci_uint32 t = (timeout);                                           \
+    *(prc) = 0;                                                        \
+    while( 1 ) {                                                       \
+      __sleep_seq = (w)->sleep_seq.all;                                \
+      ci_rmb();                                                        \
+      if( ! (cond) )                                                   \
+        break;                                                         \
+      (*prc) = ci_sock_sleep((ni), (w), (why),                         \
+          CI_SLEEP_NETIF_LOCKED | CI_SLEEP_NETIF_RQ, __sleep_seq, &t); \
+      /* TODO (Bug24547) handle case where netif lock fails */         \
+      CI_TEST(ci_netif_lock(ni) == 0);                                 \
+      if( *(prc) )                                                     \
+        break;                                                         \
+      ci_netif_poll(ni);                                               \
+    }                                                                  \
+  } while( 0 )
 
 
-#define CI_TCP_SLEEP_WHILE(ni, ts, why, timeout, cond, prc)     \
+#define CI_TCP_SLEEP_WHILE(ni, ts, why, timeout, cond, prc) \
   CITP_WAITABLE_SLEEP_WHILE((ni), &(ts)->s.b, (why), (timeout), (cond), (prc))
 
 
@@ -200,63 +204,55 @@ void ip_cmsg_recv_timestamping(ci_netif *ni, const ci_ip_pkt_fmt *pkt,
  *
  *--------------------------------------------------------------------*/
 
-ci_inline int
-ci_tcp_ep_set_filters(ci_netif *        ni,
-                      oo_sp             sock_id,
-                      ci_ifid_t         bindto_ifindex,
-                      oo_sp             from_tcp_id)
+ci_inline int ci_tcp_ep_set_filters(
+    ci_netif* ni, oo_sp sock_id, ci_ifid_t bindto_ifindex, oo_sp from_tcp_id)
 {
   int rc;
 
   ci_assert(ni);
 
-  LOG_TC(ci_log("%s: %d:%d bindto_ifindex=%d port_sock=%d",
-                __FUNCTION__, NI_ID(ni), OO_SP_FMT(sock_id),
-                (int) bindto_ifindex, OO_SP_FMT(from_tcp_id)));
+  LOG_TC(ci_log("%s: %d:%d bindto_ifindex=%d port_sock=%d", __FUNCTION__,
+      NI_ID(ni), OO_SP_FMT(sock_id), (int) bindto_ifindex,
+      OO_SP_FMT(from_tcp_id)));
 
 #ifdef __ci_driver__
-  rc = tcp_helper_endpoint_set_filters(ci_netif_get_valid_ep(ni, sock_id),
-                                       bindto_ifindex, from_tcp_id);
+  rc = tcp_helper_endpoint_set_filters(
+      ci_netif_get_valid_ep(ni, sock_id), bindto_ifindex, from_tcp_id);
 
 #else
-  if( ci_tcp_can_set_filter_in_ul(ni, SP_TO_SOCK(ni, sock_id)) )
+  if( ci_tcp_can_set_filter_in_ul(ni, SP_TO_SOCK(ni, sock_id)) ) {
     rc = ci_tcp_sock_set_stack_filter(ni, SP_TO_SOCK(ni, sock_id));
-  else
-    rc = ci_tcp_helper_ep_set_filters(ci_netif_get_driver_handle(ni), sock_id,
-                                      bindto_ifindex, from_tcp_id);
+  } else
+    rc = ci_tcp_helper_ep_set_filters(
+        ci_netif_get_driver_handle(ni), sock_id, bindto_ifindex, from_tcp_id);
 #endif
 
-  LOG_TC( if(rc < 0)
-            ci_log(" ---> %s (rc=%d)", __FUNCTION__, rc) );
+  LOG_TC(if( rc < 0 ) ci_log(" ---> %s (rc=%d)", __FUNCTION__, rc));
   return rc;
 }
 
-#if !defined(__KERNEL__) && CI_CFG_ENDPOINT_MOVE
-ci_inline int
-ci_tcp_ep_reuseport_bind(ci_fd_t fd, const char* cluster_name,
-                         ci_int32 cluster_size, ci_uint32 cluster_restart_opt,
-                         ci_uint32 cluster_hot_restart_opt,
-                         ci_addr_t addr, ci_uint16 port_be16)
+#if ! defined(__KERNEL__) && CI_CFG_ENDPOINT_MOVE
+ci_inline int ci_tcp_ep_reuseport_bind(ci_fd_t fd, const char* cluster_name,
+    ci_int32 cluster_size, ci_uint32 cluster_restart_opt,
+    ci_uint32 cluster_hot_restart_opt, ci_addr_t addr, ci_uint16 port_be16)
 {
   int rc;
 
   if( port_be16 == 0 ) {
-    /* There should be a non-zero port value to perform reuseport bind properly.
-     * This condition will be violated when socket deferred bind happens, e.g.
-     * when combining SO_REUSEPORT with EF_TCP_SHARED_LOCAL_PORTS option. */
+    /* There should be a non-zero port value to perform reuseport bind
+     * properly. This condition will be violated when socket deferred bind
+     * happens, e.g. when combining SO_REUSEPORT with EF_TCP_SHARED_LOCAL_PORTS
+     * option. */
     LOG_TC(ci_log("%s: Trying to perform reuseport bind with 0 port value",
-                  __FUNCTION__));
+        __FUNCTION__));
     return EINVAL;
   }
 
   LOG_TC(ci_log("%s: %d addr: " IPX_FMT " port: %d", __FUNCTION__, fd,
-                IPX_ARG(AF_IP_L3(addr)), port_be16));
+      IPX_ARG(AF_IP_L3(addr)), port_be16));
   rc = ci_tcp_helper_ep_reuseport_bind(fd, cluster_name, cluster_size,
-                                       cluster_restart_opt,
-                                       cluster_hot_restart_opt,
-                                       addr, port_be16);
-  LOG_TC( if(rc < 0)
-            ci_log(" ---> %s (rc=%d)", __FUNCTION__, rc) );
+      cluster_restart_opt, cluster_hot_restart_opt, addr, port_be16);
+  LOG_TC(if( rc < 0 ) ci_log(" ---> %s (rc=%d)", __FUNCTION__, rc));
   return rc;
 }
 #endif
@@ -274,10 +270,8 @@ ci_tcp_ep_reuseport_bind(ci_fd_t fd, const char* cluster_name,
  *
  *--------------------------------------------------------------------*/
 
-ci_inline int
-ci_tcp_ep_clear_filters(ci_netif*         ni,
-                        oo_sp             sock_id,
-                        int               need_update)
+ci_inline int ci_tcp_ep_clear_filters(
+    ci_netif* ni, oo_sp sock_id, int need_update)
 {
   int rc;
 #ifdef __ci_driver__
@@ -285,34 +279,32 @@ ci_tcp_ep_clear_filters(ci_netif*         ni,
 #endif
   ci_assert(ni);
 
-  LOG_TC(ci_log("%s: %d:%d (%d)", __FUNCTION__,
-                ni->state->stack_id, OO_SP_FMT(sock_id), need_update));
+  LOG_TC(ci_log("%s: %d:%d (%d)", __FUNCTION__, ni->state->stack_id,
+      OO_SP_FMT(sock_id), need_update));
   ci_assert(ci_netif_is_locked(ni));
 
 #ifdef __ci_driver__
-  rc = tcp_helper_endpoint_clear_filters(
-                    ci_netif_get_valid_ep(ni, sock_id),
-                    (supress_hw_ops ? EP_CLEAR_FILTERS_FLAG_SUPRESS_HW : 0) |
-                    (need_update ? EP_CLEAR_FILTERS_FLAG_NEED_UPDATE : 0));
+  rc = tcp_helper_endpoint_clear_filters(ci_netif_get_valid_ep(ni, sock_id),
+      (supress_hw_ops ? EP_CLEAR_FILTERS_FLAG_SUPRESS_HW : 0) |
+          (need_update ? EP_CLEAR_FILTERS_FLAG_NEED_UPDATE : 0));
 #else
   if( (SP_TO_SOCK(ni, sock_id)->s_flags & CI_SOCK_FLAG_STACK_FILTER) &&
       ci_tcp_can_set_filter_in_ul(ni, SP_TO_SOCK(ni, sock_id)) ) {
     ci_tcp_sock_clear_stack_filter(ni, SP_TO_TCP(ni, sock_id));
     rc = 0;
-  }
-  else
-    rc = ci_tcp_helper_ep_clear_filters(ci_netif_get_driver_handle(ni), sock_id,
-                                        need_update);
+  } else
+    rc = ci_tcp_helper_ep_clear_filters(
+        ci_netif_get_driver_handle(ni), sock_id, need_update);
 #if CI_CFG_UL_INTERRUPT_HELPER
-    /* When called from stack poll, it is important to remove sw filters
-     * immediately, before receiving next packets. */
-    if( ni->state->in_poll )
-      ci_netif_handle_actions(ni);
+  /* When called from stack poll, it is important to remove sw filters
+   * immediately, before receiving next packets. */
+  if( ni->state->in_poll )
+    ci_netif_handle_actions(ni);
 #endif
 #endif
 
-  LOG_TC( if (rc < 0 && rc != -EAGAIN)
-            ci_log(" ---> %s (rc=%d)", __FUNCTION__, rc) );
+  LOG_TC(if( rc < 0 && rc != -EAGAIN )
+          ci_log(" ---> %s (rc=%d)", __FUNCTION__, rc));
   return rc;
 }
 
@@ -324,7 +316,7 @@ ci_tcp_ep_clear_filters(ci_netif*         ni,
  * address. If the socket is not bound, the function just add multicast
  * address to the list, and bind() should install the filter.
  * or
- * Delete a multicast address from a socket list of multicast addresses. 
+ * Delete a multicast address from a socket list of multicast addresses.
  * If the socket is already bound, this function removes filters for this
  * address. If the socket is not bound, the function just deletes multicast
  * address from the list.
@@ -342,26 +334,20 @@ ci_tcp_ep_clear_filters(ci_netif*         ni,
  *--------------------------------------------------------------------*/
 
 #ifndef __ci_driver__
-ci_inline int
-ci_tcp_ep_mcast_add_del(ci_netif*         ni,
-                        oo_sp             sock_id,
-                        ci_ifid_t         ifindex,
-                        ci_uint32         mcast_addr,
-                        int               add)
+ci_inline int ci_tcp_ep_mcast_add_del(ci_netif* ni, oo_sp sock_id,
+    ci_ifid_t ifindex, ci_uint32 mcast_addr, int add)
 {
   int rc;
 
   ci_assert(ni);
 
-  LOG_TC(ci_log("%s: id=%d (ifid=%d, maddr=%s)",
-                __FUNCTION__, OO_SP_FMT(sock_id), ifindex,
-                ip_addr_str(mcast_addr)));
+  LOG_TC(ci_log("%s: id=%d (ifid=%d, maddr=%s)", __FUNCTION__,
+      OO_SP_FMT(sock_id), ifindex, ip_addr_str(mcast_addr)));
 
-  rc = ci_tcp_helper_ep_mcast_add_del(ci_netif_get_driver_handle(ni),
-                                      sock_id, mcast_addr, ifindex, add);
+  rc = ci_tcp_helper_ep_mcast_add_del(
+      ci_netif_get_driver_handle(ni), sock_id, mcast_addr, ifindex, add);
 
-  LOG_TC( if(rc < 0)
-            ci_log(" ---> %s (rc=%d)", __FUNCTION__, rc) );
+  LOG_TC(if( rc < 0 ) ci_log(" ---> %s (rc=%d)", __FUNCTION__, rc));
   return rc;
 }
 #endif
@@ -372,22 +358,22 @@ ci_tcp_ep_mcast_add_del(ci_netif*         ni,
 *********************************************************************/
 
 #ifdef __KERNEL__
-# define verify_fail()  return
+#define verify_fail() return
 #else
-# define verify_fail()  ci_fail(("STOP."))
+#define verify_fail() ci_fail(("STOP."))
 #endif
 
-#define verify(exp)							  \
-  do{									  \
-    if( CI_UNLIKELY(!(exp)) ) {						  \
+#define verify(exp)                                                       \
+  do {                                                                    \
+    if( CI_UNLIKELY(! (exp)) ) {                                          \
       ci_log("********** verify(%s) at %s:%d", #exp, __FILE__, __LINE__); \
-      ci_log("********** from %s:%d", file?file:"", line);		  \
-      verify_fail();							  \
-    }									  \
-  }while(0)
+      ci_log("********** from %s:%d", file ? file : "", line);            \
+      verify_fail();                                                      \
+    }                                                                     \
+  } while( 0 )
 
 #undef verify
-#define verify(exp)  ci_assert(exp)
+#define verify(exp) ci_assert(exp)
 
 
 /*********************************************************************
@@ -395,18 +381,18 @@ ci_tcp_ep_mcast_add_del(ci_netif*         ni,
 *********************************************************************/
 
 #ifndef SO_TIMESTAMPNS
-# define SO_TIMESTAMPNS 35
+#define SO_TIMESTAMPNS 35
 #endif
 
 #ifndef SO_REUSEPORT
-# define SO_REUSEPORT   15
+#define SO_REUSEPORT 15
 #endif
 
 #if CI_CFG_TIMESTAMPING
 /* The following value needs to match its counterpart
  * in kernel headers.
  */
-#define ONLOAD_SO_TIMESTAMPING 37
+#define ONLOAD_SO_TIMESTAMPING  37
 #define ONLOAD_SCM_TIMESTAMPING ONLOAD_SO_TIMESTAMPING
 #endif
 
@@ -414,10 +400,10 @@ ci_tcp_ep_mcast_add_del(ci_netif*         ni,
  * the headers in use. */
 struct oo_sock_extended_err {
   ci_uint32 ee_errno;
-  ci_uint8  ee_origin;
-  ci_uint8  ee_type;
-  ci_uint8  ee_code;
-  ci_uint8  ee_pad;
+  ci_uint8 ee_origin;
+  ci_uint8 ee_type;
+  ci_uint8 ee_code;
+  ci_uint8 ee_pad;
   ci_uint32 ee_info;
   ci_uint32 ee_data;
 };
@@ -434,48 +420,44 @@ struct oo_sock_extended_err {
 
 /* check [ov] is a non-NULL ptr & [ol] indicates the right space for
  * type [ty] */
-#define opt_ok(ov,ol,ty)     ((ov) && (ol) >= sizeof(ty))
-#define opt_not_ok(ov,ol,ty) \
-    ((ol) < sizeof(ty) ? -EINVAL : (ov) ? 0 : -EFAULT)
+#define opt_ok(ov, ol, ty)  ((ov) && (ol) >= sizeof(ty))
+#define opt_not_ok(ov, ol, ty) \
+  ((ol) < sizeof(ty) ? -EINVAL : (ov) ? 0 : -EFAULT)
 
-ci_inline unsigned 
-ci_get_optval(const void *optval, socklen_t optlen)
+ci_inline unsigned ci_get_optval(const void* optval, socklen_t optlen)
 {
-  if (optlen >= sizeof(unsigned))
-    return (*(unsigned*)optval);
-  else return (unsigned)(*(unsigned char*)optval);
+  if( optlen >= sizeof(unsigned) )
+    return (*(unsigned*) optval);
+  else
+    return (unsigned) (*(unsigned char*) optval);
 }
 
 /*! Do not call it, use ci_getsockopt_final(). */
-ci_inline int
-ci_getsockopt_final_pre(void *optval, socklen_t *optlen, int level,
-                        void *val, socklen_t val_size)
+ci_inline int ci_getsockopt_final_pre(
+    void* optval, socklen_t* optlen, int level, void* val, socklen_t val_size)
 {
   if( *optlen > 0 )
     memcpy(optval, val, CI_MIN(*optlen, val_size));
   if( *optlen > val_size )
     *optlen = val_size;
   /* TODO AFAIK, Solaris returns error if *optlen < val_size. */
-  return 0;  
+  return 0;
 }
 
 /*! Common getsockopt() part - push value to the user according to the
  * particular OS expectations. Return -1 with errno being set or 0.  */
-ci_inline int
-ci_getsockopt_final(void *optval, socklen_t *optlen, int level,
-                    void *val, size_t val_size)
+ci_inline int ci_getsockopt_final(
+    void* optval, socklen_t* optlen, int level, void* val, size_t val_size)
 {
-  if( (level == SOL_SOCKET || level == SOL_IP) &&
-      val_size == sizeof(int) && 
+  if( (level == SOL_SOCKET || level == SOL_IP) && val_size == sizeof(int) &&
       *optlen >= sizeof(char) && *optlen < sizeof(int) ) {
-    int ival = *((int *)val);
-    unsigned char ucval = (unsigned char)ival;
-    if( ival >=0 && ival <= 255)
-      return ci_getsockopt_final_pre(optval, optlen, level,
-                                     &ucval, sizeof(ucval));
+    int ival = *((int*) val);
+    unsigned char ucval = (unsigned char) ival;
+    if( ival >= 0 && ival <= 255 )
+      return ci_getsockopt_final_pre(
+          optval, optlen, level, &ucval, sizeof(ucval));
   }
-  return ci_getsockopt_final_pre(optval, optlen, level,
-                                 val, val_size);
+  return ci_getsockopt_final_pre(optval, optlen, level, val, val_size);
 }
 
 
@@ -487,9 +469,8 @@ ci_getsockopt_final(void *optval, socklen_t *optlen, int level,
  * \param optlen  [in/out] Length of buffer ref'd by [optval]
  * \return        As for getsockopt()
  */
-extern int ci_get_sol_tcp(ci_netif* netif, ci_sock_cmn* s,
-			  int optname, void *optval,
-			  socklen_t *optlen) CI_HF;
+extern int ci_get_sol_tcp(ci_netif* netif, ci_sock_cmn* s, int optname,
+    void* optval, socklen_t* optlen) CI_HF;
 
 #ifdef __KERNEL__
 extern int ci_ip_mtu_discover_from_sflags(int s_flags, int af) CI_HF;
@@ -504,9 +485,8 @@ extern int ci_ip_mtu_discover_from_sflags(int s_flags, int af) CI_HF;
  * \param optlen  [in/out] Length of buffer ref'd by [optval]
  * \return        As for getsockopt()
  */
-extern int ci_get_sol_ip( ci_netif* netif, ci_sock_cmn* s, ci_fd_t fd,
-			  int optname, void *optval,
-			  socklen_t *optlen ) CI_HF;
+extern int ci_get_sol_ip(ci_netif* netif, ci_sock_cmn* s, ci_fd_t fd,
+    int optname, void* optval, socklen_t* optlen) CI_HF;
 #endif
 
 #if CI_CFG_FAKE_IPV6
@@ -519,9 +499,8 @@ extern int ci_get_sol_ip( ci_netif* netif, ci_sock_cmn* s, ci_fd_t fd,
  * \param optlen  [in/out] Length of buffer ref'd by [optval]
  * \return        As for getsockopt()
  */
-extern int ci_get_sol_ip6( ci_netif* netif, ci_sock_cmn* s, ci_fd_t fd,
-                           int optname, void *optval, 
-                           socklen_t *optlen ) CI_HF;
+extern int ci_get_sol_ip6(ci_netif* netif, ci_sock_cmn* s, ci_fd_t fd,
+    int optname, void* optval, socklen_t* optlen) CI_HF;
 #endif
 
 #if defined(__KERNEL__) && ! defined(EFRM_HAS_STRUCT_TIMEVAL)
@@ -538,9 +517,8 @@ extern int ci_get_sol_ip6( ci_netif* netif, ci_sock_cmn* s, ci_fd_t fd,
  * \param optlen  [in/out] Length of buffer ref'd by [optval]
  * \return        As for getsockopt()
  */
-extern int ci_get_sol_socket( ci_netif* netif, ci_sock_cmn* s,
-			      int optname, void *optval,
-			      socklen_t *optlen ) CI_HF;
+extern int ci_get_sol_socket(ci_netif* netif, ci_sock_cmn* s, int optname,
+    void* optval, socklen_t* optlen) CI_HF;
 
 /*! Handler for common setsockopt:SOL_IP handlers.
  * \param netif   [in] Netif context
@@ -550,9 +528,8 @@ extern int ci_get_sol_socket( ci_netif* netif, ci_sock_cmn* s,
  * \param optlen  [in] Length of buffer ref'd by [optval]
  * \return        As for setsockopt()
  */
-extern int 
-ci_set_sol_ip( ci_netif* netif, ci_sock_cmn* s,
-	       int optname, const void *optval, socklen_t optlen) CI_HF;
+extern int ci_set_sol_ip(ci_netif* netif, ci_sock_cmn* s, int optname,
+    const void* optval, socklen_t optlen) CI_HF;
 
 #if CI_CFG_FAKE_IPV6
 /*! Handler for common setsockopt:SOL_IPV6 handlers.
@@ -563,9 +540,8 @@ ci_set_sol_ip( ci_netif* netif, ci_sock_cmn* s,
  * \param optlen  [in] Length of buffer ref'd by [optval]
  * \return        As for setsockopt()
  */
-extern int 
-ci_set_sol_ip6( ci_netif* netif, ci_sock_cmn* s,
-	        int optname, const void *optval, socklen_t optlen) CI_HF;
+extern int ci_set_sol_ip6(ci_netif* netif, ci_sock_cmn* s, int optname,
+    const void* optval, socklen_t optlen) CI_HF;
 #endif
 
 /*! Handler for common setsockopt:SOL_SOCKET handlers.
@@ -576,52 +552,71 @@ ci_set_sol_ip6( ci_netif* netif, ci_sock_cmn* s,
  * \param optlen  [in] Length of buffer ref'd by [optval]
  * \return        As for setsockopt()
  */
-extern int 
-ci_set_sol_socket( ci_netif* netif, ci_sock_cmn* s,
-		   int optname, const void *optval, socklen_t optlen) CI_HF;
+extern int ci_set_sol_socket(ci_netif* netif, ci_sock_cmn* s, int optname,
+    const void* optval, socklen_t optlen) CI_HF;
 
 /*! Handles socket options that don't require the netif lock. */
-extern int 
-ci_set_sol_socket_nolock(ci_netif*, ci_sock_cmn* s, int optname,
-			 const void *optval, socklen_t optlen) CI_HF;
+extern int ci_set_sol_socket_nolock(ci_netif*, ci_sock_cmn* s, int optname,
+    const void* optval, socklen_t optlen) CI_HF;
 
 /*********************************************************************
  ******************************* Ioctls ******************************
-*********************************************************************/
+ *********************************************************************/
 
 #ifdef __KERNEL__
-#define CI_IOCTL_ARG_OK(t,a) ({t _v; int _rc = get_user(_v, (t*)(a)); (void)_v; _rc==0;})
-#define CI_IOCTL_SETARG(a,v) do { put_user(v,a); } while(0)
-#define CI_IOCTL_GETARG(t,a) ({t _v; get_user(_v, (t*)(a)); _v; })
+#define CI_IOCTL_ARG_OK(t, a)         \
+  ({                                  \
+    t _v;                             \
+    int _rc = get_user(_v, (t*) (a)); \
+    (void) _v;                        \
+    _rc == 0;                         \
+  })
+#define CI_IOCTL_SETARG(a, v) \
+  do {                        \
+    put_user(v, a);           \
+  } while( 0 )
+#define CI_IOCTL_GETARG(t, a) \
+  ({                          \
+    t _v;                     \
+    get_user(_v, (t*) (a));   \
+    _v;                       \
+  })
 #else
-#define CI_IOCTL_ARG_OK(t,a) ((a) != 0)
-#define CI_IOCTL_SETARG(a,v) do { *(a)=(v); } while(0)
-#define CI_IOCTL_GETARG(t,v) (*(t*)(v))
+#define CI_IOCTL_ARG_OK(t, a) ((a) != 0)
+#define CI_IOCTL_SETARG(a, v) \
+  do {                        \
+    *(a) = (v);               \
+  } while( 0 )
+#define CI_IOCTL_GETARG(t, v) (*(t*) (v))
 #endif
 
 #if defined(__KERNEL) /* Bug 18959: should be __KERNEL__ */
-/* Common handler for FIONBIO - called in per-protocol handler to 
+/* Common handler for FIONBIO - called in per-protocol handler to
  * keep the request efficient */
-#define CI_CMN_IOCTL_FIONBIO(s, arg) do {                             \
-  int v, _rc = get_user(v, arg);                                      \
-  if( v ) {                                                           \
-      LOG_SV( ci_log("%s: set non-blocking mode", __FUNCTION__ ) );   \
-      ci_bit_set(&(s)->b.sb_aflags, CI_SB_AFLAG_O_NONBLOCK_BIT);      \
-    } else {                                                          \
-      LOG_SV( ci_log("%s: clear non-blocking mode", __FUNCTION__ ) ); \
-      ci_bit_clear(&(s)->b.sb_aflags, CI_SB_AFLAG_O_NONBLOCK_BIT);    \
-    } } while (0) 
+#define CI_CMN_IOCTL_FIONBIO(s, arg)                               \
+  do {                                                             \
+    int v, _rc = get_user(v, arg);                                 \
+    if( v ) {                                                      \
+      LOG_SV(ci_log("%s: set non-blocking mode", __FUNCTION__));   \
+      ci_bit_set(&(s)->b.sb_aflags, CI_SB_AFLAG_O_NONBLOCK_BIT);   \
+    } else {                                                       \
+      LOG_SV(ci_log("%s: clear non-blocking mode", __FUNCTION__)); \
+      ci_bit_clear(&(s)->b.sb_aflags, CI_SB_AFLAG_O_NONBLOCK_BIT); \
+    }                                                              \
+  } while( 0 )
 #else
-/* Common handler for FIONBIO - called in per-protocol handler to 
+/* Common handler for FIONBIO - called in per-protocol handler to
  * keep the request efficient */
-#define CI_CMN_IOCTL_FIONBIO(s, arg) do {                             \
-  if( *(int*)(arg) ) {                                                \
-      LOG_SV( ci_log("%s: set non-blocking mode", __FUNCTION__ ) );   \
-      ci_bit_set(&(s)->b.sb_aflags, CI_SB_AFLAG_O_NONBLOCK_BIT);      \
-    } else {                                                          \
-      LOG_SV( ci_log("%s: clear non-blocking mode", __FUNCTION__ ) ); \
-      ci_bit_clear(&(s)->b.sb_aflags, CI_SB_AFLAG_O_NONBLOCK_BIT);    \
-    } } while (0) 
+#define CI_CMN_IOCTL_FIONBIO(s, arg)                               \
+  do {                                                             \
+    if( *(int*) (arg) ) {                                          \
+      LOG_SV(ci_log("%s: set non-blocking mode", __FUNCTION__));   \
+      ci_bit_set(&(s)->b.sb_aflags, CI_SB_AFLAG_O_NONBLOCK_BIT);   \
+    } else {                                                       \
+      LOG_SV(ci_log("%s: clear non-blocking mode", __FUNCTION__)); \
+      ci_bit_clear(&(s)->b.sb_aflags, CI_SB_AFLAG_O_NONBLOCK_BIT); \
+    }                                                              \
+  } while( 0 )
 #endif
 
 /*! Common handler for IOCTL calls.
@@ -633,22 +628,22 @@ ci_set_sol_socket_nolock(ci_netif*, ci_sock_cmn* s, int optname,
  * \param  os_socket_exists Non-zero if OS socket extsts
  * \return          As for ioctl()
  */
-extern int ci_cmn_ioctl(ci_netif* netif, ci_sock_cmn* s, int request, 
-			void* arg, int os_rc, int os_socket_exists);
+extern int ci_cmn_ioctl(ci_netif* netif, ci_sock_cmn* s, int request,
+    void* arg, int os_rc, int os_socket_exists);
 
 /*! Compute the time stamp delta for the given packet time stamp and
  *  return in in ts
  */
-extern void ci_udp_compute_stamp(ci_netif *netif, ci_uint64 stamp,
-                                 struct timespec *ts);
+extern void ci_udp_compute_stamp(
+    ci_netif* netif, ci_uint64 stamp, struct timespec* ts);
 
 
 /* Return from getsockopt(level=SOL_INVALID) with appropriate errno */
-# define SOCKOPT_RET_INVALID_LEVEL(s) \
-    if ((s)->domain == AF_INET6 )   \
-      RET_WITH_ERRNO(ENOPROTOOPT);  \
-    else                            \
-      RET_WITH_ERRNO(EOPNOTSUPP)
+#define SOCKOPT_RET_INVALID_LEVEL(s) \
+  if( (s)->domain == AF_INET6 )      \
+    RET_WITH_ERRNO(ENOPROTOOPT);     \
+  else                               \
+    RET_WITH_ERRNO(EOPNOTSUPP)
 
 /*********************************************************************
  ***************************** Async IO ******************************
@@ -661,12 +656,11 @@ extern void ci_udp_compute_stamp(ci_netif *netif, ci_uint64 stamp,
 
 
 #if defined(__KERNEL__)
-extern void ci_ip_queue_enqueue_nnl(ci_netif* netif, ci_ip_pkt_queue*qu,
-				    ci_ip_pkt_fmt* pkt) CI_HF;
+extern void ci_ip_queue_enqueue_nnl(
+    ci_netif* netif, ci_ip_pkt_queue* qu, ci_ip_pkt_fmt* pkt) CI_HF;
 #endif
 extern ci_ip_pkt_fmt* ci_pkt_alloc_n(ci_netif* ni, int n) CI_HF;
 extern ci_ip_pkt_fmt* ci_pkt_alloc_n_nnl(ci_netif* ni, int n) CI_HF;
-
 
 
 /*********************************************************************
@@ -677,20 +671,21 @@ extern ci_ip_pkt_fmt* ci_pkt_alloc_n_nnl(ci_netif* ni, int n) CI_HF;
  * boundary requirements (multiple of 64 bits) */
 
 /* How much payload space in a first fragment packet */
-#define UDP_PAYLOAD1_SPACE_PMTU(af, pmtu)			\
-  (((pmtu) - CI_IPX_HDR_SIZE(af) - CI_IPX_FRAG_HDR_SIZE(af) -  \
-    sizeof(ci_udp_hdr)) & 0xfff8)
+#define UDP_PAYLOAD1_SPACE_PMTU(af, pmtu)                    \
+  (((pmtu) -CI_IPX_HDR_SIZE(af) - CI_IPX_FRAG_HDR_SIZE(af) - \
+       sizeof(ci_udp_hdr)) &                                 \
+      0xfff8)
 
 /* How much space in a second fragment packet */
 #define UDP_PAYLOAD2_SPACE_PMTU(af, pmtu) \
-  (((pmtu) - CI_IPX_HDR_SIZE(af) + CI_IPX_FRAG_HDR_SIZE(af)) & 0xfff8)
+  (((pmtu) -CI_IPX_HDR_SIZE(af) + CI_IPX_FRAG_HDR_SIZE(af)) & 0xfff8)
 
-#define UDP_HAS_SENDQ_SPACE(us,l) \
-  ((us)->s.so.sndbuf >= (int)((us)->tx_count + (l)))
+#define UDP_HAS_SENDQ_SPACE(us, l) \
+  ((us)->s.so.sndbuf >= (int) ((us)->tx_count + (l)))
 
 
 /* Linux sets twice the buffer size that the application requests. */
-#define oo_adjust_SO_XBUF(v)  ((v) * 2)
+#define oo_adjust_SO_XBUF(v) ((v) *2)
 
 
 /**********************************************************************
@@ -699,49 +694,45 @@ extern ci_ip_pkt_fmt* ci_pkt_alloc_n_nnl(ci_netif* ni, int n) CI_HF;
 
 #ifdef __KERNEL__
 
-ci_inline int
-oo_spinloop_pause_check_signals(ci_netif* ni, ci_uint64 now_frc,
-                                ci_uint64* schedule_frc, int have_timeout)
+ci_inline int oo_spinloop_pause_check_signals(
+    ci_netif* ni, ci_uint64 now_frc, ci_uint64* schedule_frc, int have_timeout)
 {
-  if(CI_UNLIKELY( signal_pending(current) ))
+  if( CI_UNLIKELY(signal_pending(current)) )
     return have_timeout ? -EINTR : -ERESTARTSYS;
   if( now_frc - *schedule_frc > IPTIMER_STATE(ni)->khz ) {
-    schedule();                  /* schedule() every 1ms */
+    schedule(); /* schedule() every 1ms */
     *schedule_frc = now_frc;
   }
   return 0;
 }
 
-#define OO_SPINLOOP_PAUSE_CHECK_SIGNALS(ni, now_frc, schedule_frc,      \
-                                        have_timeout, w, si)            \
+#define OO_SPINLOOP_PAUSE_CHECK_SIGNALS(            \
+    ni, now_frc, schedule_frc, have_timeout, w, si) \
   oo_spinloop_pause_check_signals(ni, now_frc, schedule_frc, have_timeout)
 
 #else
 
 #include "ci/internal/ip_signal.h"
-extern int oo_spinloop_run_pending_sigs(ci_netif*, citp_waitable*,
-                                        citp_signal_info*, int) CI_HF;
+extern int oo_spinloop_run_pending_sigs(
+    ci_netif*, citp_waitable*, citp_signal_info*, int) CI_HF;
 
-ci_inline int
-oo_spinloop_pause_check_signals(ci_netif* ni,
-                                ci_uint64 now_frc /*unused*/,
-                                ci_uint64* schedule_frc /*unused*/,
-                                int have_timeout,
-                                citp_waitable* w, citp_signal_info* si)
+ci_inline int oo_spinloop_pause_check_signals(ci_netif* ni,
+    ci_uint64 now_frc /*unused*/, ci_uint64* schedule_frc /*unused*/,
+    int have_timeout, citp_waitable* w, citp_signal_info* si)
 {
   ci_assert_gt(si->c.inside_lib, 0);
   ci_assert(~si->c.aflags & OO_SIGNAL_FLAG_FDTABLE_LOCKED);
 
-  if(CI_LIKELY( ! (si->c.aflags & OO_SIGNAL_FLAG_HAVE_PENDING) ))
+  if( CI_LIKELY(! (si->c.aflags & OO_SIGNAL_FLAG_HAVE_PENDING)) )
     return 0;
   else
     return oo_spinloop_run_pending_sigs(ni, w, si, have_timeout);
 }
 
-#define OO_SPINLOOP_PAUSE_CHECK_SIGNALS(ni, now_frc, schedule_frc,      \
-                                        have_timeout, w, si)            \
-  oo_spinloop_pause_check_signals(ni, now_frc, schedule_frc,            \
-                                  have_timeout, w, si)
+#define OO_SPINLOOP_PAUSE_CHECK_SIGNALS(            \
+    ni, now_frc, schedule_frc, have_timeout, w, si) \
+  oo_spinloop_pause_check_signals(                  \
+      ni, now_frc, schedule_frc, have_timeout, w, si)
 
 #endif
 
@@ -779,9 +770,9 @@ static inline int ci_intf_i_to_ifindex(ci_netif* ni, int intf_i)
  *********************************************************************/
 
 /* Returns true if the packet is freed. */
-ci_inline int/*bool*/
-ci_netif_pkt_release_in_poll(ci_netif* netif, ci_ip_pkt_fmt* pkt,
-                             struct ci_netif_poll_state* ps)
+ci_inline int /*bool*/
+ci_netif_pkt_release_in_poll(
+    ci_netif* netif, ci_ip_pkt_fmt* pkt, struct ci_netif_poll_state* ps)
 {
   if( pkt->refcount == 1 ) {
     /* We are going to free the packet, so it is not in use
@@ -794,57 +785,55 @@ ci_netif_pkt_release_in_poll(ci_netif* netif, ci_ip_pkt_fmt* pkt,
     __ci_netif_pkt_clean(pkt);
     if( ! (pkt->flags & CI_PKT_FLAG_NONB_POOL) ) {
       ci_netif_pkt_put(netif, pkt);
-    }
-    else if( ps != NULL ) {
+    } else if( ps != NULL ) {
       *ps->tx_pkt_free_list_insert = OO_PKT_P(pkt);
       ps->tx_pkt_free_list_insert = &pkt->next;
       ++ps->tx_pkt_free_list_n;
-    }
-    else {
+    } else {
       ci_netif_pkt_free_nonb_list(netif, OO_PKT_P(pkt), pkt);
-      netif->state->n_async_pkts ++;
+      netif->state->n_async_pkts++;
     }
     return CI_TRUE;
-  }
-  else {
+  } else {
     ci_assert_gt(pkt->refcount, 1);
     --pkt->refcount;
     return CI_FALSE;
   }
 }
-                             
+
 
 #ifdef __KERNEL__
 extern void ci_netif_set_merge_atomic_flag(ci_netif* ni);
-#define CI_NETIF_STATE_MOD(ni, is_locked, field, mod) \
-  do {                                                                      \
-    if( is_locked ) {                                                       \
-      mod##mod ni->state->field;                                            \
-    }                                                                       \
-    else {                                                                  \
-      ci_int32 val;                                                         \
-      do {                                                                  \
-        val = ni->state->atomic_##field;                                    \
-      } while( ci_cas32u_fail(&ni->state->atomic_##field, val, val mod 1) );\
-    }                                                                       \
-  } while(0)
+#define CI_NETIF_STATE_MOD(ni, is_locked, field, mod)                        \
+  do {                                                                       \
+    if( is_locked ) {                                                        \
+      mod##mod ni->state->field;                                             \
+    } else {                                                                 \
+      ci_int32 val;                                                          \
+      do {                                                                   \
+        val = ni->state->atomic_##field;                                     \
+      } while( ci_cas32u_fail(&ni->state->atomic_##field, val, val mod 1) ); \
+    }                                                                        \
+  } while( 0 )
 #else
 #define CI_NETIF_STATE_MOD(ni, is_locked, field, mod) \
-  do { mod##mod ni->state->field; } while(0)
+  do {                                                \
+    mod##mod ni->state->field;                        \
+  } while( 0 )
 #endif
 
-void oo_pkt_calc_checksums(ci_netif* ni, ci_ip_pkt_fmt* pkt,
-                           struct iovec* host_iov);
+void oo_pkt_calc_checksums(
+    ci_netif* ni, ci_ip_pkt_fmt* pkt, struct iovec* host_iov);
 
 
 #ifndef __KERNEL__
-ci_inline void ci_pkt_zc_free_clean(ci_ip_pkt_fmt* pkt,
-                                    enum onload_zc_callback_rc cb_rc)
+ci_inline void ci_pkt_zc_free_clean(
+    ci_ip_pkt_fmt* pkt, enum onload_zc_callback_rc cb_rc)
 {
   if( ! (cb_rc & ONLOAD_ZC_KEEP) ) {
     /* Remove the ref we added earlier iff the user didn't retain it */
-    pkt->rx_flags &=~ CI_PKT_RX_FLAG_KEEP;
-    pkt->pio_addr = -1;  /* Reset to normal after user_refcount overwrote it */
+    pkt->rx_flags &= ~CI_PKT_RX_FLAG_KEEP;
+    pkt->pio_addr = -1; /* Reset to normal after user_refcount overwrote it */
   }
 }
 #endif
@@ -854,14 +843,10 @@ ci_inline void ci_pkt_zc_free_clean(ci_ip_pkt_fmt* pkt,
  ****************************** ZC send offloads *********************
  *********************************************************************/
 
-ci_int8
-ci_tcp_offload_zc_send_accum_crc(ci_netif* ni, ci_ip_pkt_fmt* pkt,
-                                 struct ci_pkt_zc_payload* zcp,
-                                 unsigned payload_offset, void* prefix);
-ci_uint8
-ci_tcp_offload_zc_send_insert_crc(ci_netif* ni, ci_ip_pkt_fmt* pkt,
-                                  struct ci_pkt_zc_payload* zcp,
-                                  unsigned payload_offset, void* prefix);
+ci_int8 ci_tcp_offload_zc_send_accum_crc(ci_netif* ni, ci_ip_pkt_fmt* pkt,
+    struct ci_pkt_zc_payload* zcp, unsigned payload_offset, void* prefix);
+ci_uint8 ci_tcp_offload_zc_send_insert_crc(ci_netif* ni, ci_ip_pkt_fmt* pkt,
+    struct ci_pkt_zc_payload* zcp, unsigned payload_offset, void* prefix);
 
 #endif /* __CI_LIB_IP_INTERNAL_H__ */
 /*! \cidoxg_end */
